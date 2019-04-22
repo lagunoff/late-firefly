@@ -13,6 +13,7 @@ data Err
   | ResponseFormatError ResponseFormatError
   | EmptySelectorResults { url :: String, selector :: String } 
   | EmptyAttribute { url :: String, attribute :: String } 
+  | JSONParseError String
 
 
 liftA0

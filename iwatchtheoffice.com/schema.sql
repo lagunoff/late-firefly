@@ -1,16 +1,17 @@
 drop table if exists iwatchtheoffice_versions;
 create table iwatchtheoffice_versions (
-       id int not null primary key,
-       started_at datetime not null default now(),
+       id integer not null primary key autoincrement,
+       started_at datetime not null,
        completed_at datetime null,
-       status enum('pending', 'completed', 'failed') default 'pending'
+       status text CHECK(status IN ('pending', 'completed'))
 );
 
 drop table if exists iwatchtheoffice_seasons;
+
 create table iwatchtheoffice_seasons (
-       id int not null primary key,
-       version_id int not null,
-       number text not null,
-       thumbnail text null,
-       foreign key (version_id) references iwatchtheoffice_versions(id)
+       id integer not null primary key autoincrement,
+       code integer not null,
+       thumbnail text not null,
+       href text not null
+--       foreign key (version_id) references iwatchtheoffice_versions(id)
 );

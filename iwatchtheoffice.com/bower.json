@@ -1,0 +1,21 @@
+{
+  "name": "iwatchtheoffice.com",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "output"
+  ],
+  "dependencies": {
+    "purescript-prelude": "^4.1.1",
+    "purescript-console": "^4.2.0",
+    "purescript-effect": "^2.0.1",
+    "purescript-cheerio": "^0.2.0",
+    "purescript-affjax": "^9.0.0",
+    "purescript-debug": "^4.0.0",
+    "purescript-querydsl": "^0.7.0"
+  },
+  "devDependencies": {
+    "purescript-psci-support": "^4.0.0"
+  }
+}

@@ -98,4 +98,5 @@ component =
               ]
             ]
           ]
+        , HH.img [ HP.src "OFF-09OFF-09-image0.jpg" ]
         ]

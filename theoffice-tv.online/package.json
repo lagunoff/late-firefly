@@ -1,0 +1,17 @@
+{
+  "name": "theoffice-tv.online",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "private": true,
+  "dependencies": {
+    "jss": "^9.8.7",
+    "jss-preset-default": "^4.5.0",
+    "ts-loader": "^5.4.3",
+    "typescript": "^3.4.4",
+    "typescript-invertible-router": "^0.9.3",
+    "webpack": "^4.30.0",
+    "webpack-cli": "^3.3.1",
+    "webpack-dev-server": "^3.3.1"
+  }
+}

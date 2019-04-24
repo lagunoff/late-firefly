@@ -1,6 +1,6 @@
 import { Db, Season, Series } from "./db";
 import jss from 'jss';
-import { h, Jet, noop, array, RawPatch, custom, applyPatch } from "typescript-sdom";
+import { h, Jet, noop, array, RawPatch, custom, applyPatch, create } from "typescript-sdom";
 import * as r from 'typescript-invertible-router';
 import * as routes from './routes';
 import { seasonAdapter } from "./season";
@@ -43,7 +43,6 @@ export function update(action: Action, model: Model): RawPatch<Model> {
 // View
 export function view(db: Db) {
   return h<Model, Action>('main', { class: classes.content }).childs(
-    h.h1(m => 'Episode ' + m.episode.code.replace(/^S\d\dE0?/, '') + ' - ' + m.episode.name),
     h.ul({ class: `nav nav-tabs ${classes.tabs}` }).childs(
       array<Model, 'episode', 'links'>('episode', 'links')(
         h.li<any>({ class: 'nav-item' }).childs(
@@ -53,7 +52,10 @@ export function view(db: Db) {
       ),
     ),
     custom(createIframe, actuateIframe),
+    h.h1(m => 'Episode ' + m.episode.code.replace(/^S\d\dE0?/, '') + ' - ' + m.episode.name),
     h.p(m => m.episode.description),
+    h.div({ id: 'disqus_thread' }),
+    custom(createDisqus, actuateDisqus),
   );
 }
 
@@ -63,20 +65,23 @@ function styles() {
   const gridPadding = unit * 2;
   const columns = 3;
   const maxWidth = 840;
+  const outerWidth = maxWidth + (gridPadding * (columns - 1));
   
   return {
     content: {
-      maxWidth: maxWidth + (gridPadding * (columns - 1)),
+      maxWidth: outerWidth,
       margin: [0, 'auto'],
     },
 
     iframe: {
       display: 'block',
-      width: maxWidth,
-      height: maxWidth * 9 / 16,
+      width: outerWidth,
+      height: outerWidth * 9 / 16,
+      marginBottom: unit * 2,
     },
 
     tabs: {
+      marginTop: unit * 2,
       marginBottom: unit,
     },
   };
@@ -102,3 +107,17 @@ function actuateIframe(el: any, jet: Jet<Model>) {
   }
   return el;
 }
+
+function createDisqus(model: Model) {
+  setTimeout(() => DISQUS.reset({ reload: true }), 100);
+  return create(h.div({ id: 'disqus_thread' }), model);
+}
+
+function actuateDisqus(el: any, jet: Jet<Model>) {
+  return el;
+}
+
+const disqusCode = `<div id="disqus_thread"></div>
+`;
+
+declare const DISQUS: any;

@@ -10,7 +10,7 @@ module.exports = function() {
       rules: [{
         test: /\.tsx?$/,
         loader: 'ts-loader',
-//        options: { compilerOptions: tsConfig.compilerOptions, },
+        //        options: { compilerOptions: tsConfig.compilerOptions, },
       }, {
         test: /\.css$/,
         loaders: ['style-loader', 'css-loader'],

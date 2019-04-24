@@ -1,20 +1,51 @@
-import { SDOM, h, create } from 'typescript-sdom';
-import db, { Db, Season } from './db';
+import { SDOM, h, create, Patch, RawPatch, preparePatch, actuate, Jet, applyPatch, discriminate } from 'typescript-sdom';
+import db, { Db } from './db';
 import jss from 'jss';
 import preset from 'jss-preset-default';
-import * as r from 'typescript-invertible-router';
 jss.setup(preset());
 
-r.oneOf();
+import { parse, print, Route } from './routes';
+import * as Home from './home';
+import * as Season from './season';
+import * as Episode from './episode';
+
+
+// Map route tag to component
+const routeToComponent: Record<Route['tag'], any> = {
+  Home,
+  Episode,
+  Season,
+};
+
 
 // Model
 export type Model = {
+  page: {
+    route: Route;
+    model: any;
+  };
 };
 
 // Action
 export type Action =
-  | { }
+  | { tag: 'RouteChange', value: Route }
+  | { tag: '@Children', update: any, action: any }
 ;
+
+// Update
+export function update(action: Action, model: Model): RawPatch<Model> {
+  switch (action.tag) {
+    case 'RouteChange': {
+      const route = action.value;
+      const pageModel = routeToComponent[route.tag].init(db, route);
+      return { $patch: { page: { route, model: pageModel } } };
+    }
+    case '@Children': {
+      const patch = action.update(action.action, model.page.model);
+      return { $at: ['page', 'model'], patch };
+    }
+  }
+}
 
 // View
 export function view(db: Db) {
@@ -32,27 +63,19 @@ export function view(db: Db) {
     ),
   );
 
-  const content = h.section({ class: classes.content }).childs(
-    h.ul({ class: classes.seasonsUl }).childs(...db.seasons.map(renderSeason)),
-  );
-
   const footer = h.footer({ class: classes.footer }).childs(
-    h.div({ class: classes.container + ' container'  }).childs(
+    h.div({ class: classes.container + ' container' }).childs(
       h.span({ class: 'text-muted' }).childs('theoffice-tv.online'),
     ),
   )
-
-  function renderSeason(season: Season) {
-    return h.li({ class: classes.seasonLi }).childs(
-      h('h3', season.code),
-      h.a({ href: season.href }).childs(h.img({ class: 'rounded', src: season.thumbnail })),
-      h.div({ style: 'overflow: hidden' }).childs(...season.series.map(seria => h.span(h.a({ href: seria.href }).childs(seria.code.replace(/^S0\d/, '')), ' '))),
-    );
-  }  
   
   return h.div<Model, Action>({ class: classes.root }).childs(
     header,
-    content,
+    discriminate<Model, 'page', 'route', 'tag'>('page', 'route', 'tag')({
+      Home: Home.view(db).dimap((m: Jet<Model>) => m.key('page', 'model'), action => ({ tag: '@Children', action, update: routeToComponent['Home'].update })),
+      Episode: Episode.view(db).dimap((m: Jet<Model>) => m.key('page', 'model'), action => ({ tag: '@Children', action, update: routeToComponent['Episode'].update })),
+      Season: Season.view(db).dimap((m: Jet<Model>) => m.key('page', 'model'), action => ({ tag: '@Children', action, update: routeToComponent['Season'].update })),
+    }),
     footer,
   );
 }
@@ -60,13 +83,16 @@ export function view(db: Db) {
 // Styles
 function styles() {
   const unit = 8;
+  const gridPadding = unit * 2;
+  const columns = 3;
+  const maxWidth = 840;
+  
   return {
     root: {
-      
     },
 
     content: {
-      maxWidth: 900 + (unit * 2),
+      maxWidth: maxWidth + (gridPadding * (columns - 1)),
       margin: [0, 'auto'],
     },
 
@@ -78,10 +104,16 @@ function styles() {
     },
     
     seasonLi: {
-      width: 900 / 3,
+      width: maxWidth / columns,
       listStyle: 'none',
       margin: [unit * 2, 0, 0, 0],
       '& img': { width: '100%' },
+    },
+
+    episodes: {
+      fontSize: 14,
+      maxHeight: 22,
+      overflow: 'hidden',
     },
 
     footer: {
@@ -95,7 +127,7 @@ function styles() {
     
     container: {
       width: 'auto',
-      maxWidth: 900 + unit * 2,
+      maxWidth: maxWidth + (gridPadding * (columns - 1)),
       padding: [0, unit],
       boxSizing: 'content-box',
     },
@@ -103,24 +135,42 @@ function styles() {
     '@global': {
       html: {
         position: 'relative',
-        minheight: '100%',
+        minHeight: '100%',
       },
       body: {
         marginBottom: 60,
-      }
+      },
     },
   };
 }
 
 const { classes } = jss.createStyleSheet(styles()).attach();
 
-let model: Model = { };
+
+function dispatch(action: Action) {
+  const rawPatch = update(action, model);
+  const patch = preparePatch(model, rawPatch);
+  el = actuate(el, sdom, new Jet(model, patch));
+  model = applyPatch(model, patch);
+  console.log('patch', patch);
+  console.log('model', model);
+}
+
+const defaultRoute: Route = { tag: 'Home' };
+const route = parse(location) || defaultRoute;
+const pageModel = routeToComponent[route.tag].init(db, route);
+let model: Model = { page: { route, model: pageModel } };
 const container = document.createElement('div');
 document.body.appendChild(container);
-const getModel = () => model;
-const sdom = view(db);
-const el = create(sdom, getModel);
+const sdom = view(db).map(dispatch);
+let el = create(sdom, model);
+
+
 window.onpopstate = function(event) {
-//  handleAction({ tag: 'HashChange', hash: location.hash });
+  const route = parse(location) || defaultRoute;
+  dispatch({ tag: 'RouteChange', value: route });
 };
 container.appendChild(el);
+
+
+declare const require: any;

@@ -5,6 +5,7 @@
   "license": "MIT",
   "private": true,
   "dependencies": {
+    "file-loader": "^3.0.1",
     "jss": "^9.8.7",
     "jss-preset-default": "^4.5.0",
     "ts-loader": "^5.4.3",

@@ -33,7 +33,7 @@ export function view(db: Db) {
     );
   }  
   
-  return h<Model, Action>('main', { class: classes.content }).childs(
+  return h<Model, Action>('main', { class: classes.root }).childs(
     h.ul({ class: classes.seasonsUl }).childs(
       ...db.seasons.map(renderSeason)
     ),
@@ -45,13 +45,15 @@ function styles() {
   const unit = 8;
   const gridPadding = unit * 2;
   const columns = 3;
-  const maxWidth = 840;
+  const innerWidth = 860;
+  const itemWidth = columns => `calc((100% - ${gridPadding * (columns - 1)}px) / ${columns})`;
   
   return {
-    
-    content: {
-      maxWidth: maxWidth + (gridPadding * (columns - 1)),
+    root: {
+      maxWidth: innerWidth,
       margin: [0, 'auto'],
+      padding: [0, unit * 2],
+      boxSizing: 'content-box',
     },
 
     seasonsUl: {
@@ -62,10 +64,9 @@ function styles() {
     },
     
     seasonLi: {
-      width: maxWidth / columns,
+      width: itemWidth(3),
       listStyle: 'none',
       margin: [unit * 2, 0, 0, 0],
-      maxHeight: 214,
       overflow: 'hidden',
       '& img': { width: '100%' },
       '& > div': {
@@ -92,6 +93,13 @@ function styles() {
       '&:hover': {
         overflow: 'visible',
       },
+      '@media (max-width: 768px)': {
+        width: itemWidth(2),
+      },
+      '@media (max-width: 500px)': {
+        width: itemWidth(1),
+      },
+      
     },
 
     episodes: {

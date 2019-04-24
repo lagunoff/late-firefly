@@ -28,7 +28,7 @@ export function init(db: Db, route: Route): Model {
 export function view(db: Db) {
   const href = (m: ArrayItemModel<Model['season']['series'], Model>) => routes.print({ tag: 'Episode', season: m.parent.route.season, episode: m.item.code });
   
-  return h<Model, Action>('main', { class: classes.content }).childs(
+  return h<Model, Action>('main', { class: classes.root }).childs(
     h.h1(m => m.season.code),
     //    h.img({ src: m => m.season.thumbnail }),
     h.ul({ class: classes.ul }).childs(
@@ -50,14 +50,14 @@ export function view(db: Db) {
 // Styles
 function styles() {
   const unit = 8;
-  const gridPadding = unit * 2;
-  const columns = 3;
-  const maxWidth = 840;
+  const innerWidth = 860;
   
   return {
-    content: {
-      maxWidth: maxWidth + (gridPadding * (columns - 1)),
+    root: {
+      maxWidth: innerWidth,
+      padding: [0, unit * 2],
       margin: [0, 'auto'],
+      boxSizing: 'content-box',
     },
 
     img: {
@@ -72,7 +72,14 @@ function styles() {
       listStyle: 'none',
       display: 'flex',
       margin: [unit * 2, 0],
-      '& > * + *': { marginLeft: unit * 2 },
+      '& > * + *': { marginLeft: unit * 2, marginTop: 0 },
+      '@media (max-width: 500px)': {
+        flexDirection: 'column',
+        '& > * + *': { marginLeft: 0, marginTop: unit * 2 },
+        '& $img': {
+          width: '100%',
+        },
+      },
     },
   };
 }

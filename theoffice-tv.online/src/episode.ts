@@ -42,7 +42,7 @@ export function update(action: Action, model: Model): RawPatch<Model> {
 
 // View
 export function view(db: Db) {
-  return h<Model, Action>('main', { class: classes.content }).childs(
+  return h<Model, Action>('main', { class: classes.root }).childs(
     h.ul({ class: `nav nav-tabs ${classes.tabs}` }).childs(
       array<Model, 'episode', 'links'>('episode', 'links')(
         h.li<any>({ class: 'nav-item' }).childs(
@@ -62,21 +62,21 @@ export function view(db: Db) {
 // Styles
 function styles() {
   const unit = 8;
-  const gridPadding = unit * 2;
-  const columns = 3;
-  const maxWidth = 840;
-  const outerWidth = maxWidth + (gridPadding * (columns - 1));
+  const innerWidth = 860;
   
   return {
-    content: {
-      maxWidth: outerWidth,
+    root: {
+      maxWidth: innerWidth,
+      padding: [0, unit * 2],
       margin: [0, 'auto'],
+      boxSizing: 'content-box',
     },
 
     iframe: {
       display: 'block',
-      width: outerWidth,
-      height: outerWidth * 9 / 16,
+      width: '100%',
+      maxWidth: innerWidth,
+      height: innerWidth * 9 / 16,
       marginBottom: unit * 2,
     },
 
@@ -116,8 +116,5 @@ function createDisqus(model: Model) {
 function actuateDisqus(el: any, jet: Jet<Model>) {
   return el;
 }
-
-const disqusCode = `<div id="disqus_thread"></div>
-`;
 
 declare const DISQUS: any;

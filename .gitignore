@@ -1,4 +1,5 @@
-/tmp
+**/tags
+**/TAGS
 **/.#*
 /node_modules/
 **/*~
@@ -8,7 +9,8 @@
 /yarn-error.log
 /.dir-locals.el
 /yarn-errors.log
-/examples/node_modules
-/examples/out
-/examples/dist
+*/output
+*/dist
 /tmp
+**/.stack-work
+**/.cabal-sandbox

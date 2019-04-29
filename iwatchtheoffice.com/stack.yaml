@@ -1,0 +1,9 @@
+resolver: lts-13.08
+extra-deps:
+  - github: egonSchiele/HandsomeSoup
+    commit: 4cb37a6738d3988800e60afb04f4b44ff67ce3ab
+nix:
+  enable: true
+  packages: [zlib, curl]
+  path: ["nixpkgs=/home/vlad/opt/nixpkgs"]
+  add-gc-roots: true

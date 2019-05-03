@@ -50,7 +50,7 @@ executable theoffice-tv-online
   -- .hs or .lhs file containing the Main module.
   main-is:             Main.hs
 
-  haste-options: --output-html --with-js=./src/extra-rts.js -o ./output/index.html
+  haste-options: --with-js=./src/extra-rts.js -o ./output/main.js
   
   -- Modules included in this executable, other than Main.
   -- other-modules:       
@@ -66,10 +66,14 @@ executable theoffice-tv-online
                      , transformers
                      , haste-prim
                      , deepseq
+                     , open-union
+                     , type-fun
   
   -- Directories containing source files.
   hs-source-dirs:      src
                      , ../iwatchtheoffice.com/
+                     , ./open-union
+                     , ./type-fun
   
   -- Base language which the package is written in.
   default-language:    Haskell2010

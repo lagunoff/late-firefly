@@ -1,9 +1,10 @@
 {-# LANGUAGE OverloadedStrings, UndecidableInstances, FlexibleInstances, GADTs, PostfixOperators #-}
 module TheOffice.Home where
 
-import Stitch
-import Data.String
+import Stitch hiding ((?))
+import Stitch.Combinators.Extra
 import Haste.Prim (toJSStr)
+import Data.String (IsString)
 import qualified Data.Text as T
 import Data.Monoid ((<>))
 import SDOM (SDOM)
@@ -21,30 +22,30 @@ init = Model ()
 
 view :: SDOM Model msg
 view =
-  main_ [ cs "root" ]
-  [ ul_ [ cs "ul" ] (db_seasons db # map renderSeson)
+  main_ [ class_ (cs "root") ]
+  [ ul_ [ class_ (cs "ul") ] (db_seasons db # map renderSeson)
   , node "style" [ stringProp "innerHTML" . T.unpack $ renderCSS styles ] []
   ]
   where
     (#) = flip ($)
     renderSeson season =
-      li_ [ cs "li" ]
+      li_ [ class_ ("li") ]
       [ h3_ [] [text_ $ toJSStr $ season_code season]
       , a_ [ href_ . toJSStr . ("#" <>) . R.print . R.Season $ season_code season ]
-        [ img_ [ cs "rounded", src_ . toJSStr . season_thumbnail $ season ] ]
-      , div_ [ cs "episodes" ]
+        [ img_ [ class_ (cs "rounded"), src_ . toJSStr . season_thumbnail $ season ] ]
+      , div_ [ class_ (cs "episodes") ]
         $ [ b_ [] [ (text_ . toJSStr . show . length . season_episodes) season] ]
         <> season_episodes season # map (\e -> span_ [] [ a_ [ href_ . toJSStr . ("#" <>) . R.print $ R.Episode (season_code season) (episode_code e) ] [ (text_ . toJSStr . episode_code) e] ] )
       ]
 
 styles :: CSS
 styles = do
-  clazz_ "root" ? do
+  cs ".root" ? do
     "max-width" .= px innerWidth
     "margin" .= list [px 0, "auto"]
     "padding" .= list [px 0, px (unit * 2)]
     "box-sizing" .= "content-box"
-  clazz_ "ul" ? do
+  cs ".ul" ? do
     "padding" .= px 0
     "display" .= "flex"
     "justify-content" .= "space-between"
@@ -56,10 +57,6 @@ styles = do
     px = T.pack . (<> "px") . show
     list = T.intercalate " "
 
-clazz_ :: T.Text -> Selector
-clazz_ name = Selector (["." <> clazz name])
+cs :: (IsString s, Monoid s) => s -> s
+cs name = name <> "-5ET49ANhU9T0gUK5"
 
-clazz :: (IsString s, Monoid s) => s -> s
-clazz name = name <> "-5ET49ANhU9T0gUK5"
-
-cs c = stringProp "className" (clazz c)

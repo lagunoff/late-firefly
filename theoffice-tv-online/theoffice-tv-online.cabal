@@ -68,6 +68,7 @@ executable theoffice-tv-online
                      , deepseq
                      , open-union
                      , type-fun
+                     , containers
   
   -- Directories containing source files.
   hs-source-dirs:      src

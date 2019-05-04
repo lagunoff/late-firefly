@@ -274,4 +274,4 @@ autofocus_ = boolProp "autofocus"
 -- | Set "className" property
 -- <https://developer.mozilla.org/en-US/docs/Web/API/Element/className>
 class_ :: (i -> JSString) -> SDOMAttr i o
-class_ = jsStrProp "class"
+class_ = jsStrProp "className"

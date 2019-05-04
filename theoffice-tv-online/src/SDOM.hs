@@ -7,6 +7,7 @@ import Data.OpenUnion
 import TypeFun.Data.List (Delete)
 import Data.Typeable
 import Haste.DOM.JSString (Elem, newTextElem, newElem, setAttr, appendChild, setProp)
+import System.IO.Unsafe (unsafePerformIO)
 
 
 data SDOM i o where
@@ -49,3 +50,19 @@ unionExhausted = undefined
 
 dimap :: (i' -> i) -> (o -> o') -> SDOM i o -> SDOM i' o'
 dimap = SDOMDimap
+
+instance Monoid JSString where
+  mempty = jsEmptyString 
+  mappend = jsAppendString
+
+jsEmptyString :: JSString
+jsEmptyString = unsafePerformIO impl
+  where
+    impl :: IO JSString
+    impl = ffi "\"\""
+    
+jsAppendString :: JSString -> JSString -> JSString
+jsAppendString a b = unsafePerformIO $ impl a b
+  where
+    impl :: JSString -> JSString -> IO JSString
+    impl = ffi "(function (a, b) { return a + b; })"

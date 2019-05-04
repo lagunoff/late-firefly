@@ -29,14 +29,14 @@ prop :: ToAny a => JSString -> a -> SDOMAttr i o
 prop name val = SDOMAttr $ \el -> unsafeSetProp el name (toAny val)
   where
     unsafeSetProp :: Elem -> JSString -> JSAny -> IO ()
-    unsafeSetProp = ffi "function(el, name, val) { el[name] = val; }"
+    unsafeSetProp = ffi "(function(el, name, val) { el[name] = val; })"
 
 -- TODO: move to appropriate location
 intercalate :: JSString -> [JSString] -> JSString
 intercalate sep xs = unsafePerformIO $ join sep xs
   where
     join :: JSString -> [JSString] -> IO JSString
-    join = ffi "function (xs, sep) { return xs.join(sep); }"
+    join = ffi "(function (xs, sep) { return xs.join(sep); })"
 
 --
 -- > div_ [ classList_ [ ("empty", null items) ] [ ]
@@ -282,4 +282,4 @@ autofocus_ = boolProp "autofocus"
 -- | Set "className" property
 -- <https://developer.mozilla.org/en-US/docs/Web/API/Element/className>
 class_ :: JSString -> SDOMAttr i o
-class_ = jsStrProp "class"
+class_ = jsStrProp "className"

@@ -3,6 +3,7 @@ module Main where
 
 import Stitch
 import qualified Haste.DOM as DOM
+import Haste.Prim.Foreign
 import Data.Text (unpack)
 import Data.Typeable.Internal
 import Data.String
@@ -37,6 +38,7 @@ view =
       ]
     ]
   , dimap page id view02
+  , div_ [ id_ "disqus_thread" ] []
   , node "style" [ stringProp "innerHTML" . unpack $ renderCSS styles ] []
   ]
 
@@ -52,6 +54,13 @@ main :: IO ()
 main = do
   root <- create (Model { counter = 0, page = (liftUnion Home.init) }) view
   DOM.appendChild DOM.documentBody root
+  initDisqus
+
+resetDisqus :: IO ()
+resetDisqus = ffi "(function(){ DISQUS.reset({ reload: true }); })"
+
+initDisqus :: IO ()
+initDisqus = ffi "(function(){ init_disqus(); })"
 
 styles :: CSS
 styles = do
@@ -82,6 +91,10 @@ styles = do
         "text-decoration" .= "none"
         "&:hover" ? do
           "background" .= "hsla(0, 0%, 0%, 0.04)"
+  "#disqus_thread" ? do
+    "max-width" .= px (pageWidth theme)
+    "margin" .= "0 auto"
+    
   where
     cs_ = fromString . cs  
     px = T.pack . (<> "px") . show

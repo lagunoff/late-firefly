@@ -1,8 +1,7 @@
 {-# LANGUAGE OverloadedStrings, DataKinds, TypeFamilies, DeriveAnyClass, RankNTypes, TemplateHaskell #-}
 module Main where
 
-import Stitch hiding ((?))
-import Stitch.Combinators.Extra
+import Stitch
 import qualified Haste.DOM as DOM
 import Data.Text (unpack)
 import Data.Typeable.Internal
@@ -14,6 +13,8 @@ import SDOM
 import SDOM.Html
 import SDOM.Prop
 import qualified TheOffice.Home as Home
+import TheOffice.Style
+import qualified Data.Text as T
 
 
 data Model = Model
@@ -28,9 +29,13 @@ data Action
 view :: SDOM Model msg
 view =
   div_ [ class_ (cs "root") ]
-  [ input_ [ placeholder_ "Login" ]
-  , input_ [ placeholder_ "Password" ]
-  , button_ [ type_ "button" ] [ text_ "GO!!!" ]
+  [ nav_ [ class_ (cs "nav") ]
+    [ ul_ []
+      [ li_ [] [ a_ [ href_ "" ] [ b_ [] [ text_ "TheOffice-tv.online" ] ] ]
+      , li_ [] [ a_ [ href_ "" ] [ text_ "Seasons" ] ]
+      , li_ [] [ a_ [ href_ "" ] [ text_ "Random episode" ] ]
+      ]
+    ]
   , dimap page id view02
   , node "style" [ stringProp "innerHTML" . unpack $ renderCSS styles ] []
   ]
@@ -50,11 +55,37 @@ main = do
 
 styles :: CSS
 styles = do
-  cs ".root" ? do
-    "max-width" .= "650px"
-    "margin" .= "0 auto"
-  "h1" ?
-    "font-weight" .= "bold"
-
+  "body" ? do
+    "margin" .= "0"
+    "color" .= "rgba(0,0,0,0.87)"
+  "html, body *" ? do
+    "font-family" .= "-apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,\"Helvetica Neue\",Arial,\"Noto Sans\",sans-serif,\"Apple Color Emoji\",\"Segoe UI Emoji\",\"Segoe UI Symbol\",\"Noto Color Emoji\""
+  cs_ ".root" ? do
+    "margin" .= "0"
+  cs_ ".nav" ? do
+    "background" .= "hsla(0, 0%, 0%, 0.02)"
+    "ul" ? do
+      "margin" .= "0"
+      "padding" .= "0"
+      "display" .= "flex"
+      "margin" .= "0 auto"
+      "width" .= px (pageWidth theme)
+    "li" ? do
+      "list-style" .= "none"
+      "&:first-child a" ? "padding-left" .= "0"
+      "a" ? do
+        "padding" .= list ["0", px (unit theme)]
+        "display" .= "block"
+        "height" .= px (unit theme * 4.5)
+        "line-height" .= px (unit theme * 4.5)
+        "color" .= toCss (colorTextSecondary theme)
+        "text-decoration" .= "none"
+        "&:hover" ? do
+          "background" .= "hsla(0, 0%, 0%, 0.04)"
+  where
+    cs_ = fromString . cs  
+    px = T.pack . (<> "px") . show
+    list = T.intercalate " "
+    
 cs :: (IsString s, Monoid s) => s -> s
 cs name = name <> "-ot0oxddvn33DoOAB"

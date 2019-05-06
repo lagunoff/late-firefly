@@ -16,6 +16,7 @@ import SDOM.Prop
 import qualified TheOffice.Home as Home
 import TheOffice.Style
 import qualified Data.Text as T
+import qualified TheOffice.Router as R
 
 
 data Model = Model
@@ -55,18 +56,20 @@ main = do
   root <- create (Model { counter = 0, page = (liftUnion Home.init) }) view
   DOM.appendChild DOM.documentBody root
   initDisqus
+  _ <- R.onPopState $ \_ -> pure ()
+  pure ()
 
 resetDisqus :: IO ()
 resetDisqus = ffi "(function(){ DISQUS.reset({ reload: true }); })"
 
 initDisqus :: IO ()
 initDisqus = ffi
-  "(function() { \
-\    var d = document, s = d.createElement('script');\
-\    s.src = 'https://theoffice-tv-online.disqus.com/embed.js';\
-\    s.setAttribute('data-timestamp', +new Date());\
-\    (d.head || d.body).appendChild(s);\
-\  })"
+  "(function() {\
+  \  var d = document, s = d.createElement('script');\
+  \  s.src = 'https://theoffice-tv-online.disqus.com/embed.js';\
+  \  s.setAttribute('data-timestamp', +new Date());\
+  \  (d.head || d.body).appendChild(s);\
+  \})"
 
 styles :: CSS
 styles = do
@@ -98,13 +101,14 @@ styles = do
         "color" .= toCss (colorTextSecondary theme)
         "text-decoration" .= "none"
         "&:hover" ? do
-          "background" .= "hsla(0, 0%, 0%, 0.04)"
+          "color" .= toCss (colorText theme) 
+        "&:active" ? do
+          "color" .= toCss (colorSecondary theme) 
   "#disqus_thread" ? do
     "max-width" .= px (pageWidth theme)
     "padding" .= list ["0", px (unit theme * 2)]
     "box-sizing" .= "content-box"
     "margin" .= "0 auto"
-    
   where
     cs_ = fromString . cs  
     px = T.pack . (<> "px") . show

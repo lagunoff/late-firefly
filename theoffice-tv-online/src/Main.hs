@@ -60,7 +60,13 @@ resetDisqus :: IO ()
 resetDisqus = ffi "(function(){ DISQUS.reset({ reload: true }); })"
 
 initDisqus :: IO ()
-initDisqus = ffi "(function(){ init_disqus(); })"
+initDisqus = ffi
+  "(function() { \
+\    var d = document, s = d.createElement('script');\
+\    s.src = 'https://theoffice-tv-online.disqus.com/embed.js';\
+\    s.setAttribute('data-timestamp', +new Date());\
+\    (d.head || d.body).appendChild(s);\
+\  })"
 
 styles :: CSS
 styles = do
@@ -79,9 +85,11 @@ styles = do
       "display" .= "flex"
       "margin" .= "0 auto"
       "width" .= px (pageWidth theme)
+      "padding" .= list ["0", px (unit theme * 2)]
+      "box-sizing" .= "content-box"
     "li" ? do
       "list-style" .= "none"
-      "&:first-child a" ? "padding-left" .= "0"
+      "&:first-child a" ? "margin-left" .= px (-unit theme)
       "a" ? do
         "padding" .= list ["0", px (unit theme)]
         "display" .= "block"
@@ -93,6 +101,8 @@ styles = do
           "background" .= "hsla(0, 0%, 0%, 0.04)"
   "#disqus_thread" ? do
     "max-width" .= px (pageWidth theme)
+    "padding" .= list ["0", px (unit theme * 2)]
+    "box-sizing" .= "content-box"
     "margin" .= "0 auto"
     
   where

@@ -24,9 +24,21 @@ init = Model ()
 
 view :: SDOM Model msg
 view =
-  main_ [ class_ (cs "root") ]
-  [ ul_ [ class_ (cs "ul") ] (db_seasons db # map renderSeson)
-  , node "style" [ stringProp "innerHTML" . T.unpack $ renderCSS styles ] []
+  div_ []
+  [ header_ [ class_ (cs "summary") ]
+    [ a_ [ class_ (cs "poster"), href_ "https://m.media-amazon.com/images/M/MV5BMTgzNjAzMDE0NF5BMl5BanBnXkFtZTcwNTEyMzM3OA@@._V1_SY1000_CR0,0,736,1000_AL_.jpg" ]
+      [ img_ [ class_ (cs "rounded"), width_ "270", src_ "https://m.media-amazon.com/images/M/MV5BMTgzNjAzMDE0NF5BMl5BanBnXkFtZTcwNTEyMzM3OA@@._V1_SY1000_CR0,0,736,1000_AL_.jpg" ]
+      ]
+    , div_ [ class_ (cs "summary-right") ]
+      [ h2_ [] [ text_ "The Office (US)" ]
+      , p_ [] [ text_ "This US adaptation, set at a paper company in Scranton, Pa., has a similar documentary style to that of the Ricky Gervais-led British original. It features the staff of Dunder-Mifflin, a staff that includes characters based on characters from the British show (and, quite possibly, people you work with in your office). There's Jim, the likable employee who's a bit of an everyman. Jim has a thing for receptionist-turned-sales rep Pam (because office romances are always a good idea). There's also Dwight, the successful co-worker who lacks social skills and common sense. And there's Ryan, who has held many jobs at the company" ]
+      ]
+    , div_ [ class_ (cs "clearfix") ] []
+    ]
+  , main_ [ class_ (cs "main") ]
+    [ ul_ [ class_ (cs "ul") ] (db_seasons db # map renderSeson)
+    , node "style" [ stringProp "innerHTML" . T.unpack $ renderCSS styles ] []
+    ]
   ]
   where
     (#) = flip ($)
@@ -40,25 +52,40 @@ view =
         <> season_episodes season
         # map (\e -> a_ [ href_ (episodeUrl season e) ] [ text_ . (\x -> " " <> x <> " ") . prepareEpisode . toJSStr . episode_code $ e])
       ]
-    seasonUrl season = toJSStr . ("#" <>) . R.print . R.Season . season_code $ season
-    episodeUrl season episode = toJSStr . ("#" <>) . R.print $ R.Episode (season_code season) (episode_code episode)
-    regex = "^S\\d\\d?" :: JSStr.RegEx
+    seasonUrl season = toJSStr . ("#" <>) $ R.seasonUrl season
+    episodeUrl season episode = toJSStr . ("#" <>) $ R.episodeUrl season episode
+    regex = "^S\\d\\d?E" :: JSStr.RegEx
     prepareEpisode str = JSStr.replace str regex ""
 
 styles :: CSS
 styles = do
-  cs_ ".root" ? do
+  cs_ ".summary" ? do
+    "max-width" .= px (pageWidth theme)
+    "margin" .= list [px (unit theme * 3), "auto"]
+    "padding" .= list ["0", px (unit theme * 2)]
+    "display" .= "flex"
+    "flex-direction" .= "row"
+  cs_ ".poster" ? do
+    "margin-right" .= px (unit theme * 3)
+    media "(max-width: 500px)" ? do
+      "display" .= "none"
+  cs_ ".summary-right" ? do
+    "p" ? do
+      "font-size" .= "14px"
+      "line-height" .= "1.4em"
+    "h2" ? do
+      "margin" .= "0"
+      "font-size" .= "40px"
+      "font-weight" .= "400"
+  cs_ ".main" ? do
+    "padding" .= list [px 0, px (unit theme * 2)]
+    "background" .= "rgba(0,0,0,0.03)"
+    "margin-bottom" .= px (unit theme * 3)
+  cs_ ".ul" ? do
     "max-width" .= px (pageWidth theme)
     "margin" .= list [px 0, "auto"]
-    "padding" .= list [px 0, px (unit theme * 2)]
     "box-sizing" .= "content-box"
-    "h3" ? do
-      "font-size" .= "28px"
-      "font-weight" .= "300"
-      "margin" .= list ["0", "0", px (unit theme), "0"]
-  cs_ ".ul" ? do
-    "padding" .= px 0
-    "margin" .= px 0
+    "padding" .= list ["0", "0", px (unit theme * 3), "0"]
     "display" .= "flex"
     "justify-content" .= "space-between"
     "flex-wrap" .= "wrap"
@@ -67,17 +94,21 @@ styles = do
     "list-style" .= "none"
     "margin" .= list [px (unit theme * 2), "0", "0", "0"]
     "overflow" .= "hidden"
+    "h3" ? do
+      "font-size" .= "28px"
+      "font-weight" .= "300"
+      "margin" .= list ["0", "0", px (unit theme), "0"]
     "& img" ? do
       "width" .= "100%"
-      "border-radius" .= "5px"
     "& > div" ? do
       "font-size" .= px 14
       "line-height" .= "1.4em"
-      "b" ? do
-        "display" .= "block"
       "a" ? do
         linkStyles
+        "color" .= toCss (colorTextSecondary theme)
         "text-transform" .= "lowercase"
+        "&:hover" ? do
+          "color" .= toCss (colorSecondary theme)
     media "(max-width: 768px) and (min-width: 500px)" ? do
       "width" .= itemWidth 2
     media "(max-width: 500px)" ? do
@@ -95,12 +126,16 @@ styles = do
       "left" .= "0"
     "&:hover:before" ? do
       "background" .= "rgba(255, 255, 255, 0.2)"
- where
-  cs_ = fromString . cs
-  px = T.pack . (<> "px") . show
-  list = T.intercalate " "
-  gridPadding = unit theme * 2;
-  itemWidth columns = T.pack $ "calc((100% - " <> show (gridPadding * (columns - 1)) <> "px) / " <> show columns <> ")"
+  cs_ ".clearfix" ? do
+    "clear" .= "both"
+  cs_ ".rounded" ? do
+    "border-radius" .= "5px"
+  where
+    cs_ = fromString . cs
+    px = T.pack . (<> "px") . show
+    list = T.intercalate " "
+    gridPadding = unit theme * 2;
+    itemWidth columns = T.pack $ "calc((100% - " <> show (gridPadding * (columns - 1)) <> "px) / " <> show columns <> ")"
 
 cs :: (IsString s, Monoid s) => s -> s
 cs name = name <> "-5ET49ANhU9T0gUK5"

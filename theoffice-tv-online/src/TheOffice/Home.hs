@@ -52,8 +52,8 @@ view =
         <> season_episodes season
         # map (\e -> a_ [ href_ (episodeUrl season e) ] [ text_ . (\x -> " " <> x <> " ") . prepareEpisode . toJSStr . episode_code $ e])
       ]
-    seasonUrl season = toJSStr . ("#" <>) $ R.seasonUrl season
-    episodeUrl season episode = toJSStr . ("#" <>) $ R.episodeUrl season episode
+    seasonUrl season = toJSStr $ R.seasonUrl season
+    episodeUrl season episode = toJSStr $ R.episodeUrl season episode
     regex = "^S\\d\\d?E" :: JSStr.RegEx
     prepareEpisode str = JSStr.replace str regex ""
 
@@ -101,14 +101,14 @@ styles = do
     "& img" ? do
       "width" .= "100%"
     "& > div" ? do
-      "font-size" .= px 14
-      "line-height" .= "1.4em"
+      "font-size" .= px 13
+      "line-height" .= "1.3em"
       "a" ? do
         linkStyles
         "color" .= toCss (colorTextSecondary theme)
         "text-transform" .= "lowercase"
         "&:hover" ? do
-          "color" .= toCss (colorSecondary theme)
+          "color" .= toCss (colorText theme)
     media "(max-width: 768px) and (min-width: 500px)" ? do
       "width" .= itemWidth 2
     media "(max-width: 500px)" ? do

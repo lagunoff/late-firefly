@@ -6,6 +6,7 @@ import Data.Monoid ((<>))
 import qualified IWatchTheOffice.Db as Db
 import qualified Haste.JSString as JSStr
 import Haste.Prim (toJSStr, fromJSStr)
+import Haste.JSString (RegEx, match)
 import Haste.Prim.Foreign
 
 
@@ -13,16 +14,27 @@ data Route
   = Home
   | Season String
   | Episode String String
-
+  deriving (Show, Eq)
 
 parse :: String -> Maybe Route
 parse "" = Just Home
+parse "#" = Just Home
+parse ('#':xs) = go
+  ( match ("^season-(\\d+)/episode-(\\d+)$" :: RegEx) (toJSStr xs)
+  , match ("^season-(\\d+)$" :: RegEx) (toJSStr xs)
+  )
+  where
+    go ([_, season, episode], _) = Just (Episode (fromJSStr season) (fromJSStr episode))
+    go (_, [_, season]) = Just (Season (fromJSStr season))
+    go _ = Nothing
 parse _ = Nothing
 
+
 print :: Route -> String
-print Home = ""
-print (Season season) = "season-" <> season
-print (Episode season episode) = "season-" <> season <> "/episode-" <> episode
+print route = "#" <> case route of
+  Home -> ""
+  (Season season) -> "season-" <> season
+  (Episode season episode) -> "season-" <> season <> "/episode-" <> episode
 
 seasonUrl :: Db.Season -> String
 seasonUrl (Db.Season {Db.season_code=code}) = print $ Season $ fromJSStr $ JSStr.replace (toJSStr code) ("^Season\\s" :: JSStr.RegEx) ""
@@ -42,7 +54,7 @@ onPopState cb = onPopStateImpl $ \str -> do
     onPopStateImpl =
       ffi "(function(cb) {\
           \  var prev = window.onpopstate;\
-          \  window.onpopstate = function() { cb(location.hash.replace(/^#/, '')); };\
+          \  window.onpopstate = function() { cb(location.hash); };\
           \  return function() { window.onpopstate = prev; };\
           \})"
   

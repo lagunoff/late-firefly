@@ -1,9 +1,10 @@
-{-# LANGUAGE OverloadedStrings, DataKinds, TypeFamilies, DeriveAnyClass, RankNTypes, TemplateHaskell #-}
+{-# LANGUAGE OverloadedStrings, DataKinds, TypeFamilies, DeriveAnyClass, RankNTypes #-}
 module Main where
 
 import Stitch
 import qualified Haste.DOM as DOM
 import Haste.Prim.Foreign
+import qualified Haste.JSString as JSS
 import Data.Text (unpack)
 import Data.Typeable.Internal
 import Data.String
@@ -12,12 +13,13 @@ import Data.OpenUnion
 import TypeFun.Data.List (Elem)
 import SDOM
 import SDOM.Html
+import qualified SDOM.Html.Dynamic as Dyn
 import SDOM.Prop
 import qualified TheOffice.Home as Home
 import TheOffice.Style
 import qualified Data.Text as T
 import qualified TheOffice.Router as R
-
+import Data.IORef
 
 data Model = Model
   { counter :: Int
@@ -25,17 +27,18 @@ data Model = Model
   }
 type Page = '[Home.Model, String]
 
-data Action
+data Msg
   = PageAction (forall a. (Typeable a, Elem a Page) => (TypeRep, a))
+  | Click
 
-view :: SDOM Model msg
+view :: SDOM Model Msg
 view =
   div_ [ class_ (cs "root") ]
-  [ nav_ [ class_ (cs "nav") ]
+  [ nav_ [ class_ (cs "nav"), on_ "click" . const . Just $ Click ]
     [ ul_ []
-      [ li_ [] [ a_ [ href_ "" ] [ b_ [] [ text_ "TheOffice-tv.online" ] ] ]
-      , li_ [] [ a_ [ href_ "" ] [ text_ "Seasons" ] ]
-      , li_ [] [ a_ [ href_ "" ] [ text_ "Random episode" ] ]
+      [ li_ [] [ a_ [ href_ "#" ] [ b_ [] [ text_ "TheOffice-tv.online" ] ] ]
+      , li_ [] [ a_ [ href_ "#" ] [ text_ "Seasons" ] ]
+      , li_ [] [ a_ [ href_ "#" ] [ text_ "Random episode" ] ]
       ]
     ]
   , dimap page id view02
@@ -49,14 +52,31 @@ view02 = Home.view
  `union` unionExhausted
   where
     v02 :: SDOM String msg
-    v02 = text_ (" :: String")
-    
+    v02 = Dyn.text_ $ JSS.pack . (<> " :: String")
+
+initPage :: R.Route -> Union Page
+initPage R.Home = liftUnion Home.init
+initPage route@(R.Season {}) = liftUnion $ show route
+initPage route@(R.Episode {}) = liftUnion $ show route
+
+dispatch :: Msg -> IO ()
+dispatch Click = putStrLn "Clicked"
+dispatch _ = putStrLn "Unknown Message"
+   
 main :: IO ()
 main = do
-  root <- create (Model { counter = 0, page = (liftUnion Home.init) }) view
+  let initModel = Model { counter = 0, page = (liftUnion Home.init) }
+  root <- create_ dispatch initModel view
   DOM.appendChild DOM.documentBody root
   initDisqus
-  _ <- R.onPopState $ \_ -> pure ()
+  modelRef <- newIORef initModel
+  _ <- R.onPopState $ \route -> do
+    putStrLn $ "New Route: " <> show route
+    prevModel <- readIORef modelRef
+    let nextModel = prevModel { page = initPage route }
+    _ <- actuate prevModel nextModel root view
+    writeIORef modelRef nextModel
+    pure ()
   pure ()
 
 resetDisqus :: IO ()

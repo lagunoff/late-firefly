@@ -4,8 +4,8 @@ module SDOM.Prop where
 import Haste.Prim
 import Haste.Prim.Foreign
 import Haste.DOM.JSString (Elem)
+import Haste.JSString (intercalate)
 import SDOM
-import System.IO.Unsafe (unsafePerformIO)
 
 
 -- | Set field to `Bool` value
@@ -31,12 +31,6 @@ prop name val = SDOMAttr $ \el -> unsafeSetProp el name (toAny val)
     unsafeSetProp :: Elem -> JSString -> JSAny -> IO ()
     unsafeSetProp = ffi "(function(el, name, val) { el[name] = val; })"
 
--- TODO: move to appropriate location
-intercalate :: JSString -> [JSString] -> JSString
-intercalate sep xs = unsafePerformIO $ join sep xs
-  where
-    join :: JSString -> [JSString] -> IO JSString
-    join = ffi "(function (xs, sep) { return xs.join(sep); })"
 
 --
 -- > div_ [ classList_ [ ("empty", null items) ] [ ]

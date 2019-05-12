@@ -83,13 +83,13 @@ actuate (SDOMInst modelRef elRef last sink sdom) step = readIORef elRef >>= \cas
   Nothing -> pure ()
   Just oldEl -> do
     old <- readIORef modelRef
-    let new :: model
-        new = step old
+    let new = step old
     newEl <- unSDOM sdom sink last new
-    elEq <- unsafeJSEQ oldEl newEl
     writeIORef modelRef new
     writeIORef elRef $ Just newEl
-    if elEq then pure () else pure ()
+    unsafeJSEQ oldEl newEl >>= \case
+      True -> pure ()
+      False -> replaceChild oldEl newEl
 
 unsafeJSEQ :: (ToAny a) => a -> a -> IO Bool
 unsafeJSEQ = ffi "(function(a, b) { return a === b; })"
@@ -124,8 +124,9 @@ node name attrs childs = SDOM $ \sink last model -> last >>= \case
     forM_ (indexed childs) $ \(key, ch) -> childAt key el >>= \case
       Just childEl -> do
         newChildEl <- unSDOM ch sink (pure $ Just (old, childEl)) model
-        elEq <- unsafeJSEQ childEl newChildEl
-        if elEq then pure () else replaceChild childEl newChildEl el
+        unsafeJSEQ childEl newChildEl >>= \case
+          True -> pure ()
+          False -> replaceChild childEl newChildEl
       Nothing -> pure ()
     pure el
 
@@ -141,7 +142,7 @@ applyAttr sink last el _ (SDOMEvent name readMsg) = last >>= \case
     addEventListener =
       ffi "(function(sink, last, name, readMessage, el) {\
           \  el.addEventListener(name, function(event) {\
-          \    debugger; var lastElModel = last(); if (!lastElModel) return;\
+          \    var lastElModel = last(); if (!lastElModel) return;\
           \    var action = readMessage(event, lastElModel[0]); if (!action) return;\
           \    sink(action);\
           \  });\
@@ -194,11 +195,11 @@ setNodeValue =
   \  el.nodeValue = value;\
   \})"
 
-replaceChild :: Elem -> Elem -> Elem -> IO ()
+replaceChild :: Elem -> Elem -> IO ()
 replaceChild =
-  ffi "(function(prev, next, parent) {\
-  \  if (prev.parentNode !== parent) return;\
-  \  if (prev !== next) parent.replaceChild(next, prev);\
+  ffi "(function(prev, next) {\
+  \  if (!prev.parentNode) return;\
+  \  if (prev !== next) prev.parentNode.replaceChild(next, prev);\
   \})"
 
 childAt :: Int -> Elem -> IO (Maybe Elem)

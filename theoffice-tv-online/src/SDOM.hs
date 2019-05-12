@@ -7,7 +7,25 @@
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-module SDOM where
+module SDOM
+  ( PModel(..)
+  , Sink
+  , Last
+  , SDOMInst(..)
+  , SDOM(..)
+  , SDOMAttr(..)
+  , unSDOM
+  , on_
+  , attach
+  , actuate
+  , text_
+  , textDyn
+  , node
+  , union
+  , unionExhausted
+  , list_
+  , dimap
+  ) where
 
 import           Control.Monad      (forM_)
 import           Data.Bifunctor
@@ -80,33 +98,26 @@ actuate
   -> (model -> model)
   -> IO ()
 actuate (SDOMInst modelRef elRef last sink sdom) step = readIORef elRef >>= \case
-  Nothing -> pure ()
   Just oldEl -> do
     old <- readIORef modelRef
     let new = step old
     newEl <- unSDOM sdom sink last new
     writeIORef modelRef new
     writeIORef elRef $ Just newEl
-    unsafeJSEQ oldEl newEl >>= \case
+    unsafePtrEq oldEl newEl >>= \case
       True -> pure ()
       False -> replaceChild oldEl newEl
-
-unsafeJSEQ :: (ToAny a) => a -> a -> IO Bool
-unsafeJSEQ = ffi "(function(a, b) { return a === b; })"
+  Nothing -> pure ()
 
 text_ :: JSString -> SDOM model msg
-text_ content = SDOM $ \_ last _ -> do
-  lastModelEl <- last
-  case lastModelEl of
-    Just (_, el) -> pure el
-    Nothing      -> newTextElem content
+text_ content = SDOM $ \_ last _ -> last >>= \case
+  Just (_, el) -> pure el
+  Nothing      -> newTextElem content
 
 textDyn :: (model -> JSString) -> SDOM model msg
-textDyn mkContent = SDOM $ \_ last model -> do
-  lastModelEl <- last
-  case lastModelEl of
-    Just (_, el) -> setNodeValue (mkContent model) el >> pure el
-    Nothing      -> newTextElem (mkContent model)
+textDyn mkContent = SDOM $ \_ last model -> last >>= \case
+  Just (_, el) -> setNodeValue (mkContent model) el >> pure el
+  Nothing      -> newTextElem (mkContent model)
 
 dimap :: (i' -> i) -> (o -> o') -> SDOM i o -> SDOM i' o'
 dimap coproj proj sdom = SDOM $ \sink last model -> do
@@ -124,7 +135,7 @@ node name attrs childs = SDOM $ \sink last model -> last >>= \case
     forM_ (indexed childs) $ \(key, ch) -> childAt key el >>= \case
       Just childEl -> do
         newChildEl <- unSDOM ch sink (pure $ Just (old, childEl)) model
-        unsafeJSEQ childEl newChildEl >>= \case
+        unsafePtrEq childEl newChildEl >>= \case
           True -> pure ()
           False -> replaceChild childEl newChildEl
       Nothing -> pure ()
@@ -134,19 +145,8 @@ applyAttr :: forall i o. Sink o -> Last i -> Elem -> i -> SDOMAttr i o -> IO ()
 applyAttr _ _ el _ (SDOMAttr apply) = apply el
 applyAttr _ _ el input (SDOMAttrDyn update) = update input input el
 applyAttr sink last el _ (SDOMEvent name readMsg) = last >>= \case
+  Nothing -> addEventListener (sink . fromPtr) (mapLast toPtr last) (\e i -> toPtr <$> readMsg e (fromPtr i)) name el
   Just _ -> pure ()
-  Nothing ->
-    addEventListener (\o -> sink (fromPtr o)) (mapLast toPtr last) name (\e i -> toPtr <$> readMsg e (fromPtr i)) el
-    where
-    addEventListener :: Sink (Ptr o) -> Last (Ptr i) -> JSString -> (JSAny -> Ptr i -> Maybe (Ptr o)) -> Elem -> IO ()
-    addEventListener =
-      ffi "(function(sink, last, name, readMessage, el) {\
-          \  el.addEventListener(name, function(event) {\
-          \    var lastElModel = last(); if (!lastElModel) return;\
-          \    var action = readMessage(event, lastElModel[0]); if (!action) return;\
-          \    sink(action);\
-          \  });\
-          \})"
 
 updateAttr :: i -> i -> SDOMAttr i o -> Elem -> IO ()
 updateAttr _ _ (SDOMAttr _) _                = pure ()
@@ -188,6 +188,15 @@ instance Monoid JSString where
   mempty = JSS.empty
   mappend = JSS.append
 
+indexed :: [a] -> [(Int, a)]
+indexed xs = go 0# xs
+  where
+    go i (a:as) = (I# i, a) : go (i +# 1#) as
+    go _ _      = []
+
+unsafePtrEq :: (ToAny a) => a -> a -> IO Bool
+unsafePtrEq = ffi "(function(a, b) { return a === b; })"
+
 setNodeValue :: JSString -> Elem -> IO ()
 setNodeValue =
   ffi "(function(value, el) {\
@@ -208,8 +217,18 @@ childAt =
   \  return el.childNodes[index] || null;\
   \})"
 
-indexed :: [a] -> [(Int, a)]
-indexed xs = go 0# xs
-  where
-    go i (a:as) = (I# i, a) : go (i +# 1#) as
-    go _ _      = []
+addEventListener
+  :: Sink (Ptr o)
+  -> Last (Ptr i)
+  -> (JSAny -> Ptr i -> Maybe (Ptr o))
+  -> JSString
+  -> Elem
+  -> IO ()
+addEventListener =
+  ffi "(function(sink, last, readMessage, name, el) {\
+  \  el.addEventListener(name, function(event) {\
+  \    var lastElModel = last(); if (!lastElModel) return;\
+  \    var action = readMessage(event, lastElModel[0]); if (!action) return;\
+  \    sink(action);\
+  \  });\
+  \})"

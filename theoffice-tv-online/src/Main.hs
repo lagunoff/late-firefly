@@ -1,31 +1,39 @@
-{-# LANGUAGE OverloadedStrings, DataKinds, TypeFamilies, DeriveAnyClass, RankNTypes, ScopedTypeVariables, GADTs #-}
+{-# LANGUAGE DataKinds           #-}
+{-# LANGUAGE DeriveAnyClass      #-}
+{-# LANGUAGE FlexibleContexts    #-}
+{-# LANGUAGE GADTs               #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE RankNTypes          #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies        #-}
 module Main where
 
-import Stitch
-import qualified Haste.DOM as DOM
-import Haste.Prim.Foreign
-import qualified Haste.JSString as JSS
-import Data.Text (unpack)
-import Data.String
-import Data.Monoid ((<>))
-import Data.OpenUnion
-import TypeFun.Data.List (Elem)
-import SDOM
-import SDOM.Html
-import qualified SDOM.Html.Dynamic as Dyn
-import SDOM.Prop
-import qualified TheOffice.Home as Home
-import qualified TheOffice.Season as Season
-import qualified TheOffice.Episode as Episode
-import TheOffice.Style
-import qualified Data.Text as T
-import qualified TheOffice.Router as R
-import Data.IORef
-import Data.Maybe
+import           Data.IORef
+import           Data.Maybe
+import           Data.Monoid        ((<>))
+import           Data.OpenUnion
+import           Data.String
+import           Data.Text          (unpack)
+import qualified Data.Text          as T
+import qualified Haste.DOM          as DOM
+import qualified Haste.JSString     as JSS
+import           Haste.Prim.Foreign
+import           SDOM
+import           SDOM.Html
+import qualified SDOM.Html.Dynamic  as Dyn
+import           SDOM.Prop
+import           Stitch
+import qualified TheOffice.Episode  as Episode
+import qualified TheOffice.Home     as Home
+import qualified TheOffice.Router   as R
+import qualified TheOffice.Season   as Season
+import           TheOffice.Style
+import           TypeFun.Data.List  (Elem)
+
 
 data Model = Model
   { counter :: Int
-  , page :: Union Page
+  , page    :: Union Page
   }
 type Page = '[Home.Model, Season.Model, Episode.Model]
 type PageMsg = '[Season.Msg, Episode.Msg]
@@ -59,14 +67,14 @@ view02 = Home.view
     v02 = Dyn.text_ $ JSS.pack . (<> " :: String")
 
 initPage :: R.Route -> Maybe (Union Page)
-initPage R.Home = Just $ liftUnion Home.init
-initPage (R.Season season) = liftUnion <$> Season.init season
+initPage R.Home                = Just $ liftUnion Home.init
+initPage (R.Season season)     = liftUnion <$> Season.init season
 initPage route@(R.Episode s e) = liftUnion <$> Episode.init s e
 
 dispatch :: Msg -> IO ()
-dispatch Click = putStrLn "Clicked"
+dispatch Click            = putStrLn "Clicked"
 dispatch (PageAction msg) = putStrLn "Unknown Message"
-   
+
 main :: IO ()
 main = do
   route <- R.current
@@ -88,7 +96,7 @@ resetDisqus = ffi "(function(){ DISQUS.reset({ reload: true }); })"
 resetScroll :: IO ()
 resetScroll = ffi
   "(function() { window.scrollTo(0,0); })"
-  
+
 initDisqus :: IO ()
 initDisqus = ffi
   "(function() {\
@@ -128,18 +136,18 @@ styles = do
         "color" .= toCss (colorTextSecondary theme)
         "text-decoration" .= "none"
         "&:hover" ? do
-          "color" .= toCss (colorText theme) 
+          "color" .= toCss (colorText theme)
         "&:active" ? do
-          "color" .= toCss (colorSecondary theme) 
+          "color" .= toCss (colorSecondary theme)
   "#disqus_thread" ? do
     "max-width" .= px (pageWidth theme)
     "padding" .= list ["0", px (unit theme * 2)]
     "box-sizing" .= "content-box"
     "margin" .= "0 auto"
   where
-    cs_ = fromString . cs  
+    cs_ = fromString . cs
     px = T.pack . (<> "px") . show
     list = T.intercalate " "
-    
+
 cs :: (IsString s, Monoid s) => s -> s
 cs name = name <> "-ot0oxddvn33DoOAB"

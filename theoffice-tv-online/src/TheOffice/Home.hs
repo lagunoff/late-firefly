@@ -1,20 +1,24 @@
-{-# LANGUAGE OverloadedStrings, UndecidableInstances, FlexibleInstances, GADTs, PostfixOperators #-}
+{-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE GADTs                #-}
+{-# LANGUAGE OverloadedStrings    #-}
+{-# LANGUAGE PostfixOperators     #-}
+{-# LANGUAGE UndecidableInstances #-}
 module TheOffice.Home where
 
-import Stitch
-import Haste.Prim (toJSStr)
-import Data.String (IsString)
-import qualified Haste.JSString as JSStr
-import qualified Data.Text as T
-import Data.String (fromString)
-import Data.Monoid ((<>))
-import SDOM (SDOM, text_, node)
-import SDOM.Html
-import SDOM.Prop
-import qualified TheOffice.Router as R
-import IWatchTheOffice.Db
-import IWatchTheOffice.Db.Data (db)
-import TheOffice.Style
+import           Data.Monoid             ((<>))
+import           Data.String             (IsString)
+import           Data.String             (fromString)
+import qualified Data.Text               as T
+import qualified Haste.JSString          as JSStr
+import           Haste.Prim              (toJSStr)
+import           IWatchTheOffice.Db
+import           IWatchTheOffice.Db.Data (db)
+import           SDOM                    (SDOM, node, text_)
+import           SDOM.Html
+import           SDOM.Prop
+import           Stitch
+import qualified TheOffice.Router        as R
+import           TheOffice.Style
 
 newtype Model = Model ()
 

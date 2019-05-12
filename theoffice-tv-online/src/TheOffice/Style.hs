@@ -1,28 +1,28 @@
 {-# LANGUAGE OverloadedStrings #-}
 module TheOffice.Style where
 
-import Data.String (IsString, fromString)
-import Data.Monoid ((<>))
-import Stitch
+import           Data.Monoid ((<>))
+import           Data.String (IsString, fromString)
+import           Stitch
 
 data Hsla = Hsla
-  { hue :: Float
+  { hue        :: Float
   , saturation :: Float
-  , lightness :: Float
-  , alpha :: Float
+  , lightness  :: Float
+  , alpha      :: Float
   } deriving (Show, Eq)
 
 toCss :: (IsString s, Monoid s) => Hsla -> s
 toCss (Hsla h s l a) = "hsla(" <> fromString (show h) <> ", " <> fromString (show s) <> "%, " <> fromString (show l) <> "%, " <> fromString (show a) <> ")"
 
 data Theme = Theme
-  { colorBorder :: Hsla
-  , colorText :: Hsla
+  { colorBorder        :: Hsla
+  , colorText          :: Hsla
   , colorTextSecondary :: Hsla
-  , colorAccent :: Hsla
-  , colorSecondary :: Hsla
-  , unit :: Float
-  , pageWidth :: Float
+  , colorAccent        :: Hsla
+  , colorSecondary     :: Hsla
+  , unit               :: Float
+  , pageWidth          :: Float
   }
 
 theme :: Theme

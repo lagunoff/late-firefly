@@ -1,16 +1,20 @@
-{-# LANGUAGE OverloadedStrings, UndecidableInstances, FlexibleInstances, GADTs, PostfixOperators #-}
+{-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE GADTs                #-}
+{-# LANGUAGE OverloadedStrings    #-}
+{-# LANGUAGE PostfixOperators     #-}
+{-# LANGUAGE UndecidableInstances #-}
 module TheOffice.Season where
-import IWatchTheOffice.Db
-import IWatchTheOffice.Db.Data (db)
-import SDOM.Html
-import qualified SDOM.Html.Dynamic as Dyn
-import qualified SDOM.Prop.Dynamic as Dyn
-import qualified Haste.JSString as JS
-import qualified TheOffice.Router as R
-import SDOM
-import Data.Monoid ((<>))
-import Control.Arrow
-import Data.List
+import           Control.Arrow
+import           Data.List
+import           Data.Monoid             ((<>))
+import qualified Haste.JSString          as JS
+import           IWatchTheOffice.Db
+import           IWatchTheOffice.Db.Data (db)
+import           SDOM
+import           SDOM.Html
+import qualified SDOM.Html.Dynamic       as Dyn
+import qualified SDOM.Prop.Dynamic       as Dyn
+import qualified TheOffice.Router        as R
 
 newtype Model = Model { season :: Season }
 

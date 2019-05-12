@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module SDOM.Html where
 
-import SDOM
+import           SDOM
 
 -- | https://developer.mozilla.org/en-US/docs/Web/HTML/Element/div
 div_ :: [SDOMAttr i o] -> [SDOM i o] -> SDOM i o

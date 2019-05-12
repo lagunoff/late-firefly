@@ -1,23 +1,27 @@
-{-# LANGUAGE OverloadedStrings, UndecidableInstances, FlexibleInstances, GADTs, PostfixOperators #-}
+{-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE GADTs                #-}
+{-# LANGUAGE OverloadedStrings    #-}
+{-# LANGUAGE PostfixOperators     #-}
+{-# LANGUAGE UndecidableInstances #-}
 module TheOffice.Episode where
-import IWatchTheOffice.Db
-import IWatchTheOffice.Db.Data (db)
-import SDOM.Html
-import SDOM.Prop
-import qualified SDOM.Html.Dynamic as Dyn
-import qualified SDOM.Prop.Dynamic as Dyn
-import qualified Haste.JSString as JS
-import qualified TheOffice.Router as R
-import SDOM
-import Data.Monoid ((<>))
-import Control.Arrow
-import Data.List
-import Data.Maybe
-import Safe (atMay)
+import           Control.Arrow
+import           Data.List
+import           Data.Maybe
+import           Data.Monoid             ((<>))
+import qualified Haste.JSString          as JS
+import           IWatchTheOffice.Db
+import           IWatchTheOffice.Db.Data (db)
+import           Safe                    (atMay)
+import           SDOM
+import           SDOM.Html
+import qualified SDOM.Html.Dynamic       as Dyn
+import           SDOM.Prop
+import qualified SDOM.Prop.Dynamic       as Dyn
+import qualified TheOffice.Router        as R
 
 data Model = Model
   { episode :: Episode
-  , active :: Int
+  , active  :: Int
   }
 data Msg = Source Int
 

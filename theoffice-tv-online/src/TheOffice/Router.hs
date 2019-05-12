@@ -1,13 +1,13 @@
 {-# LANGUAGE OverloadedStrings #-}
 module TheOffice.Router where
 
-import Prelude hiding (print)
-import Data.Monoid ((<>))
+import           Data.Monoid        ((<>))
+import           Haste.JSString     (RegEx, match)
+import qualified Haste.JSString     as JSStr
+import           Haste.Prim         (fromJSStr, toJSStr)
+import           Haste.Prim.Foreign
 import qualified IWatchTheOffice.Db as Db
-import qualified Haste.JSString as JSStr
-import Haste.Prim (toJSStr, fromJSStr)
-import Haste.JSString (RegEx, match)
-import Haste.Prim.Foreign
+import           Prelude            hiding (print)
 
 
 data Route
@@ -36,8 +36,8 @@ current = do
 
 print :: Route -> String
 print route = "#" <> case route of
-  Home -> ""
-  (Season season) -> "season-" <> season
+  Home                     -> ""
+  (Season season)          -> "season-" <> season
   (Episode season episode) -> "season-" <> season <> "/episode-" <> episode
 
 seasonUrl :: Db.Season -> String
@@ -58,7 +58,7 @@ onPopState cb = onPopStateImpl $ \str -> do
   putStrLn $ "onPopState: " <> fromJSStr str
   case parse (fromJSStr str) of
     Just route -> cb route
-    Nothing -> putStrLn $ "onPopState: route not found: " <> fromJSStr str
+    Nothing    -> putStrLn $ "onPopState: route not found: " <> fromJSStr str
   where
     onPopStateImpl :: (JSStr.JSString -> IO ()) -> IO (IO ())
     onPopStateImpl =
@@ -67,4 +67,4 @@ onPopState cb = onPopStateImpl $ \str -> do
           \  window.onpopstate = function() { cb(location.hash); };\
           \  return function() { window.onpopstate = prev; };\
           \})"
-  
+

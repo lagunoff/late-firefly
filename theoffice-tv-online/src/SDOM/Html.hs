@@ -1,14 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module SDOM.Html where
 
-import Haste.Prim
 import SDOM
-
-node :: JSString -> [SDOMAttr i o] -> [SDOM i o] -> SDOM i o
-node = SDOMElement
-
-text_ :: JSString -> SDOM i o
-text_ = SDOMText
 
 -- | https://developer.mozilla.org/en-US/docs/Web/HTML/Element/div
 div_ :: [SDOMAttr i o] -> [SDOM i o] -> SDOM i o

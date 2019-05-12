@@ -8,7 +8,7 @@ import qualified Haste.JSString as JSStr
 import qualified Data.Text as T
 import Data.String (fromString)
 import Data.Monoid ((<>))
-import SDOM (SDOM)
+import SDOM (SDOM, text_, node)
 import SDOM.Html
 import SDOM.Prop
 import qualified TheOffice.Router as R

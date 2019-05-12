@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, DataKinds, TypeFamilies, DeriveAnyClass, RankNTypes #-}
+{-# LANGUAGE OverloadedStrings, DataKinds, TypeFamilies, DeriveAnyClass, RankNTypes, ScopedTypeVariables, GADTs #-}
 module Main where
 
 import Stitch
@@ -6,7 +6,6 @@ import qualified Haste.DOM as DOM
 import Haste.Prim.Foreign
 import qualified Haste.JSString as JSS
 import Data.Text (unpack)
-import Data.Typeable.Internal
 import Data.String
 import Data.Monoid ((<>))
 import Data.OpenUnion
@@ -16,25 +15,29 @@ import SDOM.Html
 import qualified SDOM.Html.Dynamic as Dyn
 import SDOM.Prop
 import qualified TheOffice.Home as Home
+import qualified TheOffice.Season as Season
+import qualified TheOffice.Episode as Episode
 import TheOffice.Style
 import qualified Data.Text as T
 import qualified TheOffice.Router as R
 import Data.IORef
+import Data.Maybe
 
 data Model = Model
   { counter :: Int
   , page :: Union Page
   }
-type Page = '[Home.Model, String]
+type Page = '[Home.Model, Season.Model, Episode.Model]
+type PageMsg = '[Season.Msg, Episode.Msg]
 
-data Msg
-  = PageAction (forall a. (Typeable a, Elem a Page) => (TypeRep, a))
-  | Click
+data Msg where
+  PageAction :: (Elem a PageMsg) => a -> Msg
+  Click :: Msg
 
 view :: SDOM Model Msg
 view =
   div_ [ class_ (cs "root") ]
-  [ nav_ [ class_ (cs "nav"), on_ "click" . const . Just $ Click ]
+  [ nav_ [ class_ (cs "nav"), on_ "click" . const . const . Just $ Click ]
     [ ul_ []
       [ li_ [] [ a_ [ href_ "#" ] [ b_ [] [ text_ "TheOffice-tv.online" ] ] ]
       , li_ [] [ a_ [ href_ "#" ] [ text_ "Seasons" ] ]
@@ -46,42 +49,46 @@ view =
   , node "style" [ stringProp "innerHTML" . unpack $ renderCSS styles ] []
   ]
 
-view02 :: SDOM (Union Page) msg
+view02 :: SDOM (Union Page) Msg
 view02 = Home.view
- `union` v02
+ `union` dimap id PageAction Season.view
+ `union` dimap id PageAction Episode.view
  `union` unionExhausted
   where
     v02 :: SDOM String msg
     v02 = Dyn.text_ $ JSS.pack . (<> " :: String")
 
-initPage :: R.Route -> Union Page
-initPage R.Home = liftUnion Home.init
-initPage route@(R.Season {}) = liftUnion $ show route
-initPage route@(R.Episode {}) = liftUnion $ show route
+initPage :: R.Route -> Maybe (Union Page)
+initPage R.Home = Just $ liftUnion Home.init
+initPage (R.Season season) = liftUnion <$> Season.init season
+initPage route@(R.Episode s e) = liftUnion <$> Episode.init s e
 
 dispatch :: Msg -> IO ()
 dispatch Click = putStrLn "Clicked"
-dispatch _ = putStrLn "Unknown Message"
+dispatch (PageAction msg) = putStrLn "Unknown Message"
    
 main :: IO ()
 main = do
-  let initModel = Model { counter = 0, page = (liftUnion Home.init) }
-  root <- create_ dispatch initModel view
-  DOM.appendChild DOM.documentBody root
+  route <- R.current
+  let initModel = Model { counter = 0, page = fromMaybe (liftUnion Home.init) $ initPage $ fromMaybe R.Home route }
+  inst <- attach initModel dispatch DOM.documentBody view
   initDisqus
-  modelRef <- newIORef initModel
-  _ <- R.onPopState $ \route -> do
-    putStrLn $ "New Route: " <> show route
-    prevModel <- readIORef modelRef
-    let nextModel = prevModel { page = initPage route }
-    _ <- actuate prevModel nextModel root view
-    writeIORef modelRef nextModel
-    pure ()
+  _ <- R.onPopState $ \route -> case initPage route of
+    Nothing -> pure ()
+    Just p -> do
+      putStrLn $ "New Route: " <> show route
+      actuate inst (\model -> model { page = p })
+      resetScroll
+      pure ()
   pure ()
 
 resetDisqus :: IO ()
 resetDisqus = ffi "(function(){ DISQUS.reset({ reload: true }); })"
 
+resetScroll :: IO ()
+resetScroll = ffi
+  "(function() { window.scrollTo(0,0); })"
+  
 initDisqus :: IO ()
 initDisqus = ffi
   "(function() {\

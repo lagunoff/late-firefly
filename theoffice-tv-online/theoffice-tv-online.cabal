@@ -69,6 +69,7 @@ executable theoffice-tv-online
                      , open-union
                      , type-fun
                      , containers
+                     , safe
   
   -- Directories containing source files.
   hs-source-dirs:      src

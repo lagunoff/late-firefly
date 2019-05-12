@@ -5,4 +5,4 @@ import Haste.Prim
 import SDOM
 
 text_ :: (i -> JSString) -> SDOM i o
-text_ = SDOMTextDyn
+text_ = textDyn

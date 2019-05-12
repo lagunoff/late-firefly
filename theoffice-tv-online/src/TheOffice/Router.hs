@@ -20,8 +20,8 @@ parse :: String -> Maybe Route
 parse "" = Just Home
 parse "#" = Just Home
 parse ('#':xs) = go
-  ( match ("^season-(\\d+)/episode-(\\d+)$" :: RegEx) (toJSStr xs)
-  , match ("^season-(\\d+)$" :: RegEx) (toJSStr xs)
+  ( match ("^season-([\\d\\-]+)/episode-([\\d\\-]+)$" :: RegEx) (toJSStr xs)
+  , match ("^season-([\\d\\-]+)$" :: RegEx) (toJSStr xs)
   )
   where
     go ([_, season, episode], _) = Just (Episode (fromJSStr season) (fromJSStr episode))
@@ -29,6 +29,10 @@ parse ('#':xs) = go
     go _ = Nothing
 parse _ = Nothing
 
+current :: IO (Maybe Route)
+current = do
+  hash <- ffi "(function(){ return window.location.hash; })" :: IO String
+  pure $ parse hash
 
 print :: Route -> String
 print route = "#" <> case route of
@@ -42,6 +46,12 @@ seasonUrl (Db.Season {Db.season_code=code}) = print $ Season $ fromJSStr $ JSStr
 episodeUrl :: Db.Season -> Db.Episode -> String
 episodeUrl (Db.Season {Db.season_code=season_code}) (Db.Episode{Db.episode_code=episode_code}) =
   print $ Episode (fromJSStr $ JSStr.replace (toJSStr season_code) ("^Season\\s" :: JSStr.RegEx) "") (fromJSStr $ JSStr.replace (toJSStr episode_code) ("^S\\d\\dE\\w" :: JSStr.RegEx) "")
+
+episodeCode :: Db.Episode -> String
+episodeCode (Db.Episode {Db.episode_code=episode_code}) = fromJSStr $ JSStr.replace (toJSStr episode_code) ("^S\\d\\dE\\w" :: JSStr.RegEx) ""
+
+seasonCode :: Db.Season -> String
+seasonCode (Db.Season {Db.season_code=season_code}) = fromJSStr $ JSStr.replace (toJSStr season_code) ("^Season\\s" :: JSStr.RegEx) ""
 
 onPopState :: (Route -> IO ()) -> IO (IO ())
 onPopState cb = onPopStateImpl $ \str -> do

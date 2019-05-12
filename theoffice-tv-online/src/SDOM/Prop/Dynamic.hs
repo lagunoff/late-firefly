@@ -5,7 +5,7 @@ import Haste.Prim
 import Haste.Prim.Foreign
 import Haste.DOM.JSString (Elem)
 import SDOM
-import SDOM.Prop (intercalate)
+import Haste.JSString (intercalate)
 
 
 -- | Set field to `Bool` value
@@ -28,7 +28,7 @@ prop :: ToAny a => JSString -> (i -> a) -> SDOMAttr i o
 prop name val = SDOMAttrDyn $ \_ new el -> unsafeSetProp el name $ toAny $ val new
   where
     unsafeSetProp :: Elem -> JSString -> JSAny -> IO ()
-    unsafeSetProp = ffi "function(el, name, val) { el[name] = val; }"
+    unsafeSetProp = ffi "(function(el, name, val) { el[name] = val; })"
 
 --
 -- > div_ [ classList_ [ ("empty", null items) ] [ ]

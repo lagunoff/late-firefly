@@ -1,6 +1,7 @@
-{-# LANGUAGE GADTs, OverloadedStrings, DataKinds, ScopedTypeVariables, FlexibleContexts, MagicHash #-}
+{-# LANGUAGE GADTs, OverloadedStrings, DataKinds, ScopedTypeVariables, FlexibleContexts, MagicHash, RankNTypes, LambdaCase, NoImplicitPrelude #-}
 module SDOM where
 
+import Prelude hiding (last)
 import Haste.Foreign
 import Haste.Prim
 import Data.OpenUnion
@@ -10,97 +11,171 @@ import Haste.DOM.JSString (Elem, newTextElem, newElem, appendChild)
 import qualified Haste.JSString as JSS
 import Control.Monad (forM_)
 import GHC.Exts
+import Data.IORef
+import Data.Bifunctor
 
-data SDOM i o where
-  SDOMText :: JSString -> SDOM i o
-  SDOMTextDyn :: (i -> JSString) -> SDOM i o
-  SDOMElement :: JSString -> [SDOMAttr i o] -> [SDOM i o] -> SDOM i o
-  SDOMDimap :: (i' -> i) -> (o -> o') -> SDOM i o -> SDOM i' o'
-  SDOMUnion :: (Typeable here, Typeable (Union (Delete here s))) => SDOM here o -> SDOM (Union (Delete here s)) o -> SDOM (Union s) o
+data PModel parent item = PModel { parent :: parent, item :: item }
+type Sink a = a -> IO ()
+type Last model = IO (Maybe (model, Elem))
+
+data SDOMInst model msg = SDOMInst
+  { instModel :: IORef model
+  , instElem :: IORef (Maybe Elem)
+  , instLast :: Last model
+  , instSink :: Sink msg
+  , instSDOM :: SDOM model msg
+  }
+
+newtype SDOM model msg
+  = SDOM (Sink msg -> Last model -> model -> IO Elem)
+
+unSDOM :: SDOM model msg -> Sink msg -> Last model -> model -> IO Elem
+unSDOM (SDOM f) = f
 
 data SDOMAttr i o where
   SDOMAttr :: (Elem -> IO ()) -> SDOMAttr i o
   SDOMAttrDyn :: (i -> i -> Elem -> IO ()) -> SDOMAttr i o
-  SDOMEvent :: JSString -> (JSAny -> Maybe o) -> SDOMAttr i o
+  SDOMEvent :: JSString -> (JSAny -> i -> Maybe o) -> SDOMAttr i o
 
-
-on_ :: JSString -> (JSAny -> Maybe o) -> SDOMAttr i o
+on_ :: JSString -> (JSAny -> i -> Maybe o) -> SDOMAttr i o
 on_ = SDOMEvent
 
+mapLast :: (a -> b) -> Last a -> Last b
+mapLast = fmap . fmap . first
 
-create :: i -> SDOM i o -> IO Elem
-create _ (SDOMText content) = newTextElem content
-create i (SDOMTextDyn f) = newTextElem (f i)
-create i (SDOMDimap coproj proj child) = do
-  el <- create (coproj i) child
-  attachMeta (unsafeCoerce# proj) el
-  pure el
-create i (SDOMUnion left right) = case restrict i of
-  Right i' -> create i' left
-  Left i' -> create i' right
-create i (SDOMElement name attrs childs) = do
-  el <- newElem name
-  forM_ attrs $ \attr -> applyAttr attr el i
-  forM_ childs $ \ch -> create i ch >>= appendChild el
-  pure el
+mkLast :: Elem -> a -> Last a
+mkLast el model = pure $ Just (model, el)
 
-create_ :: (o -> IO ()) -> i -> SDOM i o -> IO Elem
-create_ handler input sdom = do
-  el <- create input sdom
-  attachMeta (unsafeCoerce# handler) el
-  pure el
-  
-actuate :: i -> i -> Elem -> SDOM i o -> IO Elem
-actuate _ _ el (SDOMText _) = pure el
-actuate prev next el (SDOMTextDyn f) = setNodeValue (f next) el >> pure el
-actuate prev next el (SDOMDimap coproj _ child) = actuate (coproj prev) (coproj next) el child
-actuate prev next el sdom@(SDOMUnion left right) = case (restrict prev, restrict next) of
-  (Right prev', Right next') -> actuate prev' next' el left
-  (Left _,  Right next') -> create next' left
-  (Left prev',  Left next') -> actuate prev' next' el right
-  (Right _,  Left next') -> create next' right
-actuate prev next el (SDOMElement _ attrs childs) = do
-  forM_ attrs $ \attr -> updateAttr prev next attr el
-  forM_ (indexed childs) $ \(key, ch) -> do
-    maybeCh <- childAt key el
-    case maybeCh of
-      Nothing -> pure ()
-      Just childEl -> do
-        newChildEl <- actuate prev next childEl ch
-        replaceChild childEl newChildEl el
-  pure el
+attach
+  :: forall model msg
+   . model
+  -> Sink msg
+  -> Elem
+  -> SDOM model msg
+  -> IO (SDOMInst model msg)
+attach model sink root sdom = do
+  modelRef <- newIORef model
+  elRef <- newIORef Nothing
+  let last :: Last model
+      last = do
+        maybeEl <- readIORef elRef
+        m <- readIORef modelRef
+        pure $ maybe Nothing (\el -> Just (m, el)) maybeEl 
+  el <- unSDOM sdom sink last model
+  writeIORef elRef (Just el)
+  appendChild root el
+  pure $ SDOMInst modelRef elRef last sink sdom
 
-applyAttr :: SDOMAttr i o -> Elem -> i -> IO ()
-applyAttr (SDOMAttr apply) el _ = apply el
-applyAttr (SDOMAttrDyn update) el input = update input input el
-applyAttr (SDOMEvent name readMsg) el _ = addEventListener name (unsafeCoerce# readMsg) el
-  where
-    addEventListener :: JSString -> (JSAny -> Maybe JSAny) -> Elem -> IO ()
-    addEventListener = ffi "(function(name, readMessage, el) {\
-                            \  el.addEventListener(name, function(event) {\
-                            \    var iter = event.target;\
-                            \    var action = readMessage(event); if (!action) return;\
-                            \    for (; iter; iter = iter.parentElement) {\
-                            \      var nodeData = iter._meta; if (!nodeData) continue;\
-                            \      if ('proj' in nodeData) action = nodeData.proj(action);\
-                            \    }\
-                            \  });\
-                            \})"
+actuate
+  :: forall model msg
+   . SDOMInst model msg
+  -> (model -> model)
+  -> IO ()
+actuate (SDOMInst modelRef elRef last sink sdom) step = readIORef elRef >>= \case
+  Nothing -> pure ()
+  Just oldEl -> do
+    old <- readIORef modelRef
+    let new :: model
+        new = step old
+    newEl <- unSDOM sdom sink last new
+    elEq <- unsafeJSEQ oldEl newEl
+    writeIORef modelRef new
+    writeIORef elRef $ Just newEl
+    if elEq then pure () else pure ()
+
+unsafeJSEQ :: (ToAny a) => a -> a -> IO Bool
+unsafeJSEQ = ffi "(function(a, b) { return a === b; })"
+
+text_ :: JSString -> SDOM model msg
+text_ content = SDOM $ \_ last _ -> do
+  lastModelEl <- last
+  case lastModelEl of
+    Just (_, el) -> pure el
+    Nothing -> newTextElem content
+
+textDyn :: (model -> JSString) -> SDOM model msg
+textDyn mkContent = SDOM $ \_ last model -> do
+  lastModelEl <- last
+  case lastModelEl of
+    Just (_, el) -> setNodeValue (mkContent model) el >> pure el
+    Nothing -> newTextElem (mkContent model)
+
+dimap :: (i' -> i) -> (o -> o') -> SDOM i o -> SDOM i' o'
+dimap coproj proj sdom = SDOM $ \sink last model -> do
+  unSDOM sdom (sink . proj) (fmap (first coproj) <$> last) (coproj model)
+
+node :: JSString -> [SDOMAttr i o] -> [SDOM i o] -> SDOM i o
+node name attrs childs = SDOM $ \sink last model -> last >>= \case
+  Nothing -> do
+    el <- newElem name
+    forM_ attrs $ applyAttr sink last el model
+    forM_ childs $ \ch -> unSDOM ch sink last model >>= appendChild el
+    pure el
+  Just (old, el) -> do
+    forM_ attrs $ \attr -> updateAttr old model attr el
+    forM_ (indexed childs) $ \(key, ch) -> do
+      maybeCh <- childAt key el
+      case maybeCh of
+        Nothing -> pure ()
+        Just childEl -> do
+          newChildEl <- unSDOM ch sink (pure $ Just (old, childEl)) model
+          elEq <- unsafeJSEQ childEl newChildEl 
+          if elEq then pure () else replaceChild childEl newChildEl el
+    pure el
+          
+applyAttr :: forall i o. Sink o -> Last i -> Elem -> i -> SDOMAttr i o -> IO ()
+applyAttr _ _ el _ (SDOMAttr apply) = apply el
+applyAttr _ _ el input (SDOMAttrDyn update) = update input input el
+applyAttr sink last el _ (SDOMEvent name readMsg) = last >>= \case
+  Just _ -> pure ()
+  Nothing ->
+    addEventListener (\o -> sink (fromPtr o)) (mapLast toPtr last) name (\e i -> toPtr <$> readMsg e (fromPtr i)) el
+    where
+    addEventListener :: Sink (Ptr o) -> Last (Ptr i) -> JSString -> (JSAny -> Ptr i -> Maybe (Ptr o)) -> Elem -> IO ()
+    addEventListener =
+      ffi "(function(sink, last, name, readMessage, el) {\
+          \  el.addEventListener(name, function(event) {\
+          \    debugger; var lastElModel = last(); if (!lastElModel) return;\
+          \    var action = readMessage(event, lastElModel[0]); if (!action) return;\
+          \    sink(action);\
+          \  });\
+          \})"
 
 updateAttr :: i -> i -> SDOMAttr i o -> Elem -> IO ()
 updateAttr _ _ (SDOMAttr _) _                = pure ()
 updateAttr prev next (SDOMAttrDyn update) el = update prev next el
 updateAttr _ _ (SDOMEvent _ _) _             = pure ()
 
-union :: (Typeable a, Typeable (Union (Delete a s))) => SDOM a o -> SDOM (Union (Delete a s)) o -> SDOM (Union s) o
-union = SDOMUnion
+union
+  :: forall a s o
+   . (Typeable a, Typeable (Union (Delete a s)))
+  => SDOM a o
+  -> SDOM (Union (Delete a s)) o
+  -> SDOM (Union s) o
+union left right = SDOM $ \sink last new -> last >>= \case
+  Nothing -> case restrict new of
+    Right i' -> unSDOM left sink (pure Nothing) i'
+    Left  i' -> unSDOM right sink (pure Nothing) i'
+  Just (old, el) -> case (restrict old, restrict new) of
+    (Right old', Right new') -> unSDOM left sink (mkLast el old') new'
+    (Left     _, Right new') -> unSDOM left sink (pure Nothing) new'
+    (Left  old', Left  new') -> unSDOM right sink (mkLast el old') new'
+    (Right    _, Left  new') -> unSDOM right sink (pure Nothing) new'
+      
 infixr 4 `union`
 
 unionExhausted :: SDOM (Union '[]) o
 unionExhausted = undefined
 
-dimap :: (i' -> i) -> (o -> o') -> SDOM i o -> SDOM i' o'
-dimap = SDOMDimap
+list_ :: JSString -> [SDOMAttr i o] -> (i -> [a]) -> SDOM (PModel i a) o -> SDOM i o
+list_ name attrs coproj sdom = SDOM $ \sink last model -> last >>= \case
+  Nothing -> do
+    el <- newElem name
+    forM_ attrs $ applyAttr sink last el model
+    forM_ (coproj model) $ \ch -> unSDOM sdom sink (pure Nothing) (PModel model ch) >>= appendChild el
+    pure el
+  Just (_, el) -> do
+    pure el
 
 instance Monoid JSString where
   mempty = JSS.empty
@@ -128,8 +203,8 @@ childAt =
 
 attachMeta :: (JSAny -> JSAny) -> Elem -> IO ()
 attachMeta = ffi "(function(proj, el) {\
-  \  el._meta = el._meta || {};\
-  \  el._meta.proj = proj;\
+  \  el['_meta'] = el['_meta'] || {};\
+  \  el['_meta']['proj'] = proj;\
   \})"
 
 indexed :: [a] -> [(Int, a)]
@@ -137,4 +212,3 @@ indexed xs = go 0# xs
   where
     go i (a:as) = (I# i, a) : go (i +# 1#) as
     go _ _ = []
-

@@ -31,6 +31,12 @@ prop name val = SDOMAttr $ \el -> unsafeSetProp el name (toAny val)
     unsafeSetProp :: Elem -> JSString -> JSAny -> IO ()
     unsafeSetProp = ffi "(function(el, name, val) { el[name] = val; })"
 
+attr :: JSString -> JSString -> SDOMAttr i o
+attr name val = SDOMAttr $ \el -> unsafeSetAttr el name val
+  where
+    unsafeSetAttr :: Elem -> JSString -> JSString -> IO ()
+    unsafeSetAttr = ffi "(function(el, name, val) { el.setAttribute(name, val); })"
+
 
 --
 -- > div_ [ classList_ [ ("empty", null items) ] [ ]

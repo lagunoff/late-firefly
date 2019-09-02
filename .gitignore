@@ -12,5 +12,6 @@
 */output
 */dist
 /tmp
+*/dist-newstyle
 **/.stack-work
 **/.cabal-sandbox

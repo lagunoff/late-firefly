@@ -1,9 +1,11 @@
 name:                iwatchtheoffice-com
 version:             0.1.0.0
-cabal-version: >= 1.2                     
+build-type:          Simple
+cabal-version:       >=1.10
+               
 executable parser
-  main-is:             Main.hs
-  ghc-options: -threaded -rtsopts "-with-rtsopts=-N -T"
+  main-is:             IWatchTheOffice/Parser.hs
+  ghc-options:         -optc-Os -O4
   build-depends:       base
                      , http-client
                      , http-client-tls
@@ -18,3 +20,35 @@ executable parser
                      , optparse-applicative
                      , deepseq
                      , tagsoup
+                     , process
+                     , sqlite-simple
+                     , text
+                     , time
+                     , split
+                     , aeson
+               
+executable theoffice
+  main-is:             TheOffice/Main.hs
+  build-depends:       base
+                     , transformers
+                     , mtl
+                     , utf8-string
+                     , bytestring
+                     , exceptions
+                     , text
+                     , time
+                     , aeson
+                     , haste-app
+                     , massaraksh
+                     , split
+                     , lens-family
+                     , lens-family-core
+                     , lens-family-th
+                     , ghcjs-dom-jsaddle
+                     , jsaddle
+                     , raw-strings-qq
+  if !impl(ghcjs)
+    build-depends:   sqlite-simple
+  if impl(ghcjs)
+    build-depends:   sqlite-simple-stub
+  default-language: Haskell2010

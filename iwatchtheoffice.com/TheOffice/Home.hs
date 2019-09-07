@@ -1,28 +1,32 @@
-{-# LANGUAGE NamedFieldPuns, TemplateHaskell, LambdaCase, QuasiQuotes #-}
+{-# LANGUAGE LambdaCase      #-}
+{-# LANGUAGE NamedFieldPuns  #-}
+{-# LANGUAGE QuasiQuotes     #-}
+{-# LANGUAGE TemplateHaskell #-}
 module TheOffice.Home where
 
-import Massaraksh.Html
-import Massaraksh.Gui
-import Lens.Family hiding (view)
-import Lens.Family.TH
-import GHCJS.DOM
-import GHCJS.DOM.Types hiding (Node)
-import GHCJS.DOM.Document
-import GHCJS.DOM.Element
-import GHCJS.DOM.Node hiding (Node)
-import GHCJS.DOM.EventM hiding (on)
-import GHCJS.DOM.GlobalEventHandlers
-import GHCJS.DOM.HTMLHyperlinkElementUtils
-import Language.Javascript.JSaddle hiding (new, (!!))
-import Data.List ((!!))
-import Text.RawString.QQ
-import Control.Concurrent.MVar (takeMVar, putMVar, newEmptyMVar)
-import Control.Monad.IO.Class (liftIO)
-import IWatchTheOffice.Db
+import           Control.Concurrent.MVar             (newEmptyMVar, putMVar,
+                                                      takeMVar)
+import           Control.Lens                        hiding (element, view)
+import           Control.Monad.IO.Class              (liftIO)
+import           Data.List                           ((!!))
+import           GHCJS.DOM
+import           GHCJS.DOM.Document
+import           GHCJS.DOM.Element
+import           GHCJS.DOM.EventM                    hiding (on)
+import           GHCJS.DOM.GlobalEventHandlers
+import           GHCJS.DOM.HTMLHyperlinkElementUtils
+import           GHCJS.DOM.Node                      hiding (Node)
+import           GHCJS.DOM.Types                     hiding (Node)
+import           IWatchTheOffice.Db
+import           Language.Javascript.JSaddle         hiding (new, (!!))
+import           Massaraksh.Gui
+import           Massaraksh.Html
+import           Text.RawString.QQ
 
 data Model = Model
-  { _counter :: Int
-  , _clicks :: Int
+  { _counter :: Int      -- ^ Incremented each second
+  , _clicks  :: Int      -- ^ How many times left button was clicked
+  , _seasons :: [Season] -- ^ Data from server
   }
 
 $(makeLenses ''Model)
@@ -30,8 +34,8 @@ $(makeLenses ''Model)
 colors :: [String]
 colors = ["#F44336", "#03A9F4", "#4CAF50", "#3F51B5", "#607D8B", "#FF5722"]
 
-view :: [Season] -> Html Model msg
-view seasons =
+view :: Html' msg Model
+view =
   element "main" []
   [ div_ [ prop_ "class" "root" ]
     [ h1_ [ prop "style" $ \m -> "color: " <> (colors !! (m ^. counter `rem` 6)) <> "" ] [ text_ "Kia ora (Hi)" ]
@@ -44,7 +48,8 @@ view seasons =
       , button_ [ on click (\_ -> Right $ counter .~ 0) ] [ text_ "Reset counter" ]
       ]
     , element "style" [ prop_ "type" "text/css" ] [ text_ css ]
-    , ul_ [] $ flip fmap seasons $ \season -> li_ [] [ text_ (season_code season) ]
+    , list seasons "ol" [] $ li_ [] [ text (season_code . here) ]
+    , list seasons "ol" [] $ li_ [] [ text (season_code . here) ]
    ]
   ]
 
@@ -54,12 +59,12 @@ main seasons = do
   body <- getBodyUnchecked doc
   exitMVar <- liftIO newEmptyMVar
 
-  CreatedStore { store, modify } <- createStore $ Model 0 0
-  GuiResult { ui } <- unGui (view seasons) store $ \case
-    EventStep f -> modify f
+  storeHandle <- createStore $ Model 0 0 seasons
+  GuiHandle { ui, finalizer } <- unGui view (getStore storeHandle) $ \case
+    MsgStep f -> modifyStore storeHandle f
     _ -> pure ()
 
-  cb <- function $ \_ _ _ -> modify $ counter %~ (+) 1
+  cb <- function $ \_ _ _ -> modifyStore storeHandle $ counter %~ (+) 1
   jsg2 ("setInterval" :: String) cb (1000 :: Int)
 
   appendChild_ body ui

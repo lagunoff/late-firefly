@@ -6,6 +6,7 @@ cabal-version:       >=1.10
 executable parser
   main-is:             IWatchTheOffice/Parser.hs
   ghc-options:         -optc-Os -O4
+  other-modules: IWatchTheOffice.Db
   build-depends:       base
                      , http-client
                      , http-client-tls
@@ -26,9 +27,10 @@ executable parser
                      , time
                      , split
                      , aeson
-               
+                     , mongoDB               
 executable theoffice
   main-is:             TheOffice/Main.hs
+  other-modules: IWatchTheOffice.Db
   build-depends:       base
                      , transformers
                      , mtl
@@ -41,14 +43,17 @@ executable theoffice
                      , haste-app
                      , massaraksh
                      , split
-                     , lens-family
-                     , lens-family-core
-                     , lens-family-th
+                     , lens
                      , ghcjs-dom-jsaddle
                      , jsaddle
+                     , jsaddle-warp
                      , raw-strings-qq
+                     , websockets
+                     , wai
+                     , wai-websockets
   if !impl(ghcjs)
-    build-depends:   sqlite-simple
-  if impl(ghcjs)
-    build-depends:   sqlite-simple-stub
+    build-depends:   mongoDB
+                   , bson
+  -- if impl(ghcjs)
+  --   build-depends:   sqlite-simple-stub
   default-language: Haskell2010

@@ -1,12 +1,22 @@
 resolver: lts-13.18
+
+packages:
+  - ./
+  - ../haste-app
+  - ../massaraksh
+
 extra-deps:
  - github: egonSchiele/HandsomeSoup
    commit: 4cb37a6738d3988800e60afb04f4b44ff67ce3ab
-
+ - ghcjs-dom-jsaddle-0.9.4.0@sha256:31ddfc5ebcbb4811b0c956fd5fcf106643012b46bb4e0bc2f15d09db1d116fbb
+ - jsaddle-0.9.6.0@sha256:03b3792794759587c69dd93c79a3f743e0b4032a3617c38f7841f8e16327e013
+ - jsaddle-dom-0.9.3.2@sha256:54d4666c8983d227b2b560714c54a9486629201c49de178bbf563c6db3aa8160
+ - ref-tf-0.4.0.1@sha256:369e5c6237e4b6fe330fde021b94a9f98971690cbec5b910faa9af3cbcb15610
+ - jsaddle-warp-0.9.6.0@sha256:d84550439a50ab058f049beb0dac567a86eb4b09552ec242f1c57b3a16ab68bc
+ 
 nix:
   enable: true
   packages: [zlib, curl]
-  # path: ["nixpkgs=/home/vlad/opt/nixpkgs"]
   add-gc-roots: true
   
 flags:

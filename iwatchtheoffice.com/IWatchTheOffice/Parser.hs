@@ -11,36 +11,31 @@
 {-# LANGUAGE UndecidableInstances  #-}
 module Main where
 
-import Control.Exception              (SomeException)
-import Control.Exception              (evaluate)
-import Control.Lens                   hiding (children, element, elements)
-import Control.Monad                  (void, (>=>))
-import Control.Monad.Except           (ExceptT, MonadError, throwError)
-import Control.Monad.Except           (runExceptT)
-import Control.Monad.Fail             (MonadFail)
-import Control.Monad.IO.Class         (MonadIO, liftIO)
-import Control.Monad.Reader           (MonadReader, ReaderT, asks, local,
-                                       runReaderT)
-import Control.Monad.Trans.Class      (lift)
-import Data.Foldable                  (for_)
-import Data.Int                       (Int64)
-import Data.Maybe                     (fromMaybe)
-import Data.Semigroup                 ((<>))
-import Data.Time.Clock.POSIX          (getCurrentTime)
-import Data.Traversable               (for)
+import Control.Exception (SomeException)
+import Control.Lens (ix, only, traverse, (^.), (^..))
+import Control.Monad (void)
+import Control.Monad.Except (ExceptT, MonadError)
+import Control.Monad.Except (runExceptT)
+import Control.Monad.IO.Class (MonadIO, liftIO)
+import Control.Monad.Reader (ReaderT, asks, runReaderT)
+import Data.Foldable (for_)
+import Data.Int (Int64)
+import Data.Semigroup ((<>))
+import Data.Time.Clock.POSIX (getCurrentTime)
+import Data.Traversable (for)
 import Database.SQLite.Simple
-import Database.SQLite.Simple.FromRow
-import Database.SQLite.Simple.QQ
-import IWatchTheOffice.Db             (Episode (..), HasDatabase (..),
-                                       Season (..), initSchema)
-import Network.Wreq                   (get, responseBody, Response)
-import Options.Applicative
-import Text.HTML.TagSoup.Lens
+import IWatchTheOffice.Db (Episode (..), HasDatabase (..), Season (..),
+                           initSchema)
+import Network.Wreq (Response, get, responseBody)
+import Options.Applicative (ParserInfo, command, execParser, header, help, info,
+                            long, progDesc, short, strOption, subparser)
+import Text.HTML.TagSoup.Lens (allAttributed, allElements, allNamed, attrOne,
+                               attributed, children, contents, named, _DOM)
 
-import qualified Data.Text.Lazy          as Lazy
-import qualified Data.Text.Lazy.Encoding as Lazy
-import qualified Data.Text          as T
 import qualified Data.ByteString.Lazy as L
+import qualified Data.Text as T
+import qualified Data.Text.Lazy as Lazy
+import qualified Data.Text.Lazy.Encoding as Lazy
 
 
 type URL = String
@@ -87,8 +82,7 @@ class Monad m => HasHttp m where
 
 instance HasHttp App where
   httpGet url = liftIO $ putStrLn ("fetching " <> url) *> get url
-  
-  
+
 main :: IO ()
 main = do
   options <- execParser opts
@@ -97,15 +91,15 @@ main = do
       startedAt <- liftIO getCurrentTime
       withConnection dbpath $ \conn -> do
         let env = Env conn Nothing
-        runExceptT $ flip runReaderT env (initSchema :: App ())
+        void $ runExceptT $ flip runReaderT env (initSchema :: App ())
         tid <- execute conn "insert into transactions (started_at) values (?)" (Only startedAt) *> lastInsertRowId conn
         void $ runExceptT $ flip runReaderT env $ do
           seasons <- scrapeSeasons tid :: App [(Season,Int64)]
-          for seasons $ \(season, seasonId) -> do
+          for_ seasons $ \(season, seasonId) -> do
             scrapeEpisodes tid seasonId season
           finishedAt <- liftIO getCurrentTime
           liftIO $ execute conn "update transactions set finished_at=(?) where rowid=(?)" (finishedAt, tid)
-        
+
     Goodbye ->
       liftIO $ putStrLn "Goodbye..."
     Demo -> do

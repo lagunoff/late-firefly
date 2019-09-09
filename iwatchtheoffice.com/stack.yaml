@@ -4,6 +4,7 @@ packages:
   - ./
   - ../haste-app
   - ../massaraksh
+  - ./tagsoup-lens
 
 extra-deps:
  - github: egonSchiele/HandsomeSoup

@@ -8,52 +8,43 @@ executable parser
   ghc-options:         -optc-Os -O4
   other-modules: IWatchTheOffice.Db
   build-depends:       base
-                     , http-client
-                     , http-client-tls
-                     , http-types
-                     , data-default
+                     , wreq
                      , transformers
                      , mtl
-                     , scalpel
                      , utf8-string
                      , bytestring
                      , exceptions
                      , optparse-applicative
-                     , deepseq
                      , tagsoup
+                     , tagsoup-lens
                      , process
                      , sqlite-simple
                      , text
                      , time
                      , split
                      , aeson
-                     , mongoDB               
-executable theoffice
-  main-is:             TheOffice/Main.hs
-  other-modules: IWatchTheOffice.Db
-  build-depends:       base
-                     , transformers
-                     , mtl
-                     , utf8-string
-                     , bytestring
-                     , exceptions
-                     , text
-                     , time
-                     , aeson
-                     , haste-app
-                     , massaraksh
-                     , split
                      , lens
-                     , ghcjs-dom-jsaddle
-                     , jsaddle
-                     , jsaddle-warp
-                     , raw-strings-qq
-                     , websockets
-                     , wai
-                     , wai-websockets
-  if !impl(ghcjs)
-    build-depends:   mongoDB
-                   , bson
-  -- if impl(ghcjs)
-  --   build-depends:   sqlite-simple-stub
-  default-language: Haskell2010
+-- executable theoffice
+--   main-is:             TheOffice/Main.hs
+--   other-modules: IWatchTheOffice.Db
+--   build-depends:       base
+--                      , transformers
+--                      , mtl
+--                      , utf8-string
+--                      , bytestring
+--                      , exceptions
+--                      , text
+--                      , time
+--                      , aeson
+--                      , haste-app
+--                      , massaraksh
+--                      , split
+--                      , lens
+--                      , ghcjs-dom-jsaddle
+--                      , jsaddle
+--                      , jsaddle-warp
+--                      , raw-strings-qq
+--                      , websockets
+--                      , wai
+--                      , wai-websockets
+                     

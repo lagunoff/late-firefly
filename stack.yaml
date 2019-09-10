@@ -1,14 +1,12 @@
 resolver: lts-13.18
 
 packages:
-  - ./
-  - ../haste-app
-  - ../massaraksh
+  - ./telikov
+  - ./haste-app
+  - ./massaraksh
   - ./tagsoup-lens
 
 extra-deps:
- - github: egonSchiele/HandsomeSoup
-   commit: 4cb37a6738d3988800e60afb04f4b44ff67ce3ab
  - ghcjs-dom-jsaddle-0.9.4.0@sha256:31ddfc5ebcbb4811b0c956fd5fcf106643012b46bb4e0bc2f15d09db1d116fbb
  - jsaddle-0.9.6.0@sha256:03b3792794759587c69dd93c79a3f743e0b4032a3617c38f7841f8e16327e013
  - jsaddle-dom-0.9.3.2@sha256:54d4666c8983d227b2b560714c54a9486629201c49de178bbf563c6db3aa8160

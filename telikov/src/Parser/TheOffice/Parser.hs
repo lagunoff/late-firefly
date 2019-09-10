@@ -23,8 +23,8 @@ import Data.Int (Int64)
 import Data.Semigroup ((<>))
 import Data.Time.Clock.POSIX (getCurrentTime)
 import Data.Traversable (for)
-import Database.SQLite.Simple
-import IWatchTheOffice.Db (Episode (..), HasDatabase (..), Season (..),
+import Database.SQLite.Simple (Connection, withConnection, execute, lastInsertRowId, Only(..))
+import Parser.TheOffice.Db (Episode (..), HasDatabase (..), Season (..),
                            initSchema)
 import Network.Wreq (Response, get, responseBody)
 import Options.Applicative (ParserInfo, command, execParser, header, help, info,

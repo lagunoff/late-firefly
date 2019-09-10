@@ -1,5 +1,5 @@
 {-# LANGUAGE CPP #-}
-module TheOffice.Utils where
+module Telikov.Utils where
 import GHCJS.DOM.Types (JSM)
 import Database.SQLite.Simple
 import Database.SQLite.Simple.FromRow

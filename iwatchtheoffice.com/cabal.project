@@ -1,6 +1,0 @@
-packages:
-        ./
-        ../massaraksh
-        ../haste-app
-        ../sqlite-simple-stub
-        ../direct-sqlite-stub

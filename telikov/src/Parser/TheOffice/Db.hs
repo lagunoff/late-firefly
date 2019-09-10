@@ -4,7 +4,7 @@
 {-# LANGUAGE GADTs             #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes       #-}
-module IWatchTheOffice.Db
+module Parser.TheOffice.Db
   ( Season(..)
   , Episode(..)
   , initSchema

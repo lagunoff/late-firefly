@@ -1,0 +1,65 @@
+name:                telikov
+version:             0.1.0.0
+build-type:          Simple
+cabal-version:       >=1.10
+               
+-- executable parser
+--   main-is:             IWatchTheOffice/Parser.hs
+--   ghc-options:         -optc-Os -O4 -Wall
+--   other-modules: IWatchTheOffice.Db
+--   if impl(ghcjs)
+
+--     build: False
+--   build-depends:       base
+--                      , wreq
+--                      , transformers
+--                      , mtl
+--                      , utf8-string
+--                      , bytestring
+--                      , exceptions
+--                      , optparse-applicative
+--                      , tagsoup
+--                      , tagsoup-lens
+--                      , process
+--                      , sqlite-simple
+--                      , text
+--                      , time
+--                      , split
+--                      , aeson
+--                      , lens
+                     
+executable telikov
+  hs-source-dirs:      src
+  main-is:             Telikov/Main.hs
+  build-depends:       base
+                     , transformers
+                     , mtl
+                     , utf8-string
+                     , bytestring
+                     , exceptions
+                     , text
+                     , time
+                     , aeson
+                     , haste-app
+                     , massaraksh
+                     , split
+                     , lens
+                     , ghcjs-dom-jsaddle
+                     , jsaddle
+                     , jsaddle-warp
+                     , raw-strings-qq
+                     , shakespeare
+                                          
+  if !impl(ghcjs)
+    build-depends:   sqlite-simple
+                     , websockets
+                     , wai
+                     , wai-websockets
+                     , http-types
+  if impl(ghcjs)
+    build-depends:   sqlite-simple-stub
+                   , ghcjs-base
+                     
+-- executable simple
+--   main-is:             Main.hs
+--   build-depends:       base

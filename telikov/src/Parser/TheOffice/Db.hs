@@ -11,20 +11,18 @@ module Parser.TheOffice.Db
   , HasDatabase(..)
   ) where
 
-import Control.Monad.IO.Class     (MonadIO, liftIO)
-import Control.Monad.Reader.Class (MonadReader, ask)
-import Data.Aeson                 (FromJSON, ToJSON)
-import Data.Foldable              (for_)
-import Data.Text                  (Text)
-import Database.SQLite.Simple     (Connection, Query, execute_)
-import Database.SQLite.Simple.QQ  (sql)
-import GHC.Generics               (Generic)
+import Control.Monad.IO.Class (MonadIO, liftIO)
+import Data.Aeson (FromJSON, ToJSON)
+import Data.Foldable (for_)
 import Data.Int (Int64)
-import Database.SQLite.Simple.ToRow
-import Database.SQLite.Simple.FromRow
-import Database.SQLite.Simple.ToField
-import Data.List (intercalate)
+import Data.Text (Text)
 import qualified Data.Text as T
+import Database.SQLite.Simple (Connection, Query, execute_)
+import Database.SQLite.Simple.FromRow
+import Database.SQLite.Simple.QQ (sql)
+import Database.SQLite.Simple.ToField
+import Database.SQLite.Simple.ToRow
+import GHC.Generics (Generic)
 
 data Episode = Episode
   { episodeTid              :: Int64

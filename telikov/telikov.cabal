@@ -3,34 +3,34 @@ version:             0.1.0.0
 build-type:          Simple
 cabal-version:       >=1.10
                
--- executable parser
---   main-is:             IWatchTheOffice/Parser.hs
---   ghc-options:         -optc-Os -O4 -Wall
---   other-modules: IWatchTheOffice.Db
---   if impl(ghcjs)
-
---     build: False
---   build-depends:       base
---                      , wreq
---                      , transformers
---                      , mtl
---                      , utf8-string
---                      , bytestring
---                      , exceptions
---                      , optparse-applicative
---                      , tagsoup
---                      , tagsoup-lens
---                      , process
---                      , sqlite-simple
---                      , text
---                      , time
---                      , split
---                      , aeson
---                      , lens
+executable parser
+  main-is:             IWatchTheOffice/Parser.hs
+  ghc-options:         -optc-Os -O4 -Wall
+  other-modules: IWatchTheOffice.Db
+  if impl(ghcjs)
+    buildable: False
+  build-depends:       base
+                     , wreq
+                     , transformers
+                     , mtl
+                     , utf8-string
+                     , bytestring
+                     , exceptions
+                     , optparse-applicative
+                     , tagsoup
+                     , tagsoup-lens
+                     , process
+                     , sqlite-simple
+                     , text
+                     , time
+                     , split
+                     , aeson
+                     , lens
                      
 executable telikov
   hs-source-dirs:      src
   main-is:             Telikov/Main.hs
+  ghc-options:        -Wall
   build-depends:       base
                      , transformers
                      , mtl
@@ -49,6 +49,7 @@ executable telikov
                      , jsaddle-warp
                      , raw-strings-qq
                      , shakespeare
+                     , regex-compat-tdfa
                                           
   if !impl(ghcjs)
     build-depends:   sqlite-simple
@@ -59,7 +60,3 @@ executable telikov
   if impl(ghcjs)
     build-depends:   sqlite-simple-stub
                    , ghcjs-base
-                     
--- executable simple
---   main-is:             Main.hs
---   build-depends:       base

@@ -1,82 +1,150 @@
-{-# LANGUAGE LambdaCase      #-}
-{-# LANGUAGE NamedFieldPuns  #-}
-{-# LANGUAGE QuasiQuotes     #-}
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE FlexibleContexts       #-}
+{-# LANGUAGE FlexibleInstances      #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE GADTs                  #-}
+{-# LANGUAGE LambdaCase             #-}
+{-# LANGUAGE MultiParamTypeClasses  #-}
+{-# LANGUAGE NamedFieldPuns         #-}
+{-# LANGUAGE QuasiQuotes            #-}
+{-# LANGUAGE TemplateHaskell        #-}
 module Telikov.Home where
 
 import Control.Lens hiding (element, view)
-import Data.List ((!!))
+import Control.Monad.State.Class
+import qualified Data.Text as T
+import qualified Data.Text.Lazy as L
 import GHCJS.DOM
 import GHCJS.DOM.Document
-import GHCJS.DOM.GlobalEventHandlers
 import GHCJS.DOM.Node hiding (Node)
 import GHCJS.DOM.Types hiding (Node)
 import Haste.App
-import Parser.TheOffice.Db
-import Language.Javascript.JSaddle hiding (new, (!!))
 import Massaraksh.Gui
 import Massaraksh.Html
-import Telikov.RPC (greet)
-import Text.Lucius (lucius, renderCss)
-import qualified Data.Text.Lazy as L
+import Parser.TheOffice.Db
+import Telikov.RPC (homeRPC)
+import Text.Lucius (lucius, luciusFile, renderCss)
+import Text.Regex (matchRegex, mkRegex)
 
 data Model = Model
-  { _counter :: Int      -- ^ Incremented each second
-  , _clicks  :: Int      -- ^ How many times left button was clicked
-  , _seasons :: [(Season, [Episode])] -- ^ Data from server
+  { modelSeasons :: [(Season, [Episode])] -- ^ Data from server
   }
+makeLensesWith camelCaseFields ''Model
 
-$(makeLenses ''Model)
+data Msg a where
+  Inc :: Msg ()
+  Dec :: Msg ()
+  GetSeasons :: Msg [(Season, [Episode])]
+  SetSeasons :: [(Season, [Episode])] -> Msg ()
 
-colors :: [String]
-colors = ["#F44336", "#03A9F4", "#4CAF50", "#3F51B5", "#607D8B", "#FF5722"]
+class MonadEmit msg m where
+  emit :: msg a -> m a
+
+eval :: (MonadIO m, MonadState Model m, MonadEmit Msg m) => Msg a -> m a
+eval Inc = do
+  model <- get
+  put model
+  seasons_ <- emit GetSeasons
+  emit $ SetSeasons seasons_
+  liftIO $ print (modelSeasons model) *> print seasons_
+  pure ()
+eval Dec = pure ()
+eval GetSeasons = gets modelSeasons
+eval (SetSeasons s) = modify (& seasons .~ s)
 
 init :: JSM Model
 init = do
-  seasons <- dispatch greet ""
-  pure $ Model 0 0 seasons
+  seasons_ <- dispatch homeRPC
+  pure $ Model seasons_
 
-view :: Html' msg Model
+view :: Html' (Msg a) Model
 view =
-  element "main" []
-  [ div_ [ prop_ "className" "root" ]
-    [ h1_ [ prop "style" $ \m -> "color: " <> (colors !! (m ^. counter `rem` 6)) <> "" ] [ text_ "Kia ora (Hi)" ]
-    , div_ [ prop_ "style" "display: flex; margin-bottom: 16px" ]
-      [ div_ [ prop_ "style" "padding: 2px 8px; border: solid 3px red; background: rgba(255,0,0,0.5); color: white" ] [ text (show . _counter) ]
-      , div_ [ prop_ "style" "margin-left: 24px; padding: 2px 8px; border: solid 3px green; background: rgba(0,255,0,0.5); color: white" ] [ text (show . _clicks) ]
+  el "main" []
+  [ nav_ [ class_ "topmenu" ]
+    [ ul_ []
+      [ li_ [] [ a_ [ href_ "" ] [ text_ "Home" ] ]
+      , li_ [] [ a_ [ href_ "" ] [ text_ "Seasons" ] ]
       ]
-    , div_ [ prop_ "class" "wrapper" ]
-      [ button_ [ on click (\_ -> Right $ clicks %~ (+) 1) ] [ text_ "Click here" ]
-      , button_ [ on click (\_ -> Right $ counter .~ 0) ] [ text_ "Reset counter" ]
-      ]
-    , element "style" [ prop_ "type" "text/css" ] [ text_ css ]
-    , askModel $ \model -> ul_ [] $ flip fmap (_seasons model) $ \(season, episodes) ->
-        li_ [] $
-        [ h5_ [] [ text_ (seasonHref season) ]
-        , img_ [ prop_ "src" (seasonThumbnail season) ]
-        , ul_ [] $ flip fmap episodes $ \episode -> li_ [] [ text_ (episodeCode episode) ]
-        ]
+    , div_ [] [ input_ [ placeholder_ "Search" ] ]
     ]
-  ]
+  , div_ [ class_ "content" ]
+    [ askModel $ \model -> ul_ [] $ flip fmap (modelSeasons model) $ \(season, episodes) ->
+        let seasonLink = a_ [ href_ (seasonHref season) ] in
+        li_ [ class_ "season" ] $
+        [ seasonLink [ h2_ [] [ text_ (T.pack "Season " <> seasonName season) ] ]
+        , ul_ [ class_ "episodes" ] $ flip fmap episodes $ \episode ->
+            let episodeLink = a_ [ href_ (episodeHref episode) ] in
+            li_ [ class_ "episode" ]
+            [ episodeLink [ img_ [ class_ "episode-thumbnail", src_ (episodeThumbnail episode) ] ]
+            , episodeLink [ text_ (episodeCode episode) ]
+            , episodeLink [ text_ (episodeShortDescription episode) ]
+            ]
+        ]
+    , el "style" [ type_ "text/css" ] [ text_ resetcss ]
+    , el "style" [ type_ "text/css" ] [ text_ globalCss ]
+    , el "style" [ type_ "text/css" ] [ text_ styles ]
+    ]
+  ] where
+    seasonName season = case matches of Just [n] -> T.pack n; _ -> T.pack "-1"; where
+      matches = matchRegex (mkRegex "0*([[:digit:]]+)/$") $ T.unpack $ seasonHref season
+    el = element
 
 main :: Model -> JSM ()
 main model = do
   doc  <- currentDocumentUnchecked
   body <- getBodyUnchecked doc
-
   storeHandle <- createStore model
-  GuiHandle { ui, finalizer } <- unGui view (getStore storeHandle) $ \case
-    MsgStep f -> modifyStore storeHandle f
-    _ -> pure ()
+  let sink (MsgStep f) = modifyStore storeHandle f
+      sink _           = pure ()
+  guiHandle <- unGui view (getStore storeHandle) sink
+  appendChild_ body (ui guiHandle)
 
-  cb <- function $ \_ _ _ -> modifyStore storeHandle $ counter %~ (+) 1
---  jsg2 ("setInterval" :: String) cb (1000 :: Int)
-
-  appendChild_ body ui
-
-css = L.toStrict $ renderCss $ [lucius|
-.root {
-  margin: 0 auto;
-  max-width: 600px;
+styles :: T.Text
+styles = L.toStrict $ renderCss $ [lucius|
+.content {
+  margin: 0 24px;
+}
+.topmenu {
+  width: 100%;
+  height: 48px;
+  border-bottom: solid 1px #ccc;
+  display: flex;
+  ul {
+    display: flex;
+    flex-direction: row;
+  }
+  li {
+    display: flex;
+  }
+}
+.season {
+  margin-top: 24px;
+  > a {
+    color: rgba(0,0,0,0.87); text-decoration: none;
+    &:hover { color: red; }
+    > h2 { font-size: 18px; font-weight: 600; display: inline-block; }
+  }
+}
+.episodes {
+  display: flex;
+  flex-direction: row;
+  overflow: hidden;
+}
+.episode {
+}
+.episode + .episode { margin-left: 8px; }
+.episode-thumbnail {
+  display: block;
+  object-fit: cover;
+  height: 150px;
 }
 |] ()
+
+globalCss :: T.Text
+globalCss = L.toStrict $ renderCss $ [lucius|
+body, body * {
+  font-family: Helvetica, Arial, sans-serif;
+}
+|] ()
+
+resetcss :: T.Text
+resetcss = L.toStrict $ renderCss $ $(luciusFile "./src/Telikov/reset.css") ()

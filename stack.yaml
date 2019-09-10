@@ -1,5 +1,6 @@
 resolver: lts-13.18
 
+
 packages:
   - ./telikov
   - ./haste-app

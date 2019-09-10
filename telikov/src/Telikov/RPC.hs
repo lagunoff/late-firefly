@@ -6,7 +6,7 @@
 {-# LANGUAGE StaticPointers    #-}
 {-# LANGUAGE TypeFamilies      #-}
 module Telikov.RPC
-  ( greet
+  ( homeRPC
   , mainRPC
   ) where
 
@@ -22,6 +22,7 @@ import Haste.App.Protocol
 import Parser.TheOffice.Db
 import Data.Traversable (for)
 import Data.Int (Int64)
+import GHC.StaticPtr
 
 #ifndef __GHCJS__
 import qualified Network.WebSockets as WS
@@ -38,7 +39,7 @@ instance MonadClient JSM where
         Nothing                   -> throwM (NetworkException "Cannot decode ServerReply")
 #else
 import qualified JavaScript.Web.WebSocket as WS
-import Data.JSString as J
+import qualified Data.JSString as J
 import Control.Concurrent (newEmptyMVar, takeMVar, putMVar)
 import qualified JavaScript.Web.MessageEvent as ME
 import qualified Data.ByteString.Lazy.UTF8 as L
@@ -69,8 +70,8 @@ instance Node MyS where
   type Env MyS = IORef Int
   init _ = liftIO $ newIORef 0
 
-greet :: RemotePtr (String -> MyS [(Season, [Episode])])
-greet = static (native $ remote $ \s -> do
+homeRPC :: RemotePtr (MyS [(Season, [Episode])])
+homeRPC = static (native $ remote $ do
   liftIO $ withConnection "./test.db" $ \conn -> do
     [Only updateId] <- query_ conn "select max(rowid) from transactions where finished_at not null" :: IO [Only Int]
     idSeasons <- query conn "select rowid, * from seasons where tid=?" (Only updateId) :: IO [Only Int64 :. Season]
@@ -80,4 +81,5 @@ greet = static (native $ remote $ \s -> do
   )
 
 mainRPC :: IO ()
-mainRPC = runApp [start (Proxy :: Proxy MyS)] $ pure ()
+mainRPC = do
+  runApp [start (Proxy :: Proxy MyS)] $ pure ()

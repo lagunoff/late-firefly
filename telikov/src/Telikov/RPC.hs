@@ -21,7 +21,8 @@ import Database.SQLite.Simple (Connection, open, Query, FromRow, ToRow)
 import qualified Database.SQLite.Simple as SQLite
 import Control.Monad.Reader.Class (asks)
 import Control.Monad.Fail (MonadFail(..))
-
+import Data.Int (Int64)
+  
 #ifndef __GHCJS__
 import qualified Network.WebSockets as WS
 
@@ -72,6 +73,7 @@ class MonadFail m => HasDatabase m where
   query_ :: (FromRow r) => Query -> m [r]
   execute :: (ToRow q) => Query -> q -> m ()
   execute_ :: Query -> m ()
+  lastInsertRowId :: m Int64
 
 instance Node Server where
   type Env Server = RPCEnv
@@ -82,6 +84,7 @@ instance HasDatabase Server where
   query_ q = asks envConnection >>= \conn -> liftIO $ SQLite.query_ conn q
   execute q p = asks envConnection >>= \conn -> liftIO $ SQLite.execute conn q p
   execute_ q = asks envConnection >>= \conn -> liftIO $ SQLite.execute_ conn q
+  lastInsertRowId = asks envConnection >>= \conn -> liftIO $ SQLite.lastInsertRowId conn
 
 instance MonadFail Server where
   fail = liftIO . error

@@ -31,6 +31,8 @@ executable parser
 executable telikov-client
   hs-source-dirs:      src
   main-is:             Telikov/Client.hs
+  if !impl(ghcjs)
+    buildable: False
   ghc-options:        -Wall
   build-depends:       base
                      , transformers
@@ -51,15 +53,9 @@ executable telikov-client
                      , raw-strings-qq
                      , shakespeare
                      , regex-compat-tdfa
-  if impl(ghcjs)
-    build-depends:   sqlite-simple-stub
-                   , ghcjs-base
- if !impl(ghcjs)
-    build-depends:   sqlite-simple
-                     , websockets
-                     , wai
-                     , wai-websockets
-                     , http-types
+                     , sqlite-simple-stub
+                     , ghcjs-base
+
                    
 executable telikov-server
   hs-source-dirs:      src

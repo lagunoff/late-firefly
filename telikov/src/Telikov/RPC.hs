@@ -9,17 +9,11 @@ module Telikov.RPC where
 
 import Control.Monad.Catch
 import Data.Aeson (decode)
-import Data.IORef
 import Data.String (fromString)
 import Data.Text (Text)
-import Database.SQLite.Simple (Only (..), query, query_, withConnection, (:.)(..))
 import GHCJS.DOM.Types (JSM)
 import Haste.App
 import Haste.App.Protocol
-import Parser.TheOffice.Db
-import Data.Traversable (for)
-import Data.Int (Int64)
-import GHC.StaticPtr
 
 #ifndef __GHCJS__
 import qualified Network.WebSockets as WS
@@ -61,29 +55,8 @@ instance MonadClient JSM where
 
 #endif
   
-type MyS = EnvServer (IORef Int)
+type MyS = EnvServer ()
 
 instance Node MyS where
-  type Env MyS = IORef Int
-  init _ = liftIO $ newIORef 0
-
-homeRPC :: RemotePtr (MyS [(Season, [Episode])])
-homeRPC = static (native $ remote $ do
-  liftIO $ withConnection "./test.db" $ \conn -> do
-    [Only updateId] <- query_ conn "select max(rowid) from transactions where finished_at not null" :: IO [Only Int]
-    idSeasons <- query conn "select rowid, * from seasons where tid=?" (Only updateId) :: IO [Only Int64 :. Season]
-    for idSeasons $ \(seasonId :. season) -> do
-       episodes <- query conn "select * from episodes where season_id=?" (seasonId) :: IO [Episode]
-       pure (season, episodes)
-  )
-
-searchRPC :: RemotePtr (Text -> MyS [Episode])
-searchRPC = static (native $ remote $ \q -> do
-  liftIO $ withConnection "./test.db" $ \conn -> do
-    [Only updateId] <- query_ conn "select max(rowid) from transactions where finished_at not null" :: IO [Only Int]
-    idSeasons <- query conn "select rowid, * from seasons where tid=?" (Only updateId) :: IO [Only Int64 :. Season]
-    for idSeasons $ \(seasonId :. season) -> do
-       episodes <- query conn "select * from episodes where season_id=?" (seasonId) :: IO [Episode]
-       pure (season, episodes)
-    pure []
-  )
+  type Env MyS = ()
+  init _ = pure ()

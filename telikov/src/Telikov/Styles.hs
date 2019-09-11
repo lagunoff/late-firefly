@@ -17,11 +17,13 @@ data Theme = Theme
   , primaryText :: Rgba
   , secondaryText :: Rgba
   , borderColor :: Rgba
+  , bodyPadding :: Double
   }
 
 theme :: Theme
 theme = Theme
   { unit = 8
+  , bodyPadding = 8 * 3
   , primaryColor = Rgba 0 0 255 0
   , secondaryColor = Rgba 255 0 0 0
   , primaryText = Rgba 0 0 0 0.87

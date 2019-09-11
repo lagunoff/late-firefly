@@ -5,7 +5,7 @@ cabal-version:       >=1.10
                
 executable parser
   main-is:             Parser/TheOffice/Parser.hs
-  ghc-options:         -optc-Os -O4 -Wall
+  ghc-options:         -optc-Os -O4 -Wall -Wno-missing-signatures
   other-modules:    Parser.TheOffice.Db
   hs-source-dirs:      src
   if impl(ghcjs)
@@ -33,7 +33,7 @@ executable telikov-client
   main-is:             Telikov/Client.hs
   if !impl(ghcjs)
     buildable: False
-  ghc-options:        -Wall
+  ghc-options:        -Wall -Wno-missing-signatures -optc-Os -O4 
   build-depends:       base
                      , transformers
                      , mtl
@@ -62,7 +62,7 @@ executable telikov-server
   if impl(ghcjs)
     buildable: False
   main-is:             Telikov/Server.hs
-  ghc-options:        -Wall
+  ghc-options:        -Wall -Wno-missing-signatures
   build-depends:       base
                      , transformers
                      , mtl

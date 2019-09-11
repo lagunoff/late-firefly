@@ -30,9 +30,10 @@ import Massaraksh.Gui
 import Massaraksh.Html
 import Parser.TheOffice.Db (Episode (..), Season (..))
 import Telikov.RPC (HasDatabase (..), Server, callRPC, remote)
-import Text.Lucius (lucius, luciusFile, renderCss, toCss)
-import Text.Regex (matchRegex, mkRegex)
+import Text.Lucius (lucius, luciusFile, renderCss)
 import Telikov.Styles (Theme(..), unit, theme)
+import Data.Char (isDigit)
+import qualified Telikov.Header as Header
 
 data Model = Model
   { modelSeasons :: [(Season, [Episode])] -- ^ Data from server
@@ -78,13 +79,7 @@ init = do
 view :: Html' (Msg a) Model
 view =
   el "main" []
-  [ nav_ [ class_ "topmenu" ]
-    [ ul_ []
-      [ li_ [] [ a_ [ href_ "" ] [ text_ "Home" ] ]
-      , li_ [] [ a_ [ href_ "" ] [ text_ "Seasons" ] ]
-      ]
-    , div_ [] [ input_ [ placeholder_ "Search" ] ]
-    ]
+  [ Header.view
   , div_ [ class_ "content" ]
     [ askModel $ \model -> ul_ [] $ flip fmap (modelSeasons model) $ \(season, episodes) ->
         let seasonLink = a_ [ href_ (T.pack "#" <> seasonHref season) ] in
@@ -103,8 +98,10 @@ view =
     , el "style" [ type_ "text/css" ] [ text_ styles ]
     ]
   ] where
-    seasonName season = case matches of Just [n] -> T.pack n; _ -> T.pack "-1"; where
-      matches = matchRegex (mkRegex "0*([[:digit:]]+)/$") $ T.unpack $ seasonHref season
+    seasonName season = T.pack $ go [] $ T.unpack $ seasonHref season where
+      go prefix [] = reverse $ takeWhile isDigit prefix 
+      go prefix ('/':[]) = reverse $ takeWhile isDigit prefix 
+      go prefix (x:xs) = go (x:prefix) xs
     el = element
 
 main :: Model -> JSM ()
@@ -117,7 +114,6 @@ main model = do
   guiHandle <- unGui view (getStore storeHandle) sink
   appendChild_ body (ui guiHandle)
 
-styles :: T.Text
 styles = L.toStrict $ renderCss $ css () where
   Theme { unit, primaryText, borderColor, secondaryText } = theme
   borderRadius = 5 :: Double
@@ -126,16 +122,19 @@ styles = L.toStrict $ renderCss $ css () where
   css =
     [lucius|
       .content {
-         margin: 0 #{unit * 3}px;
+         margin: 0 #{bodyPadding}px;
       }
       
       .topmenu {
         width: 100%;
-        height: 48px;
+        height: #{unit * 6}px;
         border-bottom: solid 1px #{borderColor};
         display: flex;
+        align-items: center;
+        padding: 0 #{bodyPadding}px;
         ul { display: flex; flex-direction: row; }
         li { display: flex; }
+        input { height: #{unit * 4}px; }
       }
       
       .season {
@@ -193,7 +192,6 @@ styles = L.toStrict $ renderCss $ css () where
       }
     |]
       
-globalCss :: T.Text
 globalCss = L.toStrict $ renderCss $ css () where
   css =
     [lucius|
@@ -202,5 +200,4 @@ globalCss = L.toStrict $ renderCss $ css () where
       }
     |] 
 
-resetcss :: T.Text
 resetcss = L.toStrict $ renderCss $ $(luciusFile "./src/Telikov/reset.css") ()

@@ -1,3 +1,5 @@
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE CPP               #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -12,8 +14,13 @@ import Data.Aeson (decode)
 import Data.String (fromString)
 import Data.Text (Text)
 import GHCJS.DOM.Types (JSM)
-import Haste.App
-import Haste.App.Protocol
+import Haste.App (MonadClient(..), Node(..), EnvServer, Env, Import, Dispatch, StaticPtr, liftIO)
+import Haste.App.Protocol (Endpoint(..), ServerReply(..), ServerException(..), NetworkException(..))
+import qualified Haste.App.Remote as Remote
+import Database.SQLite.Simple (Connection, open, Query, FromRow, ToRow)
+import qualified Database.SQLite.Simple as SQLite
+import Control.Monad.Reader.Class (asks)
+import Control.Monad.Fail (MonadFail(..))
 
 #ifndef __GHCJS__
 import qualified Network.WebSockets as WS
@@ -54,9 +61,37 @@ instance MonadClient JSM where
     liftIO $ takeMVar mvar
 
 #endif
-  
-type MyS = EnvServer ()
 
-instance Node MyS where
-  type Env MyS = ()
-  init _ = pure ()
+data RPCEnv = RPCEnv
+  { envConnection :: Connection
+  }
+type Server = EnvServer RPCEnv
+
+class MonadFail m => HasDatabase m where
+  query :: (ToRow q, FromRow r) => Query -> q -> m [r]
+  query_ :: (FromRow r) => Query -> m [r]
+  execute :: (ToRow q) => Query -> q -> m ()
+  execute_ :: Query -> m ()
+
+instance Node Server where
+  type Env Server = RPCEnv
+  init _ = RPCEnv <$> open "test.db"
+
+instance HasDatabase Server where
+  query q p = asks envConnection >>= \conn -> liftIO $ SQLite.query conn q p
+  query_ q = asks envConnection >>= \conn -> liftIO $ SQLite.query_ conn q
+  execute q p = asks envConnection >>= \conn -> liftIO $ SQLite.execute conn q p
+  execute_ q = asks envConnection >>= \conn -> liftIO $ SQLite.execute_ conn q
+
+instance MonadFail Server where
+  fail = liftIO . error
+
+remote :: forall dom. (Remote.Export dom, Remote.Affinity dom ~ Server) => dom -> Import dom
+#ifndef __GHCJS__
+remote = Remote.remote
+#else
+remote = error "expression not available on GHCJS"
+#endif
+
+callRPC :: forall cli dom. Dispatch dom cli => StaticPtr (Import dom) -> cli
+callRPC = Remote.dispatch

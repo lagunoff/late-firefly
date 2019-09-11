@@ -8,27 +8,27 @@
 {-# LANGUAGE NamedFieldPuns         #-}
 {-# LANGUAGE QuasiQuotes            #-}
 {-# LANGUAGE TemplateHaskell        #-}
-{-# LANGUAGE StaticPointers    #-}
+{-# LANGUAGE StaticPointers, PartialTypeSignatures, ScopedTypeVariables    #-}
 module Telikov.Home where
 
 import Control.Lens hiding (element, view)
-import Control.Monad.State.Class
+import Control.Monad.State.Class (MonadState(get, put), modify, gets)
+import Control.Monad.IO.Class (MonadIO, liftIO)
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as L
-import Data.String (fromString)
 import GHCJS.DOM
 import GHCJS.DOM.Document
 import GHCJS.DOM.Node hiding (Node)
 import GHCJS.DOM.Types hiding (Node)
-import Haste.App
 import Massaraksh.Gui
 import Data.Traversable (for)
 import Massaraksh.Html
-import Parser.TheOffice.Db
-import Telikov.RPC (MyS)
+import Parser.TheOffice.Db (Season(..), Episode(..))
+import Telikov.RPC (Server, HasDatabase(..), remote, callRPC)
 import Text.Lucius (lucius, luciusFile, renderCss)
 import Text.Regex (matchRegex, mkRegex)
-import Database.SQLite.Simple (Only (..), query, query_, withConnection, (:.)(..))
+import Database.SQLite.Simple (Only (..), (:.)(..))
+import Database.SQLite.Simple.QQ (sql)
 import Data.Int (Int64)
 
 data Model = Model
@@ -62,18 +62,16 @@ eval (SetSeasons s) = modify (& seasons .~ s)
 
 init :: JSM Model
 init = do
-  seasons_ <- dispatch homeRPC
-  pure $ Model seasons_
-  where
-    homeRPC :: RemotePtr (MyS [(Season, [Episode])])
-    homeRPC = static (native $ remote $ do
-      liftIO $ withConnection "./test.db" $ \conn -> do
-      [Only updateId] <- query_ conn (fromString "select max(rowid) from transactions where finished_at not null") :: IO [Only Int]
-      idSeasons <- query conn (fromString "select rowid, * from seasons where tid=?") (Only updateId) :: IO [Only Int64 :. Season]
-      for idSeasons $ \(seasonId :. season) -> do
-        episodes <- query conn (fromString "select * from episodes where season_id=?") (seasonId) :: IO [Episode]
-        pure (season, episodes)
-     )
+  seasonsEpisodes <- callRPC $ static (remote $ do
+    [lastTransactId] <- query_ [sql|select max(rowid) from transactions where finished_at not null|] :: Server [Only Int]
+    seasonPairs <- query [sql|select rowid, * from seasons where tid=?|] lastTransactId :: Server [Only Int64 :. Season]
+    for seasonPairs $ \(seasonId :. season) -> do
+      episodes <- query [sql|select * from episodes where season_id=?|] seasonId :: Server [Episode]
+      pure (season, episodes)
+    )
+    
+  pure $ Model seasonsEpisodes
+
 
 view :: Html' (Msg a) Model
 view =

@@ -5,10 +5,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE StaticPointers    #-}
 {-# LANGUAGE TypeFamilies      #-}
-module Telikov.RPC
-  ( homeRPC
-  , mainRPC
-  ) where
+module Telikov.RPC where
 
 import Control.Monad.Catch
 import Data.Aeson (decode)
@@ -80,6 +77,13 @@ homeRPC = static (native $ remote $ do
        pure (season, episodes)
   )
 
-mainRPC :: IO ()
-mainRPC = do
-  runApp [start (Proxy :: Proxy MyS)] $ pure ()
+searchRPC :: RemotePtr (Text -> MyS [Episode])
+searchRPC = static (native $ remote $ \q -> do
+  liftIO $ withConnection "./test.db" $ \conn -> do
+    [Only updateId] <- query_ conn "select max(rowid) from transactions where finished_at not null" :: IO [Only Int]
+    idSeasons <- query conn "select rowid, * from seasons where tid=?" (Only updateId) :: IO [Only Int64 :. Season]
+    for idSeasons $ \(seasonId :. season) -> do
+       episodes <- query conn "select * from episodes where season_id=?" (seasonId) :: IO [Episode]
+       pure (season, episodes)
+    pure []
+  )

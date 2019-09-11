@@ -39,7 +39,10 @@ data Msg a where
 class MonadEmit msg m where
   emit :: msg a -> m a
 
-eval :: (MonadIO m, MonadState Model m, MonadEmit Msg m) => Msg a -> m a
+eval
+  :: (MonadIO m, MonadState Model m, MonadEmit Msg m)
+  => Msg a
+  -> m a
 eval Inc = do
   model <- get
   put model

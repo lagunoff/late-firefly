@@ -4,9 +4,10 @@ build-type:          Simple
 cabal-version:       >=1.10
                
 executable parser
-  main-is:             IWatchTheOffice/Parser.hs
+  main-is:             Parser/TheOffice/Parser.hs
   ghc-options:         -optc-Os -O4 -Wall
-  other-modules: IWatchTheOffice.Db
+  other-modules:    Parser.TheOffice.Db
+  hs-source-dirs:      src
   if impl(ghcjs)
     buildable: False
   build-depends:       base
@@ -27,9 +28,9 @@ executable parser
                      , aeson
                      , lens
                      
-executable telikov
+executable telikov-client
   hs-source-dirs:      src
-  main-is:             Telikov/Main.hs
+  main-is:             Telikov/Client.hs
   ghc-options:        -Wall
   build-depends:       base
                      , transformers
@@ -50,13 +51,43 @@ executable telikov
                      , raw-strings-qq
                      , shakespeare
                      , regex-compat-tdfa
-                                          
-  if !impl(ghcjs)
+  if impl(ghcjs)
+    build-depends:   sqlite-simple-stub
+                   , ghcjs-base
+ if !impl(ghcjs)
     build-depends:   sqlite-simple
                      , websockets
                      , wai
                      , wai-websockets
                      , http-types
+                   
+executable telikov-server
+  hs-source-dirs:      src
   if impl(ghcjs)
-    build-depends:   sqlite-simple-stub
-                   , ghcjs-base
+    buildable: False
+  main-is:             Telikov/Server.hs
+  ghc-options:        -Wall
+  build-depends:       base
+                     , transformers
+                     , mtl
+                     , utf8-string
+                     , bytestring
+                     , exceptions
+                     , text
+                     , time
+                     , aeson
+                     , haste-app
+                     , massaraksh
+                     , split
+                     , lens
+                     , ghcjs-dom-jsaddle
+                     , jsaddle
+                     , jsaddle-warp
+                     , raw-strings-qq
+                     , shakespeare
+                     , regex-compat-tdfa
+                     , sqlite-simple
+                     , websockets
+                     , wai
+                     , wai-websockets
+                     , http-types

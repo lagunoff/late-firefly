@@ -5,6 +5,7 @@
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE MonoLocalBinds             #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE NamedFieldPuns             #-}
@@ -14,32 +15,28 @@
 {-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE RecordWildCards            #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
-{-# LANGUAGE UndecidableInstances, LambdaCase, TemplateHaskell       #-}
+{-# LANGUAGE TemplateHaskell            #-}
+{-# LANGUAGE UndecidableInstances       #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 module Main where
 
 import Control.Exception (SomeException)
-import Control.Lens ((&), ix, only, traverse, (^.), (^..))
+import Control.Lens (ix, only, traverse, (&), (^.), (^..))
 import Control.Monad.IO.Class (liftIO)
 import Data.Foldable (for_)
 import Data.Int (Int64)
 import Data.Semigroup ((<>))
-import Data.Time.Clock.POSIX (getCurrentTime)
-import Data.Time.Clock (UTCTime)
 import Data.Traversable (for)
 import Database.SQLite.Simple (Connection, Only (..), withConnection)
-import Network.Wreq (Response, get, responseBody)
+import GHC.Generics (Generic)
 import Options.Applicative (ParserInfo, command, execParser, header, help, info,
                             long, progDesc, short, strOption, subparser)
-import Parser.TheOffice.Db (Episode (..), Season (..),
-                            initSchema)
+import Parser.TheOffice.Db (Episode (..), Season (..), initSchema)
+import Telikov.Effects (CurrentTime, Http, SQL, currentTime, execute, http2IO,
+                        httpGet, lastInsertRowId, responseBody, sql2IO, time2IO, Member, Eff, runM)
 import Text.HTML.TagSoup.Lens (allAttributed, allElements, allNamed, attrOne,
                                attributed, children, contents, named, _DOM)
-import GHC.Generics (Generic)
-import Telikov.Capabilities.Database (SQL, execute, lastInsertRowId, sql2IO)
-import Polysemy
 
-import qualified Data.ByteString.Lazy as L
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as Lazy
 import qualified Data.Text.Lazy.Encoding as Lazy
@@ -79,28 +76,12 @@ data Ctx = Ctx
   { connection :: Connection
   } deriving (Generic)
 
-data Http m a where
-  HttpGet :: String -> Http m (Response L.ByteString)
-makeSem ''Http
-
-http2IO :: Member (Embed IO) r => Sem (Http ': r) a -> Sem r a
-http2IO = interpret $ \case
-  HttpGet url -> embed (putStrLn $ "GET " <> url) *> embed (get url)
-
-data CurrentTime m a where
-  CurrentTime :: CurrentTime m UTCTime
-makeSem ''CurrentTime
-
-time2IO :: Member (Embed IO) r => Sem (CurrentTime ': r) a -> Sem r a
-time2IO = interpret $ \case
-  CurrentTime -> embed getCurrentTime
-
 main :: IO ()
 main = do
   options <- execParser opts
   case cliAction options of
     Update { dbpath } -> do
-      let program :: (Member SQL r, Member Http r, Member CurrentTime r) => Sem r ()
+      let program :: (Member SQL r, Member Http r, Member CurrentTime r) => Eff r ()
           program = do
             initSchema
             startedAt <- currentTime
@@ -115,7 +96,7 @@ main = do
         & time2IO
         & http2IO
         & runM
-        
+
     InitSchema { dbpath } -> do
       withConnection dbpath $ \conn -> initSchema & sql2IO conn & runM
     Goodbye ->
@@ -123,7 +104,7 @@ main = do
     Demo -> do
       liftIO $ putStrLn "Not implemented"
 
-scrapeSeasons :: (Member SQL r, Member Http r) => Int64 -> Sem r [(Season, Int64)]
+scrapeSeasons :: (Member SQL r, Member Http r) => Int64 -> Eff r [(Season, Int64)]
 scrapeSeasons seasonTid = do
   markup <- Lazy.decodeUtf8 . (^.responseBody) <$> httpGet "https://iwatchtheoffice.com/season-list/"
   let seasonOuters = markup^.._DOM.traverse.allAttributed(ix "id" . traverse . only "outer")
@@ -134,7 +115,7 @@ scrapeSeasons seasonTid = do
     seasonId <- execute "insert into seasons (tid, thumbnail, href) values (?,?,?)" season *> lastInsertRowId
     pure (season, seasonId)
 
-scrapeEpisodes :: (Member SQL r, Member Http r) => Int64 -> Int64 -> Season -> Sem r [(Episode, Int64)]
+scrapeEpisodes :: (Member SQL r, Member Http r) => Int64 -> Int64 -> Season -> Eff r [(Episode, Int64)]
 scrapeEpisodes episodeTid episodeSeasonId season = do
   markup <- Lazy.decodeUtf8 . (^.responseBody) <$> httpGet ("https://iwatchtheoffice.com" <> T.unpack (seasonHref season))
   let episodeOuters = markup^.._DOM.traverse.allAttributed(ix "id" . traverse . only "outer")

@@ -21,8 +21,7 @@ import Database.SQLite.Simple (Query)
 import Database.SQLite.Simple.FromRow
 import Database.SQLite.Simple.QQ (sql)
 import Database.SQLite.Simple.ToRow
-import Telikov.Capabilities.Database (SQL, execute_)
-import Polysemy (Member, Sem)
+import Telikov.Effects (SQL, execute_, Member, Eff)
 import GHC.Generics (Generic)
 
 data Episode = Episode
@@ -79,7 +78,7 @@ instance HasSchema Season where
 class HasSchema a where
   schema :: [Query]
 
-initSchema :: Member SQL r => Sem r ()
+initSchema :: Member SQL r => Eff r ()
 initSchema = for_ dbSchema execute_
 
 instance FromRow Episode where

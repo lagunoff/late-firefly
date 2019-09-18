@@ -1,16 +1,16 @@
 {-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE QuasiQuotes            #-}
+{-# LANGUAGE QuasiQuotes    #-}
 module Telikov.Header where
 
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as L
 import Massaraksh.Html
+import Parser.TheOffice.Db (Episode (..), Season (..))
+import Telikov.Styles (Theme (..), theme, unit)
 import Text.Lucius (lucius, renderCss)
-import Telikov.Styles (Theme(..), unit, theme)
-import Parser.TheOffice.Db (Season(..), Episode(..))
 
 data Model = Model
-  { modelFocused :: Bool -- ^ Search input has focus
+  { modelFocused       :: Bool -- ^ Search input has focus
   , modelSearchResults :: [SearchResult] -- ^ Search input has focus
   }
 
@@ -34,7 +34,7 @@ view =
     ]
   , element "style" [ type_ "text/css" ] [ text_ styles ]
   ]
- 
+
 styles = L.toStrict $ renderCss $ css () where
   Theme { unit, borderColor, bodyPadding, secondaryText } = theme
   css =
@@ -43,7 +43,7 @@ styles = L.toStrict $ renderCss $ css () where
         width: 100%;
         position: relative;
       }
-      
+
       .#{prefix}-logo {
         position: absolute;
         left: #{bodyPadding}px;
@@ -52,7 +52,7 @@ styles = L.toStrict $ renderCss $ css () where
         color: #{borderColor};
         a { color: #{borderColor}; text-decoration: none; &:hover { color: #{secondaryText} } }
       }
-      
+
       .#{prefix}-searchbar {
         border-bottom: solid 1px #{borderColor};
         display: flex;

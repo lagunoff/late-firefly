@@ -1,4 +1,3 @@
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE FlexibleContexts       #-}
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE FunctionalDependencies #-}
@@ -11,12 +10,14 @@
 {-# LANGUAGE ScopedTypeVariables    #-}
 {-# LANGUAGE StaticPointers         #-}
 {-# LANGUAGE TemplateHaskell        #-}
+{-# LANGUAGE TypeApplications       #-}
 {-# LANGUAGE TypeOperators          #-}
 module Telikov.Home where
 
 import Control.Lens hiding (element, view)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.State.Class (MonadState (get, put), gets, modify)
+import Data.Char (isDigit)
 import Data.Int (Int64)
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as L
@@ -27,16 +28,15 @@ import GHCJS.DOM
 import GHCJS.DOM.Document
 import GHCJS.DOM.Node hiding (Node)
 import GHCJS.DOM.Types hiding (Node)
+import Haste.App (annotate, remote)
 import Massaraksh.Gui
 import Massaraksh.Html
 import Parser.TheOffice.Db (Episode (..), Season (..))
-import Telikov.RPC (callRPC, MyNode)
-import Haste.App (remote, annotate)
-import Telikov.Capabilities.Database (SQL(..), query_, query)
-import Text.Lucius (lucius, luciusFile, renderCss)
-import Telikov.Styles (Theme(..), unit, theme)
-import Data.Char (isDigit)
+import Telikov.Effects (query, query_)
 import qualified Telikov.Header as Header
+import Telikov.RPC (TelikovBackend, callRPC)
+import Telikov.Styles (Theme (..), theme, unit)
+import Text.Lucius (lucius, luciusFile, renderCss)
 
 data Model = Model
   { modelSeasons :: [(Season, [Episode])] -- ^ Data from server
@@ -70,7 +70,7 @@ eval (SetSeasons s) = modify (& seasons .~ s)
 init :: JSM Model
 init = do
   seasonEpisodes <- callRPC $ static (remote $ do
-    annotate :: MyNode ()
+    annotate :: TelikovBackend ()
     lastTransactId <- query_ @(Only Int) [sql|select max(rowid) from transactions where finished_at not null|]
     seasonPairs <- query @(Only Int64 :. Season) [sql|select rowid, * from seasons where tid=?|] (lastTransactId !! 0)
     for seasonPairs $ \(seasonId :. season) -> do
@@ -103,9 +103,9 @@ view =
     ]
   ] where
     seasonName season = T.pack $ go [] $ T.unpack $ seasonHref season where
-      go prefix [] = reverse $ takeWhile isDigit prefix 
-      go prefix ('/':[]) = reverse $ takeWhile isDigit prefix 
-      go prefix (x:xs) = go (x:prefix) xs
+      go prefix []       = reverse $ takeWhile isDigit prefix
+      go prefix ('/':[]) = reverse $ takeWhile isDigit prefix
+      go prefix (x:xs)   = go (x:prefix) xs
     el = element
 
 main :: Model -> JSM ()
@@ -128,7 +128,7 @@ styles = L.toStrict $ renderCss $ css () where
       .content {
          margin: 0 #{bodyPadding}px;
       }
-      
+
       .topmenu {
         width: 100%;
         height: #{unit * 6}px;
@@ -140,7 +140,7 @@ styles = L.toStrict $ renderCss $ css () where
         li { display: flex; }
         input { height: #{unit * 4}px; }
       }
-      
+
       .season {
         margin-top: #{unit * 3}px;
         > a {
@@ -149,35 +149,35 @@ styles = L.toStrict $ renderCss $ css () where
           > h2 { font-size: 18px; font-weight: 600; display: inline-block; }
         }
       }
-      
+
       .episodes {
         display: flex;
         flex-direction: row;
         overflow: hidden;
       }
-      
+
       .episode-thumbnail {
         display: block;
         object-fit: cover;
         height: 150px;
       }
-      
+
       .episode: {
         position: relative;
-        display: flex; 
+        display: flex;
         flex-direction: column;
         marginRight: #{itemPadding} * 0.5;
         a { border-radius: #{borderRadius}px }
       }
-      
+
       .episode + .episode { margin-left: #{unit}px; }
-    
+
       .episode-top {
         border-top-left-radius: #{borderRadius}px;
         border-top-right-radius: #{borderRadius}px;
         overflow: hidden;
       }
-    
+
       .episode-bottom {
         border-bottom-left-radius: #{borderRadius}px;
         border-bottom-right-radius: #{borderRadius}px;
@@ -195,13 +195,13 @@ styles = L.toStrict $ renderCss $ css () where
         }
       }
     |]
-      
+
 globalCss = L.toStrict $ renderCss $ css () where
   css =
     [lucius|
       body, body * {
         font-family: Helvetica, Arial, sans-serif;
       }
-    |] 
+    |]
 
 resetcss = L.toStrict $ renderCss $ $(luciusFile "./src/Telikov/reset.css") ()

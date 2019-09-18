@@ -1,10 +1,21 @@
 {-# LANGUAGE TemplateHaskell, LambdaCase #-}
-module Telikov.Capabilities.Database where
+module Telikov.Effects
+  ( module Network.Wreq
+  , module Polysemy
+  , UTCTime(..)
+  , SQL(..), query, query_, execute, execute_, lastInsertRowId, sql2IO
+  , CurrentTime(..), currentTime, time2IO, Http(..), httpGet, http2IO
+  , Eff
+  ) where 
 
 import Database.SQLite.Simple (Connection, FromRow, ToRow)
 import Data.Int (Int64)
-import Polysemy (Member, Embed, Sem, makeSem_, embed, interpret)
+import Polysemy
 import qualified Database.SQLite.Simple as SQLite
+import Data.Time.Clock.POSIX (getCurrentTime)
+import Data.Time.Clock (UTCTime(..))
+import Network.Wreq (Response, get, responseBody)
+import qualified Data.ByteString.Lazy as L
 
 data SQL m a where
   Query :: (ToRow q, FromRow row) => SQLite.Query -> q -> SQL m [row]
@@ -28,3 +39,20 @@ sql2IO conn = interpret $ \case
   Execute_ q -> embed $ SQLite.execute_ conn q
   LastInsertRowId -> embed $ SQLite.lastInsertRowId conn
 
+data CurrentTime m a where
+  CurrentTime :: CurrentTime m UTCTime
+makeSem ''CurrentTime
+
+time2IO :: Member (Embed IO) r => Sem (CurrentTime ': r) a -> Sem r a
+time2IO = interpret $ \case
+  CurrentTime -> embed getCurrentTime
+
+data Http m a where
+  HttpGet :: String -> Http m (Response L.ByteString)
+makeSem ''Http
+
+http2IO :: Member (Embed IO) r => Sem (Http ': r) a -> Sem r a
+http2IO = interpret $ \case
+  HttpGet url -> embed (putStrLn $ "GET " <> url) *> embed (get url)
+
+type Eff = Sem

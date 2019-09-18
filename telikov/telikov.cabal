@@ -93,5 +93,6 @@ executable telikov-server
                      , http-types
                      , polysemy
                      , polysemy-plugin
+                     , wreq
                      
   default-extensions: GADTs, ScopedTypeVariables, FlexibleContexts, TypeOperators, DataKinds, PolyKinds

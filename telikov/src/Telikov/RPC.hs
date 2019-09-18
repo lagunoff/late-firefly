@@ -16,19 +16,13 @@ import Data.Aeson (decode)
 import Data.String (fromString)
 import Data.Text (Text)
 import GHCJS.DOM.Types (JSM)
-import Haste.App (Mapping(..), MonadClient(..), Node(..), EnvServer, Env, Import, Dispatch, StaticPtr, liftIO)
+import Haste.App (Mapping(..), MonadClient(..), Node(..), Env, Import, Dispatch, StaticPtr, liftIO)
 import Haste.App.Protocol (Endpoint(..), ServerReply(..), ServerException(..), NetworkException(..))
 import qualified Haste.App.Remote as Remote
-import Control.Monad.Reader.Class (asks)
 import qualified Database.SQLite.Simple as SQLite
-import Data.Int (Int64)
 import Control.Monad.Fail (MonadFail(..))
-import Telikov.Capabilities.Database (SQL(..), sql2IO)
-import Polysemy (embed, interpret, Embed, Member, Sem, makeSem, runM)
-import Data.Time.Clock.POSIX (getCurrentTime)
-import Data.Time.Clock (UTCTime)
-import Control.Lens ((&))
-  
+import Telikov.Effects (SQL(..), sql2IO, CurrentTime, time2IO, embed, Embed, Sem, runM)
+
 #ifndef __GHCJS__
 import qualified Network.WebSockets as WS
 
@@ -67,28 +61,20 @@ instance MonadClient JSM where
 
 #endif
 
-data CurrentTime m a where
-  CurrentTime :: CurrentTime m UTCTime
-makeSem ''CurrentTime
-
-time2IO :: Member (Embed IO) r => Sem (CurrentTime ': r) a -> Sem r a
-time2IO = interpret $ \case
-  CurrentTime -> embed getCurrentTime
-
-instance Mapping MyNode a where
+instance Mapping TelikovBackend a where
    invoke env node = runM $ time2IO $ sql2IO (envConnection env) $ node
 
 data RPCEnv = RPCEnv
   { envConnection :: SQLite.Connection
   }
   
-type MyNode = Sem '[SQL, CurrentTime, Embed IO]
+type TelikovBackend = Sem '[SQL, CurrentTime, Embed IO]
 
-instance Node MyNode where
-  type Env MyNode = RPCEnv
+instance Node TelikovBackend where
+  type Env TelikovBackend = RPCEnv
   init _ = RPCEnv <$> SQLite.open "test.db"
 
-instance MonadFail MyNode where
+instance MonadFail TelikovBackend where
   fail = embed @IO . error
 
 callRPC :: forall cli dom. Dispatch dom cli => StaticPtr (Import dom) -> cli

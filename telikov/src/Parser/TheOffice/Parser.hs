@@ -1,42 +1,48 @@
-{-# LANGUAGE ConstraintKinds       #-}
-{-# LANGUAGE FlexibleContexts      #-}
-{-# LANGUAGE FlexibleInstances     #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE NamedFieldPuns        #-}
-{-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE QuasiQuotes           #-}
-{-# LANGUAGE RankNTypes            #-}
-{-# LANGUAGE RecordWildCards       #-}
-{-# LANGUAGE ScopedTypeVariables   #-}
-{-# LANGUAGE UndecidableInstances  #-}
+{-# LANGUAGE ConstraintKinds            #-}
+{-# LANGUAGE DataKinds                  #-}
+{-# LANGUAGE DeriveGeneric              #-}
+{-# LANGUAGE DerivingVia                #-}
+{-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MonoLocalBinds             #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE NamedFieldPuns             #-}
+{-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE PolyKinds                  #-}
+{-# LANGUAGE QuasiQuotes                #-}
+{-# LANGUAGE RankNTypes                 #-}
+{-# LANGUAGE RecordWildCards            #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE UndecidableInstances, LambdaCase, TemplateHaskell       #-}
+{-# OPTIONS_GHC -Wno-name-shadowing #-}
 module Main where
 
 import Control.Exception (SomeException)
-import Control.Lens (ix, only, traverse, (^.), (^..))
-import Control.Monad (void)
-import Control.Monad.Except (ExceptT, MonadError)
-import Control.Monad.Except (runExceptT)
-import Control.Monad.IO.Class (MonadIO, liftIO)
-import Control.Monad.Reader (ReaderT, asks, runReaderT)
+import Control.Lens ((&), ix, only, traverse, (^.), (^..))
+import Control.Monad.IO.Class (liftIO)
 import Data.Foldable (for_)
 import Data.Int (Int64)
 import Data.Semigroup ((<>))
 import Data.Time.Clock.POSIX (getCurrentTime)
+import Data.Time.Clock (UTCTime)
 import Data.Traversable (for)
-import Database.SQLite.Simple (Connection, withConnection, execute, lastInsertRowId, Only(..))
-import Parser.TheOffice.Db (Episode (..), HasDatabase (..), Season (..),
-                           initSchema)
+import Database.SQLite.Simple (Connection, Only (..), withConnection)
 import Network.Wreq (Response, get, responseBody)
 import Options.Applicative (ParserInfo, command, execParser, header, help, info,
                             long, progDesc, short, strOption, subparser)
+import Parser.TheOffice.Db (Episode (..), Season (..),
+                            initSchema)
 import Text.HTML.TagSoup.Lens (allAttributed, allElements, allNamed, attrOne,
                                attributed, children, contents, named, _DOM)
+import GHC.Generics (Generic)
+import Telikov.Capabilities.Database (SQL, execute, lastInsertRowId, sql2IO)
+import Polysemy
 
 import qualified Data.ByteString.Lazy as L
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as Lazy
 import qualified Data.Text.Lazy.Encoding as Lazy
-
 
 type URL = String
 
@@ -48,6 +54,7 @@ data Cli = Cli
 -- | Cli actions
 data CliAction
   = Update { dbpath :: String }
+  | InitSchema { dbpath :: String }
   | Demo
   | Goodbye
 
@@ -61,65 +68,74 @@ opts = info (cli)
     actionParser =
       subparser
       ( command "update" (info update (progDesc "Update website data"))
+        <> command "init-schema" (info initSchema (progDesc "Run `initSchema` on specified database"))
         <> command "goodbye" (info (pure Goodbye) (progDesc "Say goodbye"))
         <> command "demo" (info (pure Demo) (progDesc "Run demo"))
       )
     update = Update <$> strOption (long "dbpath" <> short 'd' <> help "SQLite3 database")
+    initSchema = InitSchema <$> strOption (long "dbpath" <> short 'd' <> help "SQLite3 database")
 
-data Env = Env
-  { envConnection :: Connection
-  , envUrl        :: Maybe URL -- ^ Address of the current page
-  }
+data Ctx = Ctx
+  { connection :: Connection
+  } deriving (Generic)
 
-type App = ReaderT Env (ExceptT Err IO)
-type MonadApp m = (Monad m, MonadIO m, HasDatabase m, MonadError Err m)
+data Http m a where
+  HttpGet :: String -> Http m (Response L.ByteString)
+makeSem ''Http
 
-instance HasDatabase App where
-  getConnection = asks envConnection
+http2IO :: Member (Embed IO) r => Sem (Http ': r) a -> Sem r a
+http2IO = interpret $ \case
+  HttpGet url -> embed (putStrLn $ "GET " <> url) *> embed (get url)
 
-class Monad m => HasHttp m where
-  httpGet :: String -> m (Response L.ByteString)
+data CurrentTime m a where
+  CurrentTime :: CurrentTime m UTCTime
+makeSem ''CurrentTime
 
-instance HasHttp App where
-  httpGet url = liftIO $ putStrLn ("fetching " <> url) *> get url
+time2IO :: Member (Embed IO) r => Sem (CurrentTime ': r) a -> Sem r a
+time2IO = interpret $ \case
+  CurrentTime -> embed getCurrentTime
 
 main :: IO ()
 main = do
   options <- execParser opts
   case cliAction options of
     Update { dbpath } -> do
-      startedAt <- liftIO getCurrentTime
-      withConnection dbpath $ \conn -> do
-        let env = Env conn Nothing
-        void $ runExceptT $ flip runReaderT env (initSchema :: App ())
-        tid <- execute conn "insert into transactions (started_at) values (?)" (Only startedAt) *> lastInsertRowId conn
-        void $ runExceptT $ flip runReaderT env $ do
-          seasons <- scrapeSeasons tid :: App [(Season,Int64)]
-          for_ seasons $ \(season, seasonId) -> do
-            scrapeEpisodes tid seasonId season
-          finishedAt <- liftIO getCurrentTime
-          liftIO $ execute conn "update transactions set finished_at=(?) where rowid=(?)" (finishedAt, tid)
-
+      let program :: (Member SQL r, Member Http r, Member CurrentTime r) => Sem r ()
+          program = do
+            initSchema
+            startedAt <- currentTime
+            tid <- execute "insert into transactions (started_at) values (?)" (Only startedAt) *> lastInsertRowId
+            seasons <- scrapeSeasons tid
+            for_ seasons $ \(season, seasonId) -> do
+              scrapeEpisodes tid seasonId season
+            finishedAt <- currentTime
+            execute "update transactions set finished_at=(?) where rowid=(?)" (finishedAt, tid)
+      withConnection dbpath $ \conn -> program
+        & sql2IO conn
+        & time2IO
+        & http2IO
+        & runM
+        
+    InitSchema { dbpath } -> do
+      withConnection dbpath $ \conn -> initSchema & sql2IO conn & runM
     Goodbye ->
       liftIO $ putStrLn "Goodbye..."
     Demo -> do
       liftIO $ putStrLn "Not implemented"
 
-scrapeSeasons :: (HasDatabase m, HasHttp m) => Int64 -> m [(Season, Int64)]
+scrapeSeasons :: (Member SQL r, Member Http r) => Int64 -> Sem r [(Season, Int64)]
 scrapeSeasons seasonTid = do
-  conn   <- getConnection
   markup <- Lazy.decodeUtf8 . (^.responseBody) <$> httpGet "https://iwatchtheoffice.com/season-list/"
   let seasonOuters = markup^.._DOM.traverse.allAttributed(ix "id" . traverse . only "outer")
   for seasonOuters $ \el -> do
     let seasonHref      = Lazy.toStrict $ el^.allElements.named(only "a").attrOne "href"
     let seasonThumbnail = Lazy.toStrict $ el^.allElements.named(only "img").attrOne "src"
     let season          = Season {..}
-    seasonId <- liftIO $ execute conn "insert into seasons (tid, thumbnail, href) values (?,?,?)" season *> lastInsertRowId conn
+    seasonId <- execute "insert into seasons (tid, thumbnail, href) values (?,?,?)" season *> lastInsertRowId
     pure (season, seasonId)
 
-scrapeEpisodes :: (HasDatabase m, HasHttp m) => Int64 -> Int64 -> Season -> m [(Episode, Int64)]
+scrapeEpisodes :: (Member SQL r, Member Http r) => Int64 -> Int64 -> Season -> Sem r [(Episode, Int64)]
 scrapeEpisodes episodeTid episodeSeasonId season = do
-  conn <- getConnection
   markup <- Lazy.decodeUtf8 . (^.responseBody) <$> httpGet ("https://iwatchtheoffice.com" <> T.unpack (seasonHref season))
   let episodeOuters = markup^.._DOM.traverse.allAttributed(ix "id" . traverse . only "outer")
   for episodeOuters $ \el -> do
@@ -132,7 +148,7 @@ scrapeEpisodes episodeTid episodeSeasonId season = do
     let episodeLinks       = fmap Lazy.toStrict $ markup2^.._DOM.traverse.allAttributed(ix "class" . traverse . only "linkz_box").children.traverse.allNamed(only "a").attrOne "href"
     let episodeDescription = Lazy.toStrict $ markup2^._DOM.traverse.allAttributed(ix "class" . traverse . only "description_box").contents
     let episode            = Episode {..}
-    episodeId <- liftIO $ execute conn "insert into episodes (tid, season_id, code, name, href, short_description, thumbnail, description, links) values (?, ?, ?, ?, ?, ?, ?, ?, ?)" episode *> lastInsertRowId conn
+    episodeId <- execute "insert into episodes (tid, season_id, code, name, href, short_description, thumbnail, description, links) values (?, ?, ?, ?, ?, ?, ?, ?, ?)" episode *> lastInsertRowId
     pure (episode, episodeId)
 
 data Err

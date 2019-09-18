@@ -1,6 +1,6 @@
 module Main where
 import Haste.App hiding (Server)
-import Telikov.RPC (Server)
+import Telikov.RPC (MyNode)
 import Language.Javascript.JSaddle.Warp (run)
 import GHCJS.DOM.Types (JSM)
 import qualified Telikov.Home as Home
@@ -13,4 +13,4 @@ mainClient = Home.main =<< Home.init
 main :: IO ()
 main = do
   void $ forkIO $ run 3709 mainClient
-  runApp [start (Proxy :: Proxy Server)] $ pure ()
+  runApp [start (Proxy :: Proxy MyNode)] $ pure ()

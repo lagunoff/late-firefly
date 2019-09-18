@@ -1,3 +1,5 @@
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeOperators #-}
@@ -6,7 +8,7 @@
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE StaticPointers    #-}
-{-# LANGUAGE TypeFamilies      #-}
+{-# LANGUAGE TypeFamilies, LambdaCase, TemplateHaskell, ConstraintKinds      #-}
 module Telikov.RPC where
 
 import Control.Monad.Catch
@@ -14,14 +16,18 @@ import Data.Aeson (decode)
 import Data.String (fromString)
 import Data.Text (Text)
 import GHCJS.DOM.Types (JSM)
-import Haste.App (MonadClient(..), Node(..), EnvServer, Env, Import, Dispatch, StaticPtr, liftIO)
+import Haste.App (Mapping(..), MonadClient(..), Node(..), EnvServer, Env, Import, Dispatch, StaticPtr, liftIO)
 import Haste.App.Protocol (Endpoint(..), ServerReply(..), ServerException(..), NetworkException(..))
 import qualified Haste.App.Remote as Remote
-import Database.SQLite.Simple (Connection, open, Query, FromRow, ToRow)
-import qualified Database.SQLite.Simple as SQLite
 import Control.Monad.Reader.Class (asks)
-import Control.Monad.Fail (MonadFail(..))
+import qualified Database.SQLite.Simple as SQLite
 import Data.Int (Int64)
+import Control.Monad.Fail (MonadFail(..))
+import Telikov.Capabilities.Database (SQL(..), sql2IO)
+import Polysemy (embed, interpret, Embed, Member, Sem, makeSem, runM)
+import Data.Time.Clock.POSIX (getCurrentTime)
+import Data.Time.Clock (UTCTime)
+import Control.Lens ((&))
   
 #ifndef __GHCJS__
 import qualified Network.WebSockets as WS
@@ -45,8 +51,6 @@ import qualified Data.ByteString.Lazy.UTF8 as L
 import Data.Aeson (eitherDecode, object, Result(..))
 
 instance MonadClient JSM where
-  remoteCall ep@(LocalNode{}) pkt n = do
-    error "remoteCall: LocalNode unimplemented"
   remoteCall ep@(WebSocket{ wsEndpointHost, wsEndpointPort }) pkt n = do
     mvar <- liftIO $ newEmptyMVar
     let handleMessage :: ME.MessageEvent -> IO ()
@@ -63,38 +67,29 @@ instance MonadClient JSM where
 
 #endif
 
+data CurrentTime m a where
+  CurrentTime :: CurrentTime m UTCTime
+makeSem ''CurrentTime
+
+time2IO :: Member (Embed IO) r => Sem (CurrentTime ': r) a -> Sem r a
+time2IO = interpret $ \case
+  CurrentTime -> embed getCurrentTime
+
+instance Mapping MyNode a where
+   invoke env node = runM $ time2IO $ sql2IO (envConnection env) $ node
+
 data RPCEnv = RPCEnv
-  { envConnection :: Connection
+  { envConnection :: SQLite.Connection
   }
-type Server = EnvServer RPCEnv
+  
+type MyNode = Sem '[SQL, CurrentTime, Embed IO]
 
-class MonadFail m => HasDatabase m where
-  query :: (ToRow q, FromRow r) => Query -> q -> m [r]
-  query_ :: (FromRow r) => Query -> m [r]
-  execute :: (ToRow q) => Query -> q -> m ()
-  execute_ :: Query -> m ()
-  lastInsertRowId :: m Int64
+instance Node MyNode where
+  type Env MyNode = RPCEnv
+  init _ = RPCEnv <$> SQLite.open "test.db"
 
-instance Node Server where
-  type Env Server = RPCEnv
-  init _ = RPCEnv <$> open "test.db"
-
-instance HasDatabase Server where
-  query q p = asks envConnection >>= \conn -> liftIO $ SQLite.query conn q p
-  query_ q = asks envConnection >>= \conn -> liftIO $ SQLite.query_ conn q
-  execute q p = asks envConnection >>= \conn -> liftIO $ SQLite.execute conn q p
-  execute_ q = asks envConnection >>= \conn -> liftIO $ SQLite.execute_ conn q
-  lastInsertRowId = asks envConnection >>= \conn -> liftIO $ SQLite.lastInsertRowId conn
-
-instance MonadFail Server where
-  fail = liftIO . error
-
-remote :: forall dom. (Remote.Export dom, Remote.Affinity dom ~ Server) => dom -> Import dom
-#ifndef __GHCJS__
-remote = Remote.remote
-#else
-remote = error "expression not available on GHCJS"
-#endif
+instance MonadFail MyNode where
+  fail = embed @IO . error
 
 callRPC :: forall cli dom. Dispatch dom cli => StaticPtr (Import dom) -> cli
 callRPC = Remote.dispatch

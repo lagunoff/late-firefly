@@ -1,6 +1,10 @@
 packages:
-        telikov/
-        massaraksh/
-        haste-app/
-        sqlite-simple-stub/
-        direct-sqlite-stub/
+        polysemy
+        telikov
+        massaraksh
+        haste-app-ghcjs
+        sqlite-simple-stub
+        direct-sqlite-stub
+        ghcjs-base
+        
+jobs: $ncpus

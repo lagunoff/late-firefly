@@ -1,27 +1,28 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DeriveAnyClass    #-}
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE GADTs             #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes       #-}
+{-# LANGUAGE TypeApplications      #-}
 module Parser.TheOffice.Db
   ( Season(..)
   , Episode(..)
   , initSchema
-  , HasDatabase(..)
   ) where
 
-import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Aeson (FromJSON, ToJSON)
 import Data.Foldable (for_)
 import Data.Int (Int64)
 import Data.Text (Text)
 import qualified Data.Text as T
-import Database.SQLite.Simple (Connection, Query, execute_)
+import Database.SQLite.Simple (Query)
 import Database.SQLite.Simple.FromRow
 import Database.SQLite.Simple.QQ (sql)
-import Database.SQLite.Simple.ToField
 import Database.SQLite.Simple.ToRow
+import Telikov.Capabilities.Database (SQL, execute_)
+import Polysemy (Member, Sem)
 import GHC.Generics (Generic)
 
 data Episode = Episode
@@ -43,16 +44,17 @@ data Season = Season
   } deriving (Show, Generic, ToJSON, FromJSON)
 
 -- | Whole schema
-dbSchema :: Schema ()
-dbSchema = Table [sql| create table if not exists transactions
-  ( started_at integer not null
-  , finished_at integer default null
-  ) |]
-  :+: (schema :: Schema Season)
-  :+: (schema :: Schema Episode)
+dbSchema :: [Query]
+dbSchema =
+  pure [sql| create table if not exists transactions
+    ( started_at integer not null
+    , finished_at integer default null
+    ) |]
+  <> schema @Season
+  <> schema @Episode
 
 instance HasSchema Episode where
-  schema = Table [sql| create table if not exists episodes
+  schema = pure [sql| create table if not exists episodes
   ( tid integer not null
   , season_id integer not null
   , code text not null
@@ -67,43 +69,27 @@ instance HasSchema Episode where
   ) |]
 
 instance HasSchema Season where
-  schema = Table [sql| create table if not exists seasons
+  schema = pure [sql| create table if not exists seasons
   ( tid integer not null
   , thumbnail text not null
   , href text not null
   , foreign key(tid) references transactions(rowid)
   ) |]
 
-data Schema a where
-  Table :: Query -> Schema a
-  (:+:) :: Schema a -> Schema b -> Schema ()
-
-foldSchema :: Schema b -> (Query -> a -> a) -> a -> a
-foldSchema (Table query) f init = f query init
-foldSchema (left :+: right) f init = foldSchema right f $ foldSchema left f init
-
 class HasSchema a where
-  schema :: Schema a
+  schema :: [Query]
 
-class MonadIO m => HasDatabase m where
-  getConnection :: m Connection
-
-initSchema :: HasDatabase m => m ()
-initSchema = do
-  let queries = foldSchema dbSchema (:) []
-  conn <- getConnection
-  liftIO $ for_ queries (execute_ conn)
-
+initSchema :: Member SQL r => Sem r ()
+initSchema = for_ dbSchema execute_
 
 instance FromRow Episode where
   fromRow = Episode <$> field <*> field <*> field <*> field <*> field <*> field <*> field <*> field <*> (T.splitOn "|" <$> (field :: RowParser Text))
 
 instance ToRow Episode where
-  toRow (Episode a b c d e f g h i) =
-    [toField a, toField b, toField c, toField d, toField e, toField f, toField g, toField h, toField $ T.intercalate "|" i]
+  toRow (Episode a b c d e f g h i) = toRow (a, b, c, d, e, f, g, h, T.intercalate "|" i)
 
 instance FromRow Season where
   fromRow = Season <$> field <*> field <*> field
 
 instance ToRow Season where
-  toRow (Season a b c) = [toField a, toField b, toField c]
+  toRow (Season a b c) = toRow (a, b, c)

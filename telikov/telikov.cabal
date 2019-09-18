@@ -5,7 +5,7 @@ cabal-version:       >=1.10
                
 executable parser
   main-is:             Parser/TheOffice/Parser.hs
-  ghc-options:         -optc-Os -O4 -Wall -Wno-missing-signatures
+  ghc-options:         -optc-Os -O4 -Wall -Wno-missing-signatures -fplugin=Polysemy.Plugin
   other-modules:    Parser.TheOffice.Db
   hs-source-dirs:      src
   if impl(ghcjs)
@@ -27,13 +27,17 @@ executable parser
                      , split
                      , aeson
                      , lens
+                     , polysemy
+                     , polysemy-plugin
                      
+  default-extensions: GADTs, ScopedTypeVariables, FlexibleContexts, TypeOperators, DataKinds, PolyKinds
+  
 executable telikov-client
   hs-source-dirs:      src
   main-is:             Telikov/Client.hs
   if !impl(ghcjs)
     buildable: False
-  ghc-options:        -Wall -Wno-missing-signatures -optc-Os -O4 
+  ghc-options:        -Wall -Wno-missing-signatures -optc-Os -O4 -dedupe
   build-depends:       base
                      , transformers
                      , mtl
@@ -43,26 +47,26 @@ executable telikov-client
                      , text
                      , time
                      , aeson
-                     , haste-app
-                     , massaraksh
+                     , haste-app-ghcjs
                      , split
                      , lens
                      , ghcjs-dom-jsaddle
-                     , jsaddle
-                     , jsaddle-warp
+                     , massaraksh
                      , raw-strings-qq
                      , shakespeare
-                     , regex-compat-tdfa
                      , sqlite-simple-stub
                      , ghcjs-base
-
-                   
+                     , polysemy
+                     , th-abstraction
+                     
+  default-extensions: GADTs, ScopedTypeVariables, FlexibleContexts, TypeOperators, DataKinds, PolyKinds
+  
 executable telikov-server
   hs-source-dirs:      src
   if impl(ghcjs)
     buildable: False
   main-is:             Telikov/Server.hs
-  ghc-options:        -Wall -Wno-missing-signatures
+  ghc-options:        -Wall -Wno-missing-signatures -fplugin=Polysemy.Plugin
   build-depends:       base
                      , transformers
                      , mtl
@@ -72,7 +76,7 @@ executable telikov-server
                      , text
                      , time
                      , aeson
-                     , haste-app
+                     , haste-app-ghcjs
                      , massaraksh
                      , split
                      , lens
@@ -87,3 +91,7 @@ executable telikov-server
                      , wai
                      , wai-websockets
                      , http-types
+                     , polysemy
+                     , polysemy-plugin
+                     
+  default-extensions: GADTs, ScopedTypeVariables, FlexibleContexts, TypeOperators, DataKinds, PolyKinds

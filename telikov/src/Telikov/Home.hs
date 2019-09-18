@@ -1,3 +1,4 @@
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE FlexibleContexts       #-}
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE FunctionalDependencies #-}
@@ -29,7 +30,9 @@ import GHCJS.DOM.Types hiding (Node)
 import Massaraksh.Gui
 import Massaraksh.Html
 import Parser.TheOffice.Db (Episode (..), Season (..))
-import Telikov.RPC (HasDatabase (..), Server, callRPC, remote)
+import Telikov.RPC (callRPC, MyNode)
+import Haste.App (remote, annotate)
+import Telikov.Capabilities.Database (SQL(..), query_, query)
 import Text.Lucius (lucius, luciusFile, renderCss)
 import Telikov.Styles (Theme(..), unit, theme)
 import Data.Char (isDigit)
@@ -67,10 +70,11 @@ eval (SetSeasons s) = modify (& seasons .~ s)
 init :: JSM Model
 init = do
   seasonEpisodes <- callRPC $ static (remote $ do
-    [lastTransactId] <- query_ [sql|select max(rowid) from transactions where finished_at not null|] :: Server [Only Int]
-    seasonPairs <- query [sql|select rowid, * from seasons where tid=?|] lastTransactId :: Server [Only Int64 :. Season]
+    annotate :: MyNode ()
+    lastTransactId <- query_ @(Only Int) [sql|select max(rowid) from transactions where finished_at not null|]
+    seasonPairs <- query @(Only Int64 :. Season) [sql|select rowid, * from seasons where tid=?|] (lastTransactId !! 0)
     for seasonPairs $ \(seasonId :. season) -> do
-      episodes <- query [sql|select * from episodes where season_id=?|] seasonId :: Server [Episode]
+      episodes <- query @(Episode) [sql|select * from episodes where season_id=?|] seasonId
       pure (season, episodes)
     )
 

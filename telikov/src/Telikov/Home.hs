@@ -5,6 +5,7 @@
 {-# LANGUAGE LambdaCase             #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
 {-# LANGUAGE NamedFieldPuns         #-}
+{-# LANGUAGE OverloadedStrings      #-}
 {-# LANGUAGE PartialTypeSignatures  #-}
 {-# LANGUAGE QuasiQuotes            #-}
 {-# LANGUAGE ScopedTypeVariables    #-}
@@ -15,12 +16,10 @@
 module Telikov.Home where
 
 import Control.Lens hiding (element, view)
-import Control.Monad.IO.Class (MonadIO, liftIO)
-import Control.Monad.State.Class (MonadState (get, put), gets, modify)
 import Data.Char (isDigit)
 import Data.Int (Int64)
+import qualified Data.JSString.Text as JS
 import qualified Data.Text as T
-import qualified Data.Text.Lazy as L
 import Data.Traversable (for)
 import Database.SQLite.Simple ((:.) (..), Only (..))
 import Database.SQLite.Simple.QQ (sql)
@@ -29,43 +28,46 @@ import GHCJS.DOM.Document
 import GHCJS.DOM.Node hiding (Node)
 import GHCJS.DOM.Types hiding (Node)
 import Haste.App (annotate, remote)
-import Massaraksh.Gui
 import Massaraksh.Html
+import Massaraksh.Lens
+import Massaraksh
 import Parser.TheOffice.Db (Episode (..), Season (..))
-import Telikov.Effects (query, query_)
+import Polysemy.State (State, get, gets, modify, runState)
+import Telikov.Effects (Eff, Http, Member, http2JSM, query, query_, runM)
+import Telikov.Header (Exists (..))
 import qualified Telikov.Header as Header
 import Telikov.RPC (TelikovBackend, callRPC)
 import Telikov.Styles (Theme (..), theme, unit)
 import Text.Lucius (lucius, luciusFile, renderCss)
 
 data Model = Model
-  { modelSeasons :: [(Season, [Episode])] -- ^ Data from server
+  { modelSeasons     :: [(Season, [Episode])] -- ^ Data from server
+  , modelHeaderModel :: Header.Model
   }
 makeLensesWith camelCaseFields ''Model
 
 data Msg a where
-  Inc :: Msg ()
-  Dec :: Msg ()
+  Inc        :: Msg ()
+  Dec        :: Msg ()
   GetSeasons :: Msg [(Season, [Episode])]
   SetSeasons :: [(Season, [Episode])] -> Msg ()
+  HeaderMsg  :: forall a. Header.Msg a -> Msg a
 
 class MonadEmit msg m where
   emit :: msg a -> m a
 
-eval
-  :: (MonadIO m, MonadState Model m, MonadEmit Msg m)
-  => Msg a
-  -> m a
-eval Inc = do
-  model <- get
-  put model
-  seasons_ <- emit GetSeasons
-  emit $ SetSeasons seasons_
-  liftIO $ print (modelSeasons model) *> print seasons_
-  pure ()
+eval :: (Member (State Model) r, Member Http r) => Msg a -> Eff r a
+eval Inc = pure ()
 eval Dec = pure ()
-eval GetSeasons = gets modelSeasons
-eval (SetSeasons s) = modify (& seasons .~ s)
+eval GetSeasons = do
+  model <- get
+  pure $ modelSeasons model
+eval (SetSeasons _) = pure ()
+eval (HeaderMsg msg) = do
+  model <- gets modelHeaderModel
+  (s, a) <- runState model (Header.eval msg)
+  modify (headerModel .~ s)
+  pure a
 
 init :: JSM Model
 init = do
@@ -78,23 +80,26 @@ init = do
       pure (season, episodes)
     )
 
-  pure $ Model seasonEpisodes
+  pure $ Model seasonEpisodes Header.init
 
-view :: Html' (Msg a) Model
+liftHeader :: Exists Header.Msg -> Exists Msg
+liftHeader (Exists msg) = Exists (HeaderMsg msg)
+
+view :: Html' (Exists Msg) Model
 view =
   el "main" []
-  [ Header.view
+  [ focus nestedId $ focusN headerModel (mapUI liftHeader Header.view)
   , div_ [ class_ "content" ]
     [ askModel $ \model -> ul_ [] $ flip fmap (modelSeasons model) $ \(season, episodes) ->
-        let seasonLink = a_ [ href_ (T.pack "#" <> seasonHref season) ] in
+        let seasonLink = a_ [ href_ ("#" <> JS.textToJSString (seasonHref season)) ] in
         li_ [ class_ "season" ] $
-        [ seasonLink [ h2_ [] [ text_ (T.pack "Season " <> seasonName season) ] ]
+        [ seasonLink [ h2_ [] [ text_ ("Season " <> JS.textToJSString (seasonName season)) ] ]
         , ul_ [ class_ "episodes" ] $ flip fmap episodes $ \episode ->
-            let episodeLink = a_ [ href_ (T.pack "#" <> episodeHref episode) ] in
+            let episodeLink = a_ [ href_ ("#" <> JS.textToJSString (episodeHref episode)) ] in
             li_ [ class_ "episode" ]
-            [ episodeLink [ img_ [ class_ "episode-thumbnail", src_ (episodeThumbnail episode) ] ]
-            , episodeLink [ text_ (episodeCode episode) ]
-            , episodeLink [ text_ (episodeShortDescription episode) ]
+            [ episodeLink [ img_ [ class_ "episode-thumbnail", src_ (JS.textToJSString $ episodeThumbnail episode) ] ]
+            , episodeLink [ text_ (JS.textToJSString $ episodeCode episode) ]
+            , episodeLink [ text_ (JS.textToJSString $ episodeShortDescription episode) ]
             ]
         ]
     , el "style" [ type_ "text/css" ] [ text_ resetcss ]
@@ -112,13 +117,16 @@ main :: Model -> JSM ()
 main model = do
   doc  <- currentDocumentUnchecked
   body <- getBodyUnchecked doc
-  storeHandle <- createStore model
-  let sink (MsgStep f) = modifyStore storeHandle f
-      sink _           = pure ()
-  guiHandle <- unGui view (getStore storeHandle) sink
-  appendChild_ body (ui guiHandle)
+  StoreHandle store modifyStore <- createStore model
+  let sink (Step f) = modifyStore f
+      sink (Yield (Exists msg)) = do
+        curr <- readLatest store
+        (s, _) <- eval msg & http2JSM & runState curr & runM
+        modifyStore (const s)
+  UIHandle node _ <- unUI view store sink
+  appendChild_ body node
 
-styles = L.toStrict $ renderCss $ css () where
+styles = JS.lazyTextToJSString $ renderCss $ css () where
   Theme { unit, primaryText, borderColor, secondaryText } = theme
   borderRadius = 5 :: Double
   itemPadding = unit * 2
@@ -196,7 +204,7 @@ styles = L.toStrict $ renderCss $ css () where
       }
     |]
 
-globalCss = L.toStrict $ renderCss $ css () where
+globalCss = JS.lazyTextToJSString $ renderCss $ css () where
   css =
     [lucius|
       body, body * {
@@ -204,4 +212,4 @@ globalCss = L.toStrict $ renderCss $ css () where
       }
     |]
 
-resetcss = L.toStrict $ renderCss $ $(luciusFile "./src/Telikov/reset.css") ()
+resetcss = JS.lazyTextToJSString $ renderCss $ $(luciusFile "./src/Telikov/reset.css") ()

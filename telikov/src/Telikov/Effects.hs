@@ -4,7 +4,7 @@ module Telikov.Effects
   , module Polysemy
   , UTCTime(..)
   , SQL(..), query, query_, execute, execute_, lastInsertRowId, sql2IO
-  , CurrentTime(..), currentTime, time2IO, Http(..), httpGet, http2IO
+  , CurrentTime(..), currentTime, time2IO, Http(..), httpGet, http2JSM, http2IO
   , Eff
   ) where 
 
@@ -16,6 +16,8 @@ import Data.Time.Clock.POSIX (getCurrentTime)
 import Data.Time.Clock (UTCTime(..))
 import Network.Wreq (Response, get, responseBody)
 import qualified Data.ByteString.Lazy as L
+import Language.Javascript.JSaddle (JSM)
+import Control.Monad.IO.Class (liftIO)
 
 data SQL m a where
   Query :: (ToRow q, FromRow row) => SQLite.Query -> q -> SQL m [row]
@@ -54,5 +56,9 @@ makeSem ''Http
 http2IO :: Member (Embed IO) r => Sem (Http ': r) a -> Sem r a
 http2IO = interpret $ \case
   HttpGet url -> embed (putStrLn $ "GET " <> url) *> embed (get url)
+
+http2JSM :: Member (Embed JSM) r => Sem (Http ': r) a -> Sem r a
+http2JSM = interpret $ \case
+  HttpGet url -> embed (liftIO $ get url)
 
 type Eff = Sem

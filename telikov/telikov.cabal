@@ -29,6 +29,7 @@ executable parser
                      , lens
                      , polysemy
                      , polysemy-plugin
+                     , jsaddle
                      
   default-extensions: GADTs, ScopedTypeVariables, FlexibleContexts, TypeOperators, DataKinds, PolyKinds
   

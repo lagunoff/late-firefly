@@ -1,8 +1,5 @@
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE TypeSynonymInstances, OverloadedStrings #-}
 module Telikov.Styles where
 
-import Data.Text (Text)
 import Data.Word (Word8)
 import qualified Data.Text as T
 import Text.Lucius (ToCss(..))

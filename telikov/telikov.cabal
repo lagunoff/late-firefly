@@ -60,7 +60,22 @@ executable telikov-client
                      , polysemy
                      , th-abstraction
                      
-  default-extensions: GADTs, ScopedTypeVariables, FlexibleContexts, TypeOperators, DataKinds, PolyKinds
+  default-extensions: FlexibleContexts
+                    , FlexibleInstances
+                    , FunctionalDependencies
+                    , GADTs
+                    , LambdaCase
+                    , MultiParamTypeClasses
+                    , NamedFieldPuns
+                    , OverloadedStrings
+                    , QuasiQuotes
+                    , RankNTypes
+                    , ScopedTypeVariables
+                    , TypeApplications
+                    , TypeOperators
+                    , ConstraintKinds
+                    , TypeFamilies
+
   
 executable telikov-server
   hs-source-dirs:      src
@@ -96,4 +111,18 @@ executable telikov-server
                      , polysemy-plugin
                      , wreq
                      
-  default-extensions: GADTs, ScopedTypeVariables, FlexibleContexts, TypeOperators, DataKinds, PolyKinds
+  default-extensions: FlexibleContexts
+                    , FlexibleInstances
+                    , FunctionalDependencies
+                    , GADTs
+                    , LambdaCase
+                    , MultiParamTypeClasses
+                    , NamedFieldPuns
+                    , OverloadedStrings
+                    , QuasiQuotes
+                    , RankNTypes
+                    , ScopedTypeVariables
+                    , TypeApplications
+                    , TypeOperators
+                    , ConstraintKinds
+                    , TypeFamilies

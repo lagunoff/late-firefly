@@ -1,18 +1,6 @@
-{-# LANGUAGE FlexibleContexts       #-}
-{-# LANGUAGE FlexibleInstances      #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE GADTs                  #-}
-{-# LANGUAGE LambdaCase             #-}
-{-# LANGUAGE MultiParamTypeClasses  #-}
-{-# LANGUAGE NamedFieldPuns         #-}
-{-# LANGUAGE OverloadedStrings      #-}
-{-# LANGUAGE PartialTypeSignatures  #-}
 {-# LANGUAGE QuasiQuotes            #-}
-{-# LANGUAGE ScopedTypeVariables    #-}
-{-# LANGUAGE StaticPointers         #-}
 {-# LANGUAGE TemplateHaskell        #-}
-{-# LANGUAGE TypeApplications       #-}
-{-# LANGUAGE TypeOperators          #-}
+{-# LANGUAGE StaticPointers        #-}
 module Telikov.Home where
 
 import Control.Lens hiding (element, view)
@@ -23,20 +11,15 @@ import qualified Data.Text as T
 import Data.Traversable (for)
 import Database.SQLite.Simple ((:.) (..), Only (..))
 import Database.SQLite.Simple.QQ (sql)
-import GHCJS.DOM
-import GHCJS.DOM.Document
-import GHCJS.DOM.Node hiding (Node)
-import GHCJS.DOM.Types hiding (Node)
-import Haste.App (annotate, remote)
+import Haste.App (annotate, dispatch, remote)
+import Massaraksh
 import Massaraksh.Html
 import Massaraksh.Lens
-import Massaraksh
 import Parser.TheOffice.Db (Episode (..), Season (..))
-import Polysemy.State (State, get, gets, modify, runState)
-import Telikov.Effects (Eff, Http, Member, http2JSM, query, query_, runM)
-import Telikov.Header (Exists (..))
+import Polysemy.State (get, gets, modify, runState)
+import Telikov.Effects (Eval, Init, mapMessages, query, query_, Exists (..))
 import qualified Telikov.Header as Header
-import Telikov.RPC (TelikovBackend, callRPC)
+import Telikov.RPC (TelikovBackend)
 import Telikov.Styles (Theme (..), theme, unit)
 import Text.Lucius (lucius, luciusFile, renderCss)
 
@@ -53,25 +36,9 @@ data Msg a where
   SetSeasons :: [(Season, [Episode])] -> Msg ()
   HeaderMsg  :: forall a. Header.Msg a -> Msg a
 
-class MonadEmit msg m where
-  emit :: msg a -> m a
-
-eval :: (Member (State Model) r, Member Http r) => Msg a -> Eff r a
-eval Inc = pure ()
-eval Dec = pure ()
-eval GetSeasons = do
-  model <- get
-  pure $ modelSeasons model
-eval (SetSeasons _) = pure ()
-eval (HeaderMsg msg) = do
-  model <- gets modelHeaderModel
-  (s, a) <- runState model (Header.eval msg)
-  modify (headerModel .~ s)
-  pure a
-
-init :: JSM Model
+init :: Init Model
 init = do
-  seasonEpisodes <- callRPC $ static (remote $ do
+  seasonEpisodes <- dispatch $ static (remote $ do
     annotate :: TelikovBackend ()
     lastTransactId <- query_ @(Only Int) [sql|select max(rowid) from transactions where finished_at not null|]
     seasonPairs <- query @(Only Int64 :. Season) [sql|select rowid, * from seasons where tid=?|] (lastTransactId !! 0)
@@ -81,6 +48,20 @@ init = do
     )
 
   pure $ Model seasonEpisodes Header.init
+
+eval :: Msg a -> Eval Model Msg a
+eval = \case
+  Inc -> pure ()
+  Dec -> pure ()
+  GetSeasons -> do
+    model <- get
+    pure $ modelSeasons model
+  SetSeasons _ -> pure ()
+  HeaderMsg msg -> do
+    model <- gets modelHeaderModel
+    (s, a) <- Header.eval msg & mapMessages HeaderMsg & runState model
+    modify (headerModel .~ s)
+    pure a
 
 liftHeader :: Exists Header.Msg -> Exists Msg
 liftHeader (Exists msg) = Exists (HeaderMsg msg)
@@ -112,19 +93,6 @@ view =
       go prefix ('/':[]) = reverse $ takeWhile isDigit prefix
       go prefix (x:xs)   = go (x:prefix) xs
     el = element
-
-main :: Model -> JSM ()
-main model = do
-  doc  <- currentDocumentUnchecked
-  body <- getBodyUnchecked doc
-  StoreHandle store modifyStore <- createStore model
-  let sink (Step f) = modifyStore f
-      sink (Yield (Exists msg)) = do
-        curr <- readLatest store
-        (s, _) <- eval msg & http2JSM & runState curr & runM
-        modifyStore (const s)
-  UIHandle node _ <- unUI view store sink
-  appendChild_ body node
 
 styles = JS.lazyTextToJSString $ renderCss $ css () where
   Theme { unit, primaryText, borderColor, secondaryText } = theme

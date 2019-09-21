@@ -1,14 +1,8 @@
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE CPP               #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE StaticPointers    #-}
-{-# LANGUAGE TypeFamilies, LambdaCase, TemplateHaskell, ConstraintKinds      #-}
+{-# LANGUAGE TemplateHaskell      #-}
 module Telikov.RPC where
 
 import Control.Monad.Catch
@@ -16,18 +10,17 @@ import Data.Aeson (decode)
 import Data.String (fromString)
 import Data.Text (Text)
 import GHCJS.DOM.Types (JSM)
-import Haste.App (Mapping(..), MonadClient(..), Node(..), Env, Import, Dispatch, StaticPtr, liftIO)
+import Haste.App (Mapping(..), MonadClient(..), Node(..), Env, liftIO)
 import Haste.App.Protocol (Endpoint(..), ServerReply(..), ServerException(..), NetworkException(..))
-import qualified Haste.App.Remote as Remote
 import qualified Database.SQLite.Simple as SQLite
 import Control.Monad.Fail (MonadFail(..))
-import Telikov.Effects (SQL(..), sql2IO, CurrentTime, time2IO, embed, Embed, Sem, runM)
+import Telikov.Effects (remoteRequest, interpret, Member, SQL(..), sql2IO, CurrentTime, time2IO, embed, Embed, Sem, runM, RPC(..))
 
-#ifndef __GHCJS__
+#ifndef ghcjs_HOST_OS
 import qualified Network.WebSockets as WS
-
-instance MonadClient JSM where
-  remoteCall (WebSocket h p) msg n = liftIO $ do
+rpc2JSM :: Member (Embed JSM) r => Sem (RPC ': r) a -> Sem r a
+rpc2JSM = interpret $ \case
+  RemoteRequest (WebSocket h p) msg n -> embed $ liftIO $ do
     putStrLn $ "Sending rpc to " <> h <> ":" <> show p
     WS.runClient "127.0.0.1" p "/" $ \ c' -> do
       WS.sendTextData c' (fromString msg :: Text)
@@ -36,6 +29,7 @@ instance MonadClient JSM where
         Just (ServerReply n' msg) -> return msg
         Just (ServerEx _ msg)     -> throwM (ServerException msg)
         Nothing                   -> throwM (NetworkException "Cannot decode ServerReply")
+    
 #else
 import qualified JavaScript.Web.WebSocket as WS
 import qualified Data.JSString as J
@@ -44,7 +38,7 @@ import qualified JavaScript.Web.MessageEvent as ME
 import qualified Data.ByteString.Lazy.UTF8 as L
 import Data.Aeson (eitherDecode, object, Result(..))
 
-instance MonadClient JSM where
+instance Member RPC r => MonadClient (Sem r) where
   remoteCall ep@(WebSocket{ wsEndpointHost, wsEndpointPort }) pkt n = do
     mvar <- liftIO $ newEmptyMVar
     let handleMessage :: ME.MessageEvent -> IO ()
@@ -58,7 +52,6 @@ instance MonadClient JSM where
     conn <- liftIO $ WS.connect wsRequest
     liftIO $ WS.send (J.pack pkt) conn
     liftIO $ takeMVar mvar
-
 #endif
 
 instance Mapping TelikovBackend a where
@@ -74,8 +67,8 @@ instance Node TelikovBackend where
   type Env TelikovBackend = RPCEnv
   init _ = RPCEnv <$> SQLite.open "test.db"
 
-instance MonadFail TelikovBackend where
+instance {-# OVERLAPPABLE #-} MonadFail TelikovBackend where
   fail = embed @IO . error
 
-callRPC :: forall cli dom. Dispatch dom cli => StaticPtr (Import dom) -> cli
-callRPC = Remote.dispatch
+instance (Member RPC r, Member (Embed IO) r) => MonadClient (Sem r) where
+  remoteCall = remoteRequest

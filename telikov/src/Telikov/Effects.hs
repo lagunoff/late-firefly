@@ -5,9 +5,8 @@ module Telikov.Effects
   , UTCTime(..)
   , SQL(..), query, query_, execute, execute_, lastInsertRowId, sql2IO
   , CurrentTime(..), currentTime, time2IO, Http(..), httpGet, http2JSM, http2IO
-  , Eff
   , io2jsm
-  , Query, emit, InitEff, UpdateEff, RPC(..), remoteRequest, mapMessages, Eval, Init, Exists(..)
+  , Query, emit, InitEff, UpdateEff, RPC(..), remoteRequest, mapMessages, Eval, Init, Exists(..), evaluateMessages
   ) where 
 
 import Database.SQLite.Simple (Connection, FromRow, ToRow)
@@ -41,10 +40,10 @@ lastInsertRowId :: (Member SQL eff) => Sem eff Int64
 
 sql2IO :: Member (Embed IO) r => Connection -> Sem (SQL ': r) a -> Sem r a
 sql2IO conn = interpret $ \case
-  Query q p -> embed $ SQLite.query conn q p
-  Query_ q -> embed $ SQLite.query_ conn q
-  Execute q p -> embed $ SQLite.execute conn q p
-  Execute_ q -> embed $ SQLite.execute_ conn q
+  Query q p       -> embed $ SQLite.query conn q p
+  Query_ q        -> embed $ SQLite.query_ conn q
+  Execute q p     -> embed $ SQLite.execute conn q p
+  Execute_ q      -> embed $ SQLite.execute_ conn q
   LastInsertRowId -> embed $ SQLite.lastInsertRowId conn
 
 data CurrentTime m a where
@@ -78,11 +77,14 @@ mapMessages :: forall msg1 msg2 r a. (Member (Query msg2) r) => (forall b. msg1 
 mapMessages t = interpret $ \case
   Emit msg1 -> emit (t msg1)
 
+evaluateMessages :: forall msg r a. (forall b. msg b -> Sem (Query msg ': r) b) -> Sem (Query msg ': r) a -> Sem r a
+evaluateMessages eval = interpret $ \case
+  Emit msg -> evaluateMessages eval (eval msg)
+
 data RPC m a where
   RemoteRequest :: Endpoint -> String -> Nonce -> RPC m Value
 makeSem ''RPC
 
-type Eff = Sem
 type InitEff r = Members '[Http, RPC, Embed IO] r
 type UpdateEff model msg r = Members '[State model, Query msg, Http, RPC, Embed IO] r
 

@@ -59,7 +59,9 @@ eval = \case
   SetSeasons _ -> pure ()
   HeaderMsg msg -> do
     model <- gets modelHeaderModel
-    (s, a) <- Header.eval msg & mapMessages HeaderMsg & runState model
+    (s, a) <- Header.eval msg
+      & mapMessages HeaderMsg
+      & runState model
     modify (headerModel .~ s)
     pure a
 

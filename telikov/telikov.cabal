@@ -17,7 +17,7 @@ executable parser
                      , utf8-string
                      , bytestring
                      , exceptions
-                     , optparse-applicative
+                     , optparse-generic
                      , tagsoup
                      , tagsoup-lens
                      , process
@@ -30,8 +30,26 @@ executable parser
                      , polysemy
                      , polysemy-plugin
                      , jsaddle
+                     , haste-app-ghcjs
                      
-  default-extensions: GADTs, ScopedTypeVariables, FlexibleContexts, TypeOperators, DataKinds, PolyKinds
+  default-extensions: FlexibleContexts
+                    , FlexibleInstances
+                    , FunctionalDependencies
+                    , GADTs
+                    , LambdaCase
+                    , MultiParamTypeClasses
+                    , NamedFieldPuns
+                    , OverloadedStrings
+                    , QuasiQuotes
+                    , RankNTypes
+                    , ScopedTypeVariables
+                    , TypeApplications
+                    , TypeOperators
+                    , ConstraintKinds
+                    , TypeFamilies
+                    , DataKinds
+                    , PolyKinds
+
   
 executable telikov-client
   hs-source-dirs:      src
@@ -75,6 +93,8 @@ executable telikov-client
                     , TypeOperators
                     , ConstraintKinds
                     , TypeFamilies
+                    , DataKinds
+                    , PolyKinds
 
   
 executable telikov-server
@@ -126,3 +146,5 @@ executable telikov-server
                     , TypeOperators
                     , ConstraintKinds
                     , TypeFamilies
+                    , DataKinds
+                    , PolyKinds

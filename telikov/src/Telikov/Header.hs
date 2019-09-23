@@ -40,7 +40,7 @@ eval = \case
     modify (search .~ val)
   SearchSubmit -> do
     c <- dispatch $ static (remote $ do
-      annotate :: TelikovBackend ()      
+      annotate :: TelikovBackend ()
       res <- query_ @(Only Int) [sql|select count(*) from episodes|]
       pure $ fromOnly $ res !! 0
       )

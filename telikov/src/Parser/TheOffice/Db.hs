@@ -2,7 +2,6 @@
 {-# LANGUAGE DeriveAnyClass    #-}
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE FlexibleContexts  #-}
-{-# LANGUAGE GADTs             #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes       #-}
 {-# LANGUAGE TypeApplications      #-}
@@ -21,7 +20,7 @@ import Database.SQLite.Simple (Query)
 import Database.SQLite.Simple.FromRow
 import Database.SQLite.Simple.QQ (sql)
 import Database.SQLite.Simple.ToRow
-import Telikov.Effects (SQL, execute_, Member, Eff)
+import Telikov.Effects (SQL, execute_, Member, Sem)
 import GHC.Generics (Generic)
 
 data Episode = Episode
@@ -78,7 +77,7 @@ instance HasSchema Season where
 class HasSchema a where
   schema :: [Query]
 
-initSchema :: Member SQL r => Eff r ()
+initSchema :: Member SQL r => Sem r ()
 initSchema = for_ dbSchema execute_
 
 instance FromRow Episode where

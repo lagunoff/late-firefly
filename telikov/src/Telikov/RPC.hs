@@ -19,10 +19,10 @@ import Telikov.Effects (remoteRequest, interpret, Member, SQL(..), sql2IO, Curre
 #ifndef ghcjs_HOST_OS
 import qualified Network.WebSockets as WS
 rpc2JSM :: Member (Embed JSM) r => Sem (RPC ': r) a -> Sem r a
-rpc2JSM = interpret $ \case
-  RemoteRequest (WebSocket h p) msg n -> embed $ liftIO $ do
+rpc2JSM = interpret \case
+  RemoteRequest (WebSocket h p) msg n -> embed $ liftIO do
     putStrLn $ "Sending rpc to " <> h <> ":" <> show p
-    WS.runClient "127.0.0.1" p "/" $ \ c' -> do
+    WS.runClient "127.0.0.1" p "/" \ c' -> do
       WS.sendTextData c' (fromString msg :: Text)
       reply <- WS.receiveData c'
       case decode reply of

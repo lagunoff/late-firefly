@@ -1,5 +1,4 @@
 packages:
-        polysemy
         telikov
         massaraksh
         haste-app-ghcjs

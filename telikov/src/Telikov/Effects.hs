@@ -39,7 +39,7 @@ execute_ :: forall eff. (Member SQL eff) => SQLite.Query -> Sem eff ()
 lastInsertRowId :: (Member SQL eff) => Sem eff Int64
 
 sql2IO :: Member (Embed IO) r => Connection -> Sem (SQL ': r) a -> Sem r a
-sql2IO conn = interpret $ \case
+sql2IO conn = interpret \case
   Query q p       -> embed $ SQLite.query conn q p
   Query_ q        -> embed $ SQLite.query_ conn q
   Execute q p     -> embed $ SQLite.execute conn q p
@@ -51,7 +51,7 @@ data CurrentTime m a where
 makeSem ''CurrentTime
 
 time2IO :: Member (Embed IO) r => Sem (CurrentTime ': r) a -> Sem r a
-time2IO = interpret $ \case
+time2IO = interpret \case
   CurrentTime -> embed getCurrentTime
 
 data Http m a where
@@ -59,11 +59,11 @@ data Http m a where
 makeSem ''Http
 
 http2IO :: Member (Embed IO) r => Sem (Http ': r) a -> Sem r a
-http2IO = interpret $ \case
+http2IO = interpret \case
   HttpGet url -> embed (putStrLn $ "GET " <> url) *> embed (Wreq.get url)
 
 http2JSM :: Member (Embed JSM) r => Sem (Http ': r) a -> Sem r a
-http2JSM = interpret $ \case
+http2JSM = interpret \case
   HttpGet url -> embed (liftIO $ Wreq.get url)
 
 io2jsm :: Member (Embed JSM) r => Sem (Embed IO ': r) a -> Sem r a
@@ -74,11 +74,11 @@ data Query msg m a where
 makeSem ''Query
 
 mapMessages :: forall msg1 msg2 r a. (Member (Query msg2) r) => (forall b. msg1 b -> msg2 b) -> Sem (Query msg1 ': r) a -> Sem r a
-mapMessages t = interpret $ \case
+mapMessages t = interpret \case
   Emit msg1 -> emit (t msg1)
 
 evaluateMessages :: forall msg r a. (forall b. msg b -> Sem (Query msg ': r) b) -> Sem (Query msg ': r) a -> Sem r a
-evaluateMessages eval = interpret $ \case
+evaluateMessages eval = interpret \case
   Emit msg -> evaluateMessages eval (eval msg)
 
 data RPC m a where

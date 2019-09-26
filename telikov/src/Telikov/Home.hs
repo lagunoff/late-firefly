@@ -38,11 +38,11 @@ data Msg a where
 
 init :: Init Model
 init = do
-  seasonEpisodes <- dispatch $ static (remote $ do
+  seasonEpisodes <- dispatch $ static (remote do
     annotate :: TelikovBackend ()
     lastTransactId <- query_ @(Only Int) "select max(rowid) from transactions where finished_at not null"
     seasonPairs <- query @(Only Int64 :. Season) "select rowid, * from seasons where tid=?" (lastTransactId !! 0)
-    for seasonPairs $ \(seasonId :. season) -> do
+    for seasonPairs \(seasonId :. season) -> do
       episodes <- query @(Episode) "select * from episodes where season_id=?" seasonId
       pure (season, episodes)
     )
@@ -73,11 +73,11 @@ view =
   el "main" []
   [ focus nestedId $ focusN headerModel (mapUI liftHeader Header.view)
   , div_ [ class_ "content" ]
-    [ askModel $ \model -> ul_ [] $ flip fmap (modelSeasons model) $ \(season, episodes) ->
+    [ askModel \model -> ul_ [] $ flip fmap (modelSeasons model) \(season, episodes) ->
         let seasonLink = a_ [ href_ ("#" <> JS.textToJSString (season ^. field @"href")) ] in
         li_ [ class_ "season" ] $
         [ seasonLink [ h2_ [] [ text_ ("Season " <> JS.textToJSString (seasonName season)) ] ]
-        , ul_ [ class_ "episodes" ] $ flip fmap episodes $ \episode ->
+        , ul_ [ class_ "episodes" ] $ flip fmap episodes \episode ->
             let episodeLink = a_ [ href_ ("#" <> JS.textToJSString (episode ^. field @"href")) ] in
             li_ [ class_ "episode" ]
             [ episodeLink [ img_ [ class_ "episode-thumbnail", src_ (JS.textToJSString $ episode ^. field @"thumbnail") ] ]

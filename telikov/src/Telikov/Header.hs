@@ -39,12 +39,12 @@ eval = \case
   SearchInput val -> do
     modify (search .~ val)
   SearchSubmit -> do
-    c <- dispatch $ static (remote $ do
+    c <- dispatch $ static (remote do
       annotate :: TelikovBackend ()
       res <- query_ @(Only Int) [sql|select count(*) from episodes|]
       pure $ fromOnly $ res !! 0
       )
-    c2 <- dispatch $ static (remote $ do
+    c2 <- dispatch $ static (remote do
       annotate :: TelikovBackend ()
       res <- query_ @(Only Int) [sql|select count(*) from episodes|]
       pure $ fromOnly $ res !! 0
@@ -58,8 +58,8 @@ view =
   div_ [ cs "root" ]
   [ div_ [ cs "logo" ] [ a_ [ href_ "" ] [ text_ "Telikov.com" ] ]
   , div_ [ cs "searchbar" ]
-    [ input_ [ placeholder_ "Search", onInput $ \_ -> Left . Exists . SearchInput, prop "value" (modelSearch . here) ]
-    , button_ [ type_ "button", on click $ \_ -> Left $ Exists $ SearchSubmit ] [ text_ "-->" ]
+    [ input_ [ placeholder_ "Search", onInput \_ -> Left . Exists . SearchInput, prop "value" (modelSearch . here) ]
+    , button_ [ type_ "button", on click \_ -> Left $ Exists $ SearchSubmit ] [ text_ "-->" ]
     ]
   , div_ [ cs "navbar" ]
     [ ul_ []

@@ -52,6 +52,7 @@ executable parser
                     , PolyKinds
                     , DeriveGeneric
                     , DeriveAnyClass
+                    , BlockArguments
 
   
 executable telikov-client
@@ -101,6 +102,7 @@ executable telikov-client
                     , PolyKinds
                     , DeriveGeneric
                     , DeriveAnyClass
+                    , BlockArguments
 
   
 executable telikov-server
@@ -157,3 +159,4 @@ executable telikov-server
                     , PolyKinds
                     , DeriveGeneric
                     , DeriveAnyClass
+                    , BlockArguments

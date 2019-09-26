@@ -56,18 +56,18 @@ main = do
             startedAt <- currentTime
             tid <- execute "insert into transactions (started_at) values (?)" (Only startedAt) *> lastInsertRowId
             seasons <- scrapeSeasons tid
-            for_ seasons $ \(season, seasonId) -> do
+            for_ seasons \(season, seasonId) -> do
               scrapeEpisodes tid seasonId season
             finishedAt <- currentTime
             execute "update transactions set finished_at=(?) where rowid=(?)" (finishedAt, tid)
-      withConnection dbpath $ \conn -> program
+      withConnection dbpath \conn -> program
         & sql2IO conn
         & time2IO
         & http2IO
         & runM
 
     InitSchema { dbpath } -> do
-      withConnection dbpath $ \conn -> initSchema & sql2IO conn & runM
+      withConnection dbpath \conn -> initSchema & sql2IO conn & runM
       
     GoodBye ->
       liftIO $ putStrLn "Goodbye..."
@@ -76,7 +76,7 @@ scrapeSeasons :: Members '[SQL, Http] r => Int64 -> Sem r [(Season, Int64)]
 scrapeSeasons tid = do
   markup <- Lazy.decodeUtf8 . (^.responseBody) <$> httpGet "https://iwatchtheoffice.com/season-list/"
   let seasonOuters = markup^.._DOM.traverse.allAttributed(ix "id" . traverse . only "outer")
-  for seasonOuters $ \el -> do
+  for seasonOuters \el -> do
     let href      = Lazy.toStrict $ el^.allElements.named(only "a").attrOne "href"
     let thumbnail = Lazy.toStrict $ el^.allElements.named(only "img").attrOne "src"
     let season          = Season {..}
@@ -87,7 +87,7 @@ scrapeEpisodes :: Members '[SQL, Http] r => Int64 -> Int64 -> Season -> Sem r [(
 scrapeEpisodes tid season_id season = do
   markup <- Lazy.decodeUtf8 . (^.responseBody) <$> httpGet ("https://iwatchtheoffice.com" <> T.unpack (season ^. field @"href"))
   let episodeOuters = markup^.._DOM.traverse.allAttributed(ix "id" . traverse . only "outer")
-  for episodeOuters $ \el -> do
+  for episodeOuters \el -> do
     let href              = Lazy.toStrict $ el^.allElements.named(only "a").attrOne "href"
     let thumbnail         = Lazy.toStrict $ el^.allElements.named(only "img").attrOne "src"
     let code              = Lazy.toStrict $ el^.allElements.named(only "div").attributed(ix "id" . traverse . only "inner_remaining_l").contents

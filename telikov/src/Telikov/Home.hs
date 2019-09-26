@@ -10,11 +10,11 @@ import qualified Data.JSString.Text as JS
 import qualified Data.Text as T
 import Data.Traversable (for)
 import Database.SQLite.Simple ((:.) (..), Only (..))
-import Database.SQLite.Simple.QQ (sql)
 import Haste.App (annotate, dispatch, remote)
 import Massaraksh
 import Massaraksh.Html
 import Massaraksh.Lens
+import Data.Generics.Product (field)
 import Parser.TheOffice.Db (Episode (..), Season (..))
 import Polysemy.State (get, gets, modify, runState)
 import Telikov.Effects (Eval, Init, mapMessages, query, query_, Exists (..))
@@ -40,14 +40,14 @@ init :: Init Model
 init = do
   seasonEpisodes <- dispatch $ static (remote $ do
     annotate :: TelikovBackend ()
-    lastTransactId <- query_ @(Only Int) [sql|select max(rowid) from transactions where finished_at not null|]
-    seasonPairs <- query @(Only Int64 :. Season) [sql|select rowid, * from seasons where tid=?|] (lastTransactId !! 0)
+    lastTransactId <- query_ @(Only Int) "select max(rowid) from transactions where finished_at not null"
+    seasonPairs <- query @(Only Int64 :. Season) "select rowid, * from seasons where tid=?" (lastTransactId !! 0)
     for seasonPairs $ \(seasonId :. season) -> do
-      episodes <- query @(Episode) [sql|select * from episodes where season_id=?|] seasonId
+      episodes <- query @(Episode) "select * from episodes where season_id=?" seasonId
       pure (season, episodes)
     )
 
-  pure $ Model seasonEpisodes Header.init
+  pure (Model seasonEpisodes Header.init)
 
 eval :: Msg a -> Eval Model Msg a
 eval = \case
@@ -74,15 +74,15 @@ view =
   [ focus nestedId $ focusN headerModel (mapUI liftHeader Header.view)
   , div_ [ class_ "content" ]
     [ askModel $ \model -> ul_ [] $ flip fmap (modelSeasons model) $ \(season, episodes) ->
-        let seasonLink = a_ [ href_ ("#" <> JS.textToJSString (seasonHref season)) ] in
+        let seasonLink = a_ [ href_ ("#" <> JS.textToJSString (season ^. field @"href")) ] in
         li_ [ class_ "season" ] $
         [ seasonLink [ h2_ [] [ text_ ("Season " <> JS.textToJSString (seasonName season)) ] ]
         , ul_ [ class_ "episodes" ] $ flip fmap episodes $ \episode ->
-            let episodeLink = a_ [ href_ ("#" <> JS.textToJSString (episodeHref episode)) ] in
+            let episodeLink = a_ [ href_ ("#" <> JS.textToJSString (episode ^. field @"href")) ] in
             li_ [ class_ "episode" ]
-            [ episodeLink [ img_ [ class_ "episode-thumbnail", src_ (JS.textToJSString $ episodeThumbnail episode) ] ]
-            , episodeLink [ text_ (JS.textToJSString $ episodeCode episode) ]
-            , episodeLink [ text_ (JS.textToJSString $ episodeShortDescription episode) ]
+            [ episodeLink [ img_ [ class_ "episode-thumbnail", src_ (JS.textToJSString $ episode ^. field @"thumbnail") ] ]
+            , episodeLink [ text_ (JS.textToJSString $ episode ^. field @"code") ]
+            , episodeLink [ text_ (JS.textToJSString $ episode ^. field @"short_description") ]
             ]
         ]
     , el "style" [ type_ "text/css" ] [ text_ resetcss ]
@@ -90,7 +90,7 @@ view =
     , el "style" [ type_ "text/css" ] [ text_ styles ]
     ]
   ] where
-    seasonName season = T.pack $ go [] $ T.unpack $ seasonHref season where
+    seasonName season = T.pack $ go [] $ T.unpack $ season ^. field @"href" where
       go prefix []       = reverse $ takeWhile isDigit prefix
       go prefix ('/':[]) = reverse $ takeWhile isDigit prefix
       go prefix (x:xs)   = go (x:prefix) xs

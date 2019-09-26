@@ -1,11 +1,8 @@
 module Main where
 import Haste.App hiding (Server)
 import Telikov.RPC (TelikovBackend)
-import Language.Javascript.JSaddle.Warp (run)
 import GHCJS.DOM.Types (JSM)
 import qualified Telikov.Home as Home
-import Control.Concurrent (forkIO)
-import Data.Functor (void)
 import GHCJS.DOM
 import GHCJS.DOM.Document
 import GHCJS.DOM.Node hiding (Node)

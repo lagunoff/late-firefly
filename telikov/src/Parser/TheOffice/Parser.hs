@@ -26,6 +26,7 @@ import Telikov.Effects (Members, CurrentTime, Http, SQL, Sem, currentTime,
                         runM, sql2IO, time2IO)
 import Text.HTML.TagSoup.Lens (allAttributed, allElements, allNamed, attrOne,
                                attributed, children, contents, named, _DOM)
+import Data.Generics.Product
 
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as Lazy
@@ -72,29 +73,29 @@ main = do
       liftIO $ putStrLn "Goodbye..."
 
 scrapeSeasons :: Members '[SQL, Http] r => Int64 -> Sem r [(Season, Int64)]
-scrapeSeasons seasonTid = do
+scrapeSeasons tid = do
   markup <- Lazy.decodeUtf8 . (^.responseBody) <$> httpGet "https://iwatchtheoffice.com/season-list/"
   let seasonOuters = markup^.._DOM.traverse.allAttributed(ix "id" . traverse . only "outer")
   for seasonOuters $ \el -> do
-    let seasonHref      = Lazy.toStrict $ el^.allElements.named(only "a").attrOne "href"
-    let seasonThumbnail = Lazy.toStrict $ el^.allElements.named(only "img").attrOne "src"
+    let href      = Lazy.toStrict $ el^.allElements.named(only "a").attrOne "href"
+    let thumbnail = Lazy.toStrict $ el^.allElements.named(only "img").attrOne "src"
     let season          = Season {..}
     seasonId <- execute "insert into seasons (tid, thumbnail, href) values (?,?,?)" season *> lastInsertRowId
     pure (season, seasonId)
 
 scrapeEpisodes :: Members '[SQL, Http] r => Int64 -> Int64 -> Season -> Sem r [(Episode, Int64)]
-scrapeEpisodes episodeTid episodeSeasonId season = do
-  markup <- Lazy.decodeUtf8 . (^.responseBody) <$> httpGet ("https://iwatchtheoffice.com" <> T.unpack (seasonHref season))
+scrapeEpisodes tid season_id season = do
+  markup <- Lazy.decodeUtf8 . (^.responseBody) <$> httpGet ("https://iwatchtheoffice.com" <> T.unpack (season ^. field @"href"))
   let episodeOuters = markup^.._DOM.traverse.allAttributed(ix "id" . traverse . only "outer")
   for episodeOuters $ \el -> do
-    let episodeHref             = Lazy.toStrict $ el^.allElements.named(only "a").attrOne "href"
-    let episodeThumbnail        = Lazy.toStrict $ el^.allElements.named(only "img").attrOne "src"
-    let episodeCode             = Lazy.toStrict $ el^.allElements.named(only "div").attributed(ix "id" . traverse . only "inner_remaining_l").contents
-    let episodeName             = Lazy.toStrict $ el^.allElements.named(only "div").attributed(ix "id" . traverse . only "inner_remaining_r").contents
-    let episodeShortDescription = Lazy.toStrict $ el^.allElements.named(only "div").attributed(ix "id" . traverse . only "inner_remaining_r2").contents
-    markup2 <- Lazy.decodeUtf8 . (^.responseBody) <$> httpGet ("https://iwatchtheoffice.com" <> T.unpack episodeHref)
-    let episodeLinks       = fmap Lazy.toStrict $ markup2^.._DOM.traverse.allAttributed(ix "class" . traverse . only "linkz_box").children.traverse.allNamed(only "a").attrOne "href"
-    let episodeDescription = Lazy.toStrict $ markup2^._DOM.traverse.allAttributed(ix "class" . traverse . only "description_box").contents
+    let href              = Lazy.toStrict $ el^.allElements.named(only "a").attrOne "href"
+    let thumbnail         = Lazy.toStrict $ el^.allElements.named(only "img").attrOne "src"
+    let code              = Lazy.toStrict $ el^.allElements.named(only "div").attributed(ix "id" . traverse . only "inner_remaining_l").contents
+    let name              = Lazy.toStrict $ el^.allElements.named(only "div").attributed(ix "id" . traverse . only "inner_remaining_r").contents
+    let short_description = Lazy.toStrict $ el^.allElements.named(only "div").attributed(ix "id" . traverse . only "inner_remaining_r2").contents
+    markup2 <- Lazy.decodeUtf8 . (^.responseBody) <$> httpGet ("https://iwatchtheoffice.com" <> T.unpack (season ^. field @"href"))
+    let links       = fmap Lazy.toStrict $ markup2^.._DOM.traverse.allAttributed(ix "class" . traverse . only "linkz_box").children.traverse.allNamed(only "a").attrOne "href"
+    let description = Lazy.toStrict $ markup2^._DOM.traverse.allAttributed(ix "class" . traverse . only "description_box").contents
     let episode            = Episode {..}
     episodeId <- execute "insert into episodes (tid, season_id, code, name, href, short_description, thumbnail, description, links) values (?, ?, ?, ?, ?, ?, ?, ?, ?)" episode *> lastInsertRowId
     pure (episode, episodeId)

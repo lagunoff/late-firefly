@@ -31,6 +31,7 @@ executable parser
                      , polysemy-plugin
                      , jsaddle
                      , haste-app-ghcjs
+                     , generic-lens
                      
   default-extensions: FlexibleContexts
                     , FlexibleInstances
@@ -49,6 +50,8 @@ executable parser
                     , TypeFamilies
                     , DataKinds
                     , PolyKinds
+                    , DeriveGeneric
+                    , DeriveAnyClass
 
   
 executable telikov-client
@@ -77,6 +80,7 @@ executable telikov-client
                      , ghcjs-base
                      , polysemy
                      , th-abstraction
+                     , generic-lens
                      
   default-extensions: FlexibleContexts
                     , FlexibleInstances
@@ -95,6 +99,8 @@ executable telikov-client
                     , TypeFamilies
                     , DataKinds
                     , PolyKinds
+                    , DeriveGeneric
+                    , DeriveAnyClass
 
   
 executable telikov-server
@@ -130,6 +136,7 @@ executable telikov-server
                      , polysemy
                      , polysemy-plugin
                      , wreq
+                     , generic-lens
                      
   default-extensions: FlexibleContexts
                     , FlexibleInstances
@@ -148,3 +155,5 @@ executable telikov-server
                     , TypeFamilies
                     , DataKinds
                     , PolyKinds
+                    , DeriveGeneric
+                    , DeriveAnyClass

@@ -23,7 +23,7 @@ data SearchResult
 data Model = Model
   { modelFocused       :: Bool -- ^ Search input has focus
   , modelSearchResults :: [SearchResult] -- ^ Search input has focus
-  , modelSearch :: JSString
+  , modelSearch        :: JSString
   }
 makeLensesWith camelCaseFields ''Model
   

@@ -20,8 +20,8 @@ import Polysemy.State (get, gets, modify, runState)
 import Telikov.Effects (Eval, Init, mapMessages, query, query_, Exists (..))
 import qualified Telikov.Header as Header
 import Telikov.RPC (TelikovBackend)
-import Telikov.Styles (Theme (..), theme, unit)
-import Text.Lucius (lucius, luciusFile, renderCss)
+import Telikov.Styles (Theme (..), theme, renderCss)
+import Text.Lucius (lucius, luciusFile)
 
 data Model = Model
   { modelSeasons     :: [(Season, [Episode])] -- ^ Data from server
@@ -96,7 +96,7 @@ view =
     el = element
     toJS = JS.textToJSString
 
-styles = JS.lazyTextToJSString $ renderCss $ css () where
+styles = renderCss $ css () where
   Theme { unit, primaryText, borderColor, secondaryText } = theme
   borderRadius = 5 :: Double
   itemPadding = unit * 2
@@ -174,7 +174,7 @@ styles = JS.lazyTextToJSString $ renderCss $ css () where
       }
     |]
 
-globalCss = JS.lazyTextToJSString $ renderCss $ css () where
+globalCss = renderCss $ css () where
   css =
     [lucius|
       body, body * {
@@ -182,4 +182,4 @@ globalCss = JS.lazyTextToJSString $ renderCss $ css () where
       }
     |]
 
-resetcss = JS.lazyTextToJSString $ renderCss $ $(luciusFile "./src/Telikov/reset.css") ()
+resetcss = renderCss $ $(luciusFile "./src/Telikov/reset.css") ()

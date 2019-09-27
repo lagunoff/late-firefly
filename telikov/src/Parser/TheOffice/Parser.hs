@@ -6,25 +6,25 @@ import Control.Exception (SomeException)
 import Control.Lens (ix, only, traverse, (&), (^.), (^..))
 import Control.Monad.IO.Class (liftIO)
 import Data.Foldable (for_)
-import Data.Int (Int64)
 import Data.Semigroup ((<>))
 import Data.Traversable (for)
 import Database.SQLite.Simple (Connection, Only (..), withConnection)
 import GHC.Generics (Generic)
 import Options.Generic (ParseRecord(..), getRecord)
 import Parser.TheOffice.Db (Episode (..), Season (..), initSchema)
-import Telikov.Effects (embed, Embed, Members, CurrentTime, Http, SQL, Sem, currentTime,
+import Telikov.Effects (RowID, embed, Embed, Members, CurrentTime, Http, SQL, Sem, currentTime,
                         execute, http2IO, httpGet, lastInsertRowId, responseBody,
                         runM, sql2IO, time2IO)
 import Text.HTML.TagSoup.Lens (allAttributed, allElements, allNamed, attrOne,
                                attributed, children, contents, named, _DOM)
-import Data.Generics.Product
+import Data.Generics.Product (field)
 
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as Lazy
 import qualified Data.Text.Lazy.Encoding as Lazy
 
 type URL = String
+type Scrape r = forall eff. Members '[SQL, Http, Embed IO] eff => Sem eff r
 
 -- | Cli arguments
 data Args
@@ -64,7 +64,8 @@ main = do
     GoodBye ->
       liftIO $ putStrLn "Goodbye..."
 
-scrapeSeasons :: Members '[SQL, Http, Embed IO] r => Int64 -> Sem r [(Season, Int64)]
+
+scrapeSeasons :: RowID "transactions" -> Scrape [(Season, RowID "seasons")]
 scrapeSeasons version = do
   markup <- Lazy.decodeUtf8 . (^.responseBody) <$> httpGet "https://iwatchtheoffice.com/season-list/"
   let seasonOuters = markup^.._DOM.traverse.allAttributed(ix "id" . traverse . only "outer")
@@ -76,7 +77,7 @@ scrapeSeasons version = do
     seasonId <- execute "insert into seasons (id, version, thumbnail, href) values ((select (max(id) + 1 or 1) from seasons), ?,?,?)" season *> lastInsertRowId
     pure (season, seasonId)
 
-scrapeEpisodes :: Members '[SQL, Http] r => Int64 -> Int64 -> Season -> Sem r [(Episode, Int64)]
+scrapeEpisodes :: RowID "transactions" -> RowID "seasons" -> Season -> Scrape [(Episode, RowID "episodes")]
 scrapeEpisodes version season_id season = do
   markup <- Lazy.decodeUtf8 . (^.responseBody) <$> httpGet ("https://iwatchtheoffice.com" <> T.unpack (season ^. field @"href"))
   let episodeOuters = markup^.._DOM.traverse.allAttributed(ix "id" . traverse . only "outer")

@@ -1,10 +1,9 @@
-{-# LANGUAGE DuplicateRecordFields       #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 module Parser.TheOffice.Db where
 
 import Data.Aeson (eitherDecodeStrict', FromJSON, ToJSON, encode)
 import qualified Data.ByteString.Lazy as BSL
-import Data.Foldable (traverse_, for_)
-import Data.Int (Int64)
+import Data.Foldable (traverse_)
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
@@ -18,12 +17,13 @@ import Database.SQLite.Simple.Ok (Ok (..))
 import Database.SQLite.Simple.QQ (sql)
 import Database.SQLite.Simple.ToField (ToField (..))
 import GHC.Generics (from, to, Generic)
-import Telikov.Effects (Member, SQL, Sem, execute_)
+import Telikov.Effects (Member, SQL, Sem, execute_, RowID(..))
 import Control.Lens ((&))
 
+
 data Episode = Episode
-  { version           :: Int64
-  , season_id         :: Int64
+  { version           :: RowID "transactions"
+  , season_id         :: RowID "seasons"
   , code              :: Text
   , name              :: Text
   , href              :: Text
@@ -34,7 +34,7 @@ data Episode = Episode
   } deriving (Show, Eq, Generic, ToJSON, FromJSON)
 
 data Season = Season
-  { version   :: Int64
+  { version   :: RowID "transactions"
   , thumbnail :: Text
   , href      :: Text
   } deriving (Show, Eq, Generic, ToJSON, FromJSON)
@@ -42,36 +42,36 @@ data Season = Season
 -- | Whole schema
 dbSchema :: Query
 dbSchema = [sql|
-  create table if not exists transactions
-  ( started_at integer not null
-  , finished_at integer default null
+  create table if not exists transactions (
+    started_at  integer not null,
+    finished_at integer default null
   );
 
-  create table if not exists seasons
-  ( id integer not null
-  , version integer not null
-  , deleted integer not null default 0
-  , thumbnail text not null
-  , href text not null
-  , foreign key(version) references transactions(rowid)
-  , primary key (id, version)
+  create table seasons (
+    id        integer not null,
+    version   integer not null,
+    deleted   integer not null default 0,
+    thumbnail text    not null,
+    href      text    not null,
+    foreign key(version) references transactions(rowid),
+    primary key(id, version)
   );
   
-  create table if not exists episodes
-  ( id integer not null
-  , version integer not null
-  , deleted integer not null default 0
-  , season_id integer not null
-  , code text not null
-  , name text not null
-  , href text not null
-  , short_description text not null
-  , thumbnail text not null
-  , description text not null
-  , links text not null
-  , foreign key(season_id) references seasons(id)
-  , foreign key(version) references transactions(rowid)
-  , primary key (id, version)
+  create table if not exists episodes (
+    id        integer not null,
+    version   integer not null,
+    deleted   integer not null default 0,
+    season_id integer not null,
+    code      text    not null,
+    name      text    not null,
+    href      text    not null,
+    short_description text not null,
+    thumbnail   text not null,
+    description text not null,
+    links       text not null,
+    foreign key(season_id) references seasons(id),
+    foreign key(version)   references transactions(rowid),
+    primary key(id, version)
   );
 
   create view if not exists seasons_latest as

@@ -1,8 +1,10 @@
+{-# LANGUAGE DerivingVia #-}
+{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE TemplateHaskell #-}
 module Telikov.Effects
   ( module Network.Wreq
   , module Polysemy
-  , UTCTime(..)
+  , UTCTime(..), RowID(..)
   , SQL(..), query, query_, execute, execute_, lastInsertRowId, sql2IO
   , CurrentTime(..), currentTime, time2IO, Http(..), httpGet, http2JSM, http2IO
   , io2jsm
@@ -21,22 +23,30 @@ import qualified Network.Wreq as Wreq
 import qualified Data.ByteString.Lazy as L
 import Language.Javascript.JSaddle (JSM)
 import Control.Monad.IO.Class (liftIO)
-import Data.Aeson (Value)
+import Data.Aeson (FromJSON, ToJSON, Value)
 import Haste.App.Protocol (Endpoint(..), Nonce)
+import GHC.TypeLits
+import GHC.Generics
+import Database.SQLite.Simple.FromField
+import Database.SQLite.Simple.ToField
+
+newtype RowID t = RowID { unRowID :: Int64 }
+  deriving (Show, Eq, Generic, ToJSON, FromJSON)
+  deriving (ToField, FromField) via Int64
 
 data SQL m a where
   Query :: (ToRow q, FromRow row) => SQLite.Query -> q -> SQL m [row]
   Query_ :: (FromRow row) => SQLite.Query -> SQL m [row]
   Execute :: (ToRow q) => SQLite.Query -> q -> SQL m ()
   Execute_ :: SQLite.Query -> SQL m ()
-  LastInsertRowId :: SQL m Int64
+  LastInsertRowId :: KnownSymbol t => SQL m (RowID t)
 makeSem_ ''SQL
 
 query :: forall row q eff. (FromRow row, ToRow q, Member SQL eff) => SQLite.Query -> q -> Sem eff [row]
 query_ :: forall row eff. (FromRow row, Member SQL eff) => SQLite.Query -> Sem eff [row]
 execute :: forall q eff. (ToRow q, Member SQL eff) => SQLite.Query -> q -> Sem eff ()
 execute_ :: forall eff. (Member SQL eff) => SQLite.Query -> Sem eff ()
-lastInsertRowId :: (Member SQL eff) => Sem eff Int64
+lastInsertRowId :: forall eff t. (KnownSymbol t, Member SQL eff) => Sem eff (RowID t)
 
 sql2IO :: Member (Embed IO) r => Connection -> Sem (SQL ': r) a -> Sem r a
 sql2IO conn = interpret \case
@@ -44,7 +54,7 @@ sql2IO conn = interpret \case
   Query_ q        -> embed $ SQLite.query_ conn q
   Execute q p     -> embed $ SQLite.execute conn q p
   Execute_ q      -> embed $ SQLite.execute_ conn q
-  LastInsertRowId -> embed $ SQLite.lastInsertRowId conn
+  LastInsertRowId -> embed $ RowID <$> SQLite.lastInsertRowId conn
 
 data CurrentTime m a where
   CurrentTime :: CurrentTime m UTCTime

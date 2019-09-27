@@ -4,8 +4,8 @@ module Telikov.Header where
 import Massaraksh.Html
 import Massaraksh
 import Parser.TheOffice.Db (Season (..))
-import Telikov.Styles (Theme (..), theme, unit)
-import Text.Lucius (lucius, renderCss)
+import Telikov.Styles (Theme (..), theme, renderCss)
+import Text.Lucius (lucius)
 import Polysemy.State (modify)
 import Telikov.Effects (Eval, Exists(..), embed, query_)
 import Telikov.RPC (TelikovBackend)
@@ -52,7 +52,7 @@ view =
   [ div_ [ cs "logo" ] [ a_ [ href_ "" ] [ text_ "Telikov.com" ] ]
   , div_ [ cs "searchbar" ]
     [ input_ [ placeholder_ "Search", onInput \_ -> Left . Exists . SearchInput, prop "value" (modelSearch . here) ]
-    , button_ [ type_ "button", on click \_ -> Left $ Exists $ SearchSubmit ] [ text_ "-->" ]
+    , button_ [ type_ "button", on click \_ -> Left $ Exists $ SearchSubmit ] [ text_ "Go!" ]
     ]
   , div_ [ cs "navbar" ]
     [ ul_ []
@@ -63,7 +63,7 @@ view =
   , element "style" [ type_ "text/css" ] [ text_ styles ]
   ]
 
-styles = JS.lazyTextToJSString $ renderCss $ css () where
+styles = renderCss $ css () where
   Theme { unit, borderColor, bodyPadding, secondaryText } = theme
   unprefix = JS.unpack prefix
   css =

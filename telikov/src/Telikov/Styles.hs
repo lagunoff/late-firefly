@@ -3,6 +3,8 @@ module Telikov.Styles where
 import Data.Word (Word8)
 import qualified Data.Text as T
 import Text.Lucius (ToCss(..))
+import qualified Text.Lucius as Lucius
+import qualified Data.JSString.Text as JS
 
 data Rgba = Rgba Word8 Word8 Word8 Double
   deriving (Eq, Show)
@@ -33,3 +35,5 @@ instance ToCss Double where
 
 instance ToCss Rgba where
   toCss (Rgba r g b a) = toCss $ T.pack $ "rgba(" <> show r <> "," <> show g <> "," <> show b <> "," <> show a <> ")"
+
+renderCss = JS.lazyTextToJSString . Lucius.renderCss

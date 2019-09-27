@@ -14,7 +14,6 @@ import Data.JSString as JS
 import qualified Data.JSString.Text as JS
 import GHCJS.DOM.GlobalEventHandlers (click)
 import Database.SQLite.Simple (Only (..))
-import Database.SQLite.Simple.QQ (sql)
 import Haste.App (annotate, remote, dispatch)
 
 data SearchResult
@@ -39,17 +38,11 @@ eval = \case
   SearchInput val -> do
     modify (search .~ val)
   SearchSubmit -> do
-    c <- dispatch $ static (remote do
-      annotate :: TelikovBackend ()
-      res <- query_ @(Only Int) [sql|select count(*) from episodes|]
-      pure $ fromOnly $ res !! 0
-      )
     c2 <- dispatch $ static (remote do
       annotate :: TelikovBackend ()
-      res <- query_ @(Only Int) [sql|select count(*) from episodes|]
+      res <- query_ @(Only Int) "select count(*) from episodes"
       pure $ fromOnly $ res !! 0
       )
-    embed $ putStrLn $ "count: " <> show c
     embed $ putStrLn $ "count: " <> show c2
     pure ()
   

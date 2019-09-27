@@ -6,7 +6,7 @@ module Telikov.Effects
   , SQL(..), query, query_, execute, execute_, lastInsertRowId, sql2IO
   , CurrentTime(..), currentTime, time2IO, Http(..), httpGet, http2JSM, http2IO
   , io2jsm
-  , Query, emit, InitEff, UpdateEff, RPC(..), remoteRequest, mapMessages, Eval, Init, Exists(..), evaluateMessages
+  , Query, emit, RPC(..), remoteRequest, mapMessages, Eval, Init, Exists(..), evaluateMessages
   ) where 
 
 import Database.SQLite.Simple (Connection, FromRow, ToRow)
@@ -85,10 +85,7 @@ data RPC m a where
   RemoteRequest :: Endpoint -> String -> Nonce -> RPC m Value
 makeSem ''RPC
 
-type InitEff r = Members '[Http, RPC, Embed IO] r
-type UpdateEff model msg r = Members '[State model, Query msg, Http, RPC, Embed IO] r
-
-type Eval model msg a = forall r. UpdateEff model msg r => Sem r a
-type Init model = forall r. InitEff r => Sem r model
+type Eval model msg a = forall r. Members '[State model, Query msg, Http, RPC, Embed IO] r => Sem r a
+type Init model = forall r. Members '[Http, RPC, Embed IO] r => Sem r model
 
 data Exists f = forall a. Exists { runExist :: f a }

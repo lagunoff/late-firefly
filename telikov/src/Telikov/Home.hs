@@ -40,10 +40,9 @@ init :: Init Model
 init = do
   seasonEpisodes <- dispatch $ static (remote do
     annotate :: TelikovBackend ()
-    lastTransactId <- query_ @(Only Int) "select max(rowid) from transactions where finished_at not null"
-    seasonPairs <- query @(Only Int64 :. Season) "select rowid, * from seasons where tid=?" (lastTransactId !! 0)
+    seasonPairs <- query_ @(Only Int64 :. Season) "select rowid, * from seasons_latest"
     for seasonPairs \(seasonId :. season) -> do
-      episodes <- query @(Episode) "select * from episodes where season_id=?" seasonId
+      episodes <- query @Episode "select * from episodes_latest where season_id=?" seasonId
       pure (season, episodes)
     )
 
@@ -74,15 +73,15 @@ view =
   [ focus nestedId $ focusN headerModel (mapUI liftHeader Header.view)
   , div_ [ class_ "content" ]
     [ askModel \model -> ul_ [] $ flip fmap (modelSeasons model) \(season, episodes) ->
-        let seasonLink = a_ [ href_ ("#" <> JS.textToJSString (season ^. field @"href")) ] in
+        let seasonLink = a_ [ href_ ("#" <> toJS (season ^. field @"href")) ] in
         li_ [ class_ "season" ] $
-        [ seasonLink [ h2_ [] [ text_ ("Season " <> JS.textToJSString (seasonName season)) ] ]
+        [ seasonLink [ h2_ [] [ text_ ("Season " <> toJS (seasonName season)) ] ]
         , ul_ [ class_ "episodes" ] $ flip fmap episodes \episode ->
-            let episodeLink = a_ [ href_ ("#" <> JS.textToJSString (episode ^. field @"href")) ] in
+            let episodeLink = a_ [ href_ ("#" <> toJS (episode ^. field @"href")) ] in
             li_ [ class_ "episode" ]
-            [ episodeLink [ img_ [ class_ "episode-thumbnail", src_ (JS.textToJSString $ episode ^. field @"thumbnail") ] ]
-            , episodeLink [ text_ (JS.textToJSString $ episode ^. field @"code") ]
-            , episodeLink [ text_ (JS.textToJSString $ episode ^. field @"short_description") ]
+            [ episodeLink [ img_ [ class_ "episode-thumbnail", src_ (toJS $ episode ^. field @"thumbnail") ] ]
+            , episodeLink [ text_ (toJS $ episode ^. field @"code") ]
+            , episodeLink [ text_ (toJS $ episode ^. field @"short_description") ]
             ]
         ]
     , el "style" [ type_ "text/css" ] [ text_ resetcss ]
@@ -95,6 +94,7 @@ view =
       go prefix ('/':[]) = reverse $ takeWhile isDigit prefix
       go prefix (x:xs)   = go (x:prefix) xs
     el = element
+    toJS = JS.textToJSString
 
 styles = JS.lazyTextToJSString $ renderCss $ css () where
   Theme { unit, primaryText, borderColor, secondaryText } = theme

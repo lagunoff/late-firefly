@@ -79,7 +79,7 @@ executable telikov-client
                      , massaraksh
                      , raw-strings-qq
                      , shakespeare
-                     , sqlite-simple-stub
+                     , sqlite-simple
                      , ghcjs-base
                      , polysemy >= 1.2.0.0
                      , th-abstraction

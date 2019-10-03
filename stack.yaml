@@ -2,7 +2,7 @@ resolver: lts-13.18
 
 
 packages:
-  - ./telikov
+  - ./
   - ./type-errors-pretty
   - ./haste-app-ghcjs
   - ./massaraksh

@@ -5,21 +5,21 @@ module Telikov.Home where
 
 import Control.Lens hiding (element, view)
 import Data.Char (isDigit)
-import Data.Int (Int64)
 import qualified Data.JSString.Text as JS
 import qualified Data.Text as T
 import Data.Traversable (for)
-import Database.SQLite.Simple ((:.) (..), Only (..))
+import Database.SQLite.Simple (Only (..))
 import Haste.App (annotate, dispatch, remote)
 import Massaraksh
-import Massaraksh.Html
+import Massaraksh.Html hiding (select_)
 import Massaraksh.Lens
 import Data.Generics.Product (field)
 import Parser.TheOffice.Db (Episode (..), Season (..))
 import Polysemy.State (get, gets, modify, runState)
-import Telikov.Effects (Eval, Init, mapMessages, query, query_, Exists (..))
+import Telikov.Effects (Eval, Init, mapMessages, Exists (..))
 import qualified Telikov.Header as Header
 import Telikov.RPC (TelikovBackend)
+import Telikov.Database (select_, select, uuid5)
 import Telikov.Styles (Theme (..), theme, renderCss)
 import Text.Lucius (lucius, luciusFile)
 
@@ -40,9 +40,9 @@ init :: Init Model
 init = do
   seasonEpisodes <- dispatch $ static (remote do
     annotate :: TelikovBackend ()
-    seasonPairs <- query_ @(Only Int64 :. Season) "select rowid, * from seasons_latest"
-    for seasonPairs \(seasonId :. season) -> do
-      episodes <- query @Episode "select * from episodes_latest where season_id=?" seasonId
+    seasons <- select_ @Season "where 1"
+    for seasons \season -> do
+      episodes <- select @Episode "where season_id=?" (Only $ uuid5 season)
       pure (season, episodes)
     )
 
@@ -61,7 +61,7 @@ eval = \case
     (s, a) <- Header.eval msg
       & mapMessages HeaderMsg
       & runState model
-    modify (headerModel .~ s)
+    modify @Model (headerModel .~ s)
     pure a
 
 liftHeader :: Exists Header.Msg -> Exists Msg

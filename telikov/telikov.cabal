@@ -5,7 +5,7 @@ cabal-version:       >=1.10
                
 executable parser
   main-is:             Parser/TheOffice/Parser.hs
-  ghc-options:         -optc-Os -O4 -Wall -Wno-missing-signatures -fplugin=Polysemy.Plugin
+  ghc-options:         -optc-Os -O4 -Wall -Wno-missing-signatures
   other-modules:    Parser.TheOffice.Db
   hs-source-dirs:      src
   if impl(ghcjs)
@@ -81,11 +81,12 @@ executable telikov-client
                      , shakespeare
                      , sqlite-simple-stub
                      , ghcjs-base
-                     , polysemy
+                     , polysemy >= 1.2.0.0
                      , th-abstraction
                      , generic-lens
                      , template-haskell
                      , uuid
+                     , jsaddle
                      
   default-extensions: FlexibleContexts
                     , FlexibleInstances
@@ -114,7 +115,7 @@ executable telikov-server
   if impl(ghcjs)
     buildable: False
   main-is:             Telikov/Server.hs
-  ghc-options:        -Wall -Wno-missing-signatures -fplugin=Polysemy.Plugin
+  ghc-options:        -Wall -Wno-missing-signatures
   build-depends:       base
                      , transformers
                      , mtl

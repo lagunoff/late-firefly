@@ -36,7 +36,7 @@ init = Model False [] (JS.pack "Initial value")
 eval :: Msg a -> Eval Model Msg a
 eval = \case
   SearchInput val -> do
-    modify (search .~ val)
+    modify @Model (search .~ val)
   SearchSubmit -> do
     c2 <- dispatch $ static (remote do
       annotate :: TelikovBackend ()

@@ -1,9 +1,9 @@
 packages:
         telikov
+        ghcjs-base
         massaraksh
         haste-app-ghcjs
         sqlite-simple-stub
         direct-sqlite-stub
-        ghcjs-base
         
 jobs: $ncpus

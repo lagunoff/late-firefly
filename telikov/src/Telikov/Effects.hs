@@ -1,26 +1,29 @@
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TemplateHaskell, CPP #-}
 module Telikov.Effects
-  ( module Network.Wreq
-  , module Polysemy
+  ( module Polysemy
   , module Telikov.Database
   , UTCTime(..), Query(..)
-  , CurrentTime(..), currentTime, time2IO, Http(..), httpGet, http2JSM, http2IO
+#ifndef ghcjs_HOST_OS
+  , module Network.Wreq
+  , Http(..), httpGet, http2JSM, http2IO
+#endif
   , io2jsm
   , emit, RPC(..), remoteRequest, mapMessages, Eval, Init, Exists(..), evaluateMessages
   ) where 
 
 import Polysemy
 import Polysemy.State
-import Data.Time.Clock.POSIX (getCurrentTime)
 import Data.Time.Clock (UTCTime(..))
-import Network.Wreq (responseBody)
-import qualified Network.Wreq as Wreq
 import qualified Data.ByteString.Lazy as L
 import Language.Javascript.JSaddle (JSM)
 import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (Value)
 import Haste.App.Protocol (Endpoint(..), Nonce)
 import Telikov.Database
+
+#ifndef ghcjs_HOST_OS
+import Network.Wreq (responseBody)
+import qualified Network.Wreq as Wreq
 
 data Http m a where
   HttpGet :: String -> Http m (Wreq.Response L.ByteString)
@@ -32,10 +35,11 @@ http2IO = interpret \case
 
 http2JSM :: Member (Embed JSM) r => Sem (Http ': r) a -> Sem r a
 http2JSM = interpret \case
-  HttpGet url -> embed (liftIO $ Wreq.get url)
+  HttpGet url -> embed @JSM (liftIO $ Wreq.get url)
+#endif
 
 io2jsm :: Member (Embed JSM) r => Sem (Embed IO ': r) a -> Sem r a
-io2jsm = interpret $ embed . liftIO . unEmbed
+io2jsm = interpret $ embed @JSM . liftIO . unEmbed
 
 data Query msg m a where
   Emit :: msg a -> Query msg m a
@@ -53,7 +57,7 @@ data RPC m a where
   RemoteRequest :: Endpoint -> String -> Nonce -> RPC m Value
 makeSem ''RPC
 
-type Eval model msg a = forall r. Members '[State model, Query msg, Http, RPC, Embed IO] r => Sem r a
-type Init model = forall r. Members '[Http, RPC, Embed IO] r => Sem r model
+type Eval model msg a = forall r. Members '[State model, Query msg, RPC, Embed IO] r => Sem r a
+type Init model = forall r. Members '[RPC, Embed IO] r => Sem r model
 
 data Exists f = forall a. Exists { runExist :: f a }

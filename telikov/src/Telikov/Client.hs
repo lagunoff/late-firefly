@@ -7,7 +7,7 @@ import GHCJS.DOM
 import GHCJS.DOM.Document
 import GHCJS.DOM.Node hiding (Node)
 import Telikov.RPC (rpc2JSM)
-import Telikov.Effects (evaluateMessages, io2jsm, http2JSM, runM)
+import Telikov.Effects (evaluateMessages, io2jsm, runM)
 import Polysemy.State (runState)
 import Massaraksh
 import Telikov.Effects (Exists(..))
@@ -15,7 +15,7 @@ import Control.Lens ((&))
 
 mainClient :: JSM ()
 mainClient = do
-  model <- Home.init & http2JSM & rpc2JSM & io2jsm & runM 
+  model <- Home.init & rpc2JSM & io2jsm & runM 
   doc  <- currentDocumentUnchecked
   body <- getBodyUnchecked doc
   StoreHandle store modifyStore <- createStore model
@@ -26,7 +26,6 @@ mainClient = do
           & evaluateMessages Home.eval
           & rpc2JSM
           & io2jsm
-          & http2JSM
           & runState curr
           & runM
         modifyStore (const s)

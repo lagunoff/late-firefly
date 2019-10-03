@@ -5,6 +5,7 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE UndecidableInstances, QuantifiedConstraints, MagicHash #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Telikov.Database where
 
 import Database.SQLite.Simple (ToRow, FromRow, Connection, SQLData(..), field)
@@ -25,6 +26,7 @@ import Control.Lens ((&))
 import Data.Aeson (withText, FromJSON(..), ToJSON(..))
 import Data.Time.Clock (getCurrentTime, UTCTime(..))
 import Polysemy
+import Polysemy (Embed)
 import Polysemy.Reader
 import Data.UUID (UUID)
 import qualified Data.UUID as UUID
@@ -193,7 +195,7 @@ instance ToJSON (UUID5 a) where
 
 insert :: forall a r. (HasUUID5 a, Persistent a, Member SQL r, Member (Reader (RowID Transaction)) r) => a -> Sem r (UUID5 a)
 insert a = do
-  version <- SQLInteger . unRowID <$> ask
+  version <- SQLInteger . unRowID <$> ask @(RowID Transaction)
   let uuid = SQLText . UUID.toText . unUUID5 $ uuid5 a
   let columns = klist @a & T.intercalate ","
   let questions = klist @a & fmap (const "?") & T.intercalate "," 
@@ -209,3 +211,16 @@ insertRow a = do
   let values = kvlist a & fmap snd
   let insertQuery = "insert into \"" <> tableName @a <> "\" (" <> columns <> ") values (" <> questions <> ")"
   execute (SQLite.Query insertQuery) values *> lastInsertRowId
+
+select :: forall a r p. (Persistent a, FromRow a, ToRow p, Member SQL r) => SQLite.Query -> p -> Sem r [a]
+select (SQLite.Query txt) params = do
+  let columns = klist @a & T.intercalate ","
+  query (SQLite.Query $ "select " <> columns <> " from \"" <> tableName @a <> "_latest\" " <> txt) params
+
+select_ :: forall a r. (Persistent a, FromRow a, Member SQL r) => SQLite.Query -> Sem r [a]
+select_ (SQLite.Query txt) = do
+  let columns = klist @a & T.intercalate ","
+  query_ (SQLite.Query $ "select " <> columns <> " from \"" <> tableName @a <> "_latest\" " <> txt)
+
+
+

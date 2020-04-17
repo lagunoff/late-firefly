@@ -1,12 +1,13 @@
 module LF.DB.TH where
 
+import Control.Applicative
 import Control.Lens
 import Data.List as L
 import Data.Text as T
 import Database.SQLite.Simple.FromRow
 import Database.SQLite.Simple.ToField
 import Database.SQLite.Simple.ToRow
-import Flat.Rpc
+import Flat.Rpc as FL
 import LF.DB.Base
 import LF.Prelude
 import Language.Haskell.TH
@@ -29,6 +30,7 @@ deriveDb' DeriveDbConfig{..} n = do
   case info of
     TyConI (DataD _ _ _ _ [RecC name vars] _) -> do
       patNames <- mapM (\_ -> newName "a") vars
+      vName <- newName "v"
       let
         priFld = flip L.find vars \case
           (name, _, AppT (ConT idCon) (ConT conTy)) ->
@@ -41,10 +43,13 @@ deriveDb' DeriveDbConfig{..} n = do
         textE s = VarE 'T.pack `AppE` LitE (StringL s)
         infixMap l r = InfixE (Just l) (VarE '(<$>)) (Just r)
         infixAp l r = InfixE (Just l) (VarE '(<*>)) (Just r)
-        dbTableInst = InstanceD Nothing [] (ConT ''DbTable `AppT` ConT n) [tableDescD]
-        columns = vars <&> \v -> TupE [AppE (VarE 'recordFieldToDb) (textE (varName v)), (VarE 'fieldDesc `AppE` AppTypeE (ConE 'Proxy) (varType v))]
-        tableDescE = ConE 'TableDesc `AppE` tblName `AppE` primaryListE `AppE` ListE columns
-        tableDescD = FunD 'tableDesc [Clause [] (NormalB tableDescE) []]
+        dbTableInst = InstanceD Nothing [] (ConT ''DbTable `AppT` ConT n) [hasVersionD, tableDescD, pkInfoD]
+        columns = vars <&> \v -> TupE [AppE (VarE 'recordFieldToDb) (textE (varName v)), (VarE 'columnInfo `AppE` AppTypeE (ConE 'Proxy) (varType v))]
+        tableDescE = ConE 'TableInfo `AppE` tblName `AppE` primaryListE `AppE` ListE columns
+        tableDescD = FunD 'tableInfo [Clause [] (NormalB tableDescE) []]
+        hasVersionD = TySynInstD ''HasVersion (TySynEqn [(ConT n)] (PromotedT (bool 'False 'True (isJust verFld))))
+        pkInfoD = FunD 'pkInfo [Clause [] (NormalB pkInfoE) []]
+        pkInfoE = ConE $ bool 'NoVersion 'HasVersion (isJust verFld)
         fromRowInst = InstanceD Nothing [] (ConT ''FromRow `AppT` ConT n) [fromRowD]
         fromRowD = FunD 'fromRow [Clause [] (NormalB fromRowE) []]
         fields = fmap (const (VarE 'field)) vars
@@ -62,5 +67,41 @@ deriveDb' DeriveDbConfig{..} n = do
 deriveDb :: Name -> Q [Dec]
 deriveDb = deriveDb' (DeriveDbConfig Nothing Nothing)
 
+deriveUUID :: [String] -> Name -> Q [Dec]
+deriveUUID flds tcName = reify tcName >>= \case
+  TyConI (DataD _ _ _ _ [RecC dcName vars] _) -> do
+    let occName (Name occ _) = coerce @_ @String occ
+    patNames <- forM vars \(n, _, _) ->
+      if L.any (==occName n) flds
+      then fmap Just (newName "a") else pure Nothing
+    let
+      instD = InstanceD Nothing [] (ConT ''DeriveUUID `AppT` ConT tcName) [uuidSaltD]
+      uuidSaltD = FunD 'uuidSalt [Clause [ConP dcName (fmap (maybe WildP VarP) patNames)] (NormalB uuidSaltE) []]
+      uuidSaltE = VarE 'foldMap `AppE` (VarE 'id) `AppE` ListE (fmap (AppE (VarE 'FL.flat) . VarE) (catMaybes patNames))
+    pure [instD]
+  _ -> do
+    [] <$ reportError "deriveUUID: unsupported data declaration"
+
+deriveDbUUID :: [String] -> Name -> Q [Dec]
+deriveDbUUID flds tcName =
+  liftA2 (<>) (deriveDb tcName) (deriveUUID flds tcName)
+
 recordFieldToDb :: Text -> Text
 recordFieldToDb n = fromRight n $ parseCamelCase [] n <&> underscore
+
+-- get a list of instances
+getInstances :: Name -> Q [_]
+getInstances typ = do
+  ClassI _ instances <- reify typ
+  return instances
+
+-- | Make expression of type [Query] applying 'createTableStmt' to all
+-- the instances of typeclass 'DbTable'
+mkInitStmts :: Q Exp
+mkInitStmts = do
+  ClassI _ instances <- reify ''DbTable
+  ins <- forM instances \case
+    InstanceD _ _ (AppT _ insTy) _ -> do
+      pure $ Just $ AppTypeE (VarE 'createTableStmt) insTy
+    _ -> pure Nothing
+  pure (VarE 'L.foldl' `AppE` (VarE '(<>)) `AppE` ListE [] `AppE` ListE (catMaybes ins))

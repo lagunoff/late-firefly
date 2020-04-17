@@ -6,7 +6,8 @@ cabal-version:       >=1.10
 executable late-firefly
   main-is: LF/TheOffice/Main.hs
   ghc-options:
-    -Wall -Wno-missing-signatures -Wno-name-shadowing -Wno-unused-matches -Wno-unused-do-bind
+    -Wall -Wno-missing-signatures -Wno-name-shadowing -Wno-unused-matches
+    -Wno-unused-do-bind -Wno-partial-type-signatures
   hs-source-dirs: src
   if impl(ghcjs)
     buildable: False
@@ -23,10 +24,13 @@ executable late-firefly
     inflections,
     jsaddle,
     lens,
+    lens-regex,
     mtl,
     optparse-generic,
     process,
+    raw-strings-qq,
     reflection,
+    regex-tdfa,
     split,
     sqlite-simple,
     tagsoup,
@@ -69,6 +73,7 @@ executable late-firefly
     OverloadedLabels
     OverloadedStrings
     PackageImports
+    PartialTypeSignatures
     PolyKinds
     QuasiQuotes
     RankNTypes
@@ -82,4 +87,3 @@ executable late-firefly
     TypeOperators
     UndecidableInstances
     ViewPatterns
-

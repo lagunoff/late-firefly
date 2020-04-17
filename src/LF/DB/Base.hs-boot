@@ -2,8 +2,13 @@ module LF.DB.Base where
 
 import Data.Aeson as AE
 import Data.Typeable as T
+import Data.UUID (UUID)
 import Database.SQLite.Simple.FromField
 import Database.SQLite.Simple.ToField
+import GHC.Int
+
+newtype Id t = Id {unId :: Int64}
+newtype UUID5 t = UUID5 {unUUID5 :: UUID}
 
 newtype JsonField a = JsonField {unJsonField :: a}
 

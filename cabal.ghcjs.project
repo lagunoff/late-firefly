@@ -1,9 +1,0 @@
-packages:
-        ./
-        packages/massaraksh
-        packages/haste-app-ghcjs
-        packages/tagsoup-lens
-        packages/ghcjs-base
-        packages/direct-sqlite-ghcjs
-        
-jobs: $ncpus

@@ -2,168 +2,84 @@ name:                late-firefly
 version:             0.1.0.0
 build-type:          Simple
 cabal-version:       >=1.10
-               
-executable parser
-  main-is:             Parser/TheOffice/Parser.hs
-  ghc-options:         -optc-Os -O4 -Wall -Wno-missing-signatures
-  other-modules:    Parser.TheOffice.Db
-  hs-source-dirs:      src
+
+executable late-firefly
+  main-is: LF/TheOffice/Main.hs
+  ghc-options:
+    -Wall -Wno-missing-signatures -Wno-name-shadowing -Wno-unused-matches -Wno-unused-do-bind
+  hs-source-dirs: src
   if impl(ghcjs)
     buildable: False
-  build-depends:       base
-                     , wreq
-                     , transformers
-                     , mtl
-                     , utf8-string
-                     , bytestring
-                     , exceptions
-                     , optparse-generic
-                     , tagsoup
-                     , tagsoup-lens
-                     , process
-                     , sqlite-simple
-                     , text
-                     , time
-                     , split
-                     , aeson
-                     , lens
-                     , polysemy
-                     , polysemy-plugin
-                     , jsaddle
-                     , haste-app-ghcjs
-                     , generic-lens
-                     , template-haskell
-                     , uuid
-                     
-  default-extensions: FlexibleContexts
-                    , FlexibleInstances
-                    , FunctionalDependencies
-                    , GADTs
-                    , LambdaCase
-                    , MultiParamTypeClasses
-                    , NamedFieldPuns
-                    , OverloadedStrings
-                    , QuasiQuotes
-                    , RankNTypes
-                    , ScopedTypeVariables
-                    , TypeApplications
-                    , TypeOperators
-                    , ConstraintKinds
-                    , TypeFamilies
-                    , DataKinds
-                    , PolyKinds
-                    , DeriveGeneric
-                    , DeriveAnyClass
-                    , BlockArguments
+  build-depends:
+    aeson,
+    base,
+    bytestring,
+    data-default,
+    direct-sqlite,
+    errors,
+    exceptions,
+    flat-rpc,
+    generic-lens,
+    inflections,
+    jsaddle,
+    lens,
+    mtl,
+    optparse-generic,
+    process,
+    reflection,
+    split,
+    sqlite-simple,
+    tagsoup,
+    tagsoup-lens,
+    template-haskell,
+    text,
+    time,
+    transformers,
+    utf8-string,
+    uuid,
+    uuid-types,
+    wreq
 
-  
-executable telikov-client
-  hs-source-dirs:      src
-  main-is:             Telikov/Client.hs
-  if !impl(ghcjs)
-    buildable: False
-  ghc-options:        -Wall -Wno-missing-signatures -optc-Os -O4 -dedupe
-  build-depends:       base
-                     , transformers
-                     , mtl
-                     , utf8-string
-                     , bytestring
-                     , exceptions
-                     , text
-                     , time
-                     , aeson
-                     , haste-app-ghcjs
-                     , split
-                     , lens
-                     , ghcjs-dom-jsaddle
-                     , massaraksh
-                     , raw-strings-qq
-                     , shakespeare
-                     , sqlite-simple
-                     , ghcjs-base
-                     , polysemy >= 1.2.0.0
-                     , th-abstraction
-                     , generic-lens
-                     , template-haskell
-                     , uuid
-                     , jsaddle
-                     
-  default-extensions: FlexibleContexts
-                    , FlexibleInstances
-                    , FunctionalDependencies
-                    , GADTs
-                    , LambdaCase
-                    , MultiParamTypeClasses
-                    , NamedFieldPuns
-                    , OverloadedStrings
-                    , QuasiQuotes
-                    , RankNTypes
-                    , ScopedTypeVariables
-                    , TypeApplications
-                    , TypeOperators
-                    , ConstraintKinds
-                    , TypeFamilies
-                    , DataKinds
-                    , PolyKinds
-                    , DeriveGeneric
-                    , DeriveAnyClass
-                    , BlockArguments
+  other-modules:
+    LF.DB
+    LF.DB.Base
+    LF.DB.Base
+    LF.DB.TH
+    LF.DB.Transaction
+    LF.Orphans
+    LF.Prelude
+    LF.TheOffice.Schema
 
-  
-executable telikov-server
-  hs-source-dirs:      src
-  if impl(ghcjs)
-    buildable: False
-  main-is:             Telikov/Server.hs
-  ghc-options:        -Wall -Wno-missing-signatures
-  build-depends:       base
-                     , transformers
-                     , mtl
-                     , utf8-string
-                     , bytestring
-                     , exceptions
-                     , text
-                     , time
-                     , aeson
-                     , haste-app-ghcjs
-                     , massaraksh
-                     , split
-                     , lens
-                     , ghcjs-dom-jsaddle
-                     , jsaddle
-                     , jsaddle-warp
-                     , raw-strings-qq
-                     , shakespeare
-                     , regex-compat-tdfa
-                     , sqlite-simple
-                     , websockets
-                     , wai
-                     , wai-websockets
-                     , http-types
-                     , polysemy
-                     , polysemy-plugin
-                     , wreq
-                     , generic-lens
-                     , template-haskell
-                     , uuid
-                     
-  default-extensions: FlexibleContexts
-                    , FlexibleInstances
-                    , FunctionalDependencies
-                    , GADTs
-                    , LambdaCase
-                    , MultiParamTypeClasses
-                    , NamedFieldPuns
-                    , OverloadedStrings
-                    , QuasiQuotes
-                    , RankNTypes
-                    , ScopedTypeVariables
-                    , TypeApplications
-                    , TypeOperators
-                    , ConstraintKinds
-                    , TypeFamilies
-                    , DataKinds
-                    , PolyKinds
-                    , DeriveGeneric
-                    , DeriveAnyClass
-                    , BlockArguments
+  default-extensions:
+    AllowAmbiguousTypes
+    BlockArguments
+    ConstraintKinds
+    DataKinds
+    DeriveAnyClass
+    DeriveGeneric
+    DerivingVia
+    DuplicateRecordFields
+    FlexibleContexts
+    FlexibleInstances
+    FunctionalDependencies
+    GADTs
+    GeneralizedNewtypeDeriving
+    LambdaCase
+    NamedFieldPuns
+    OverloadedLabels
+    OverloadedStrings
+    PackageImports
+    PolyKinds
+    QuasiQuotes
+    RankNTypes
+    RecordWildCards
+    ScopedTypeVariables
+    StandaloneDeriving
+    TemplateHaskell
+    TupleSections
+    TypeApplications
+    TypeFamilies
+    TypeOperators
+    UndecidableInstances
+    ViewPatterns
+

@@ -10,5 +10,7 @@
 /tmp
 **/.stack-work
 **/.cabal-sandbox
-**/*.db
+**/*.sqlite
+**/*.sqlite-shm
+**/*.sqlite-wal
 **/.ghc.environment*

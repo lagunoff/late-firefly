@@ -97,8 +97,8 @@ getInstances typ = do
 
 -- | Make expression of type [Query] applying 'createTableStmt' to all
 -- the instances of typeclass 'DbTable'
-mkInitStmts :: Q Exp
-mkInitStmts = do
+mkDatabaseSetup :: Q Exp
+mkDatabaseSetup = do
   ClassI _ instances <- reify ''DbTable
   ins <- forM instances \case
     InstanceD _ _ (AppT _ insTy) _ -> do

@@ -3,14 +3,17 @@ version:             0.1.0.0
 build-type:          Simple
 cabal-version:       >=1.10
 
+Flag production
+  default: True
+  description: Adds optimisation
+
 executable late-firefly
-  main-is: LF/TheOffice/Main.hs
+  main-is: Main.hs
   ghc-options:
     -Wall -Wno-missing-signatures -Wno-name-shadowing -Wno-unused-matches
     -Wno-unused-do-bind -Wno-partial-type-signatures
   hs-source-dirs: src
-  if impl(ghcjs)
-    buildable: False
+
   build-depends:
     aeson,
     base,
@@ -24,35 +27,36 @@ executable late-firefly
     inflections,
     jsaddle,
     lens,
-    lens-regex,
     mtl,
+    massaraksh,
+    network-uri,
     optparse-generic,
     process,
     raw-strings-qq,
     reflection,
-    regex-tdfa,
     split,
     sqlite-simple,
-    tagsoup,
-    tagsoup-lens,
     template-haskell,
+    ordered-containers,
     text,
     time,
     transformers,
+    unliftio-core,
     utf8-string,
     uuid,
-    uuid-types,
-    wreq
+    uuid-types
 
   other-modules:
     LF.DB
-    LF.DB.Base
     LF.DB.Base
     LF.DB.TH
     LF.DB.Transaction
     LF.Orphans
     LF.Prelude
     LF.TheOffice.Schema
+    LF.Router
+    LF.Index
+    LF.Backend
 
   default-extensions:
     AllowAmbiguousTypes
@@ -87,3 +91,21 @@ executable late-firefly
     TypeOperators
     UndecidableInstances
     ViewPatterns
+
+  if !impl(ghcjs)
+    build-depends:
+      tagsoup,
+      lens-regex,
+      regex-tdfa,
+      tagsoup-lens,
+      wreq
+    other-modules:
+      LF.TheOffice.Scrape
+  else
+    if flag(production)
+    ghc-options: -dedupe
+
+  if flag(production)
+    ghc-options: -O2
+  else
+    ghc-options: -O0

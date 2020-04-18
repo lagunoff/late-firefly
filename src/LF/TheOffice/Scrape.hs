@@ -1,42 +1,24 @@
-module Main where
+module LF.TheOffice.Scrape (scrapeSite) where
 
 import Control.Lens as L hiding (children)
 import Data.Text as T
-import Data.Text.IO as T
 import Data.Text.Lazy as TL hiding (Text)
 import Data.Text.Lazy.Encoding as TL
 import Data.Generics.Product
 import LF.DB
 import LF.Prelude
 import LF.TheOffice.Schema
-import Options.Generic
 import qualified Network.Wreq as Wreq
-import Text.HTML.TagSoup.Lens (allAttributed, allElements, allNamed, attrOne,
-                               attributed, children, contents, named, _DOM)
+import Text.HTML.TagSoup.Lens
 import Text.Regex.Lens
 import Text.Regex.Quote
 import Text.Regex.TDFA
 import Text.Read
 
--- | Cli arguments
-data Args
-  = Update {dbpath :: Maybe Text}
-  | GoodBye
-  deriving (Show, Generic, ParseRecord)
-
-main :: IO ()
-main = do
-  options <- getRecord "Parser for https://iwatchtheoffice.com/"
-  case options of
-    Update{dbpath=mayDb,..} -> do
-      let dbpath = maybe "./late-firefly.sqlite" T.unpack mayDb
-      withConnection dbpath do
-        for_ $(mkInitStmts) execute_
-        newVersion do
-          scrapeSeasons >>= mapM_ (uncurry scrapeEpisodes)
-      T.putStrLn "Goodbye..."
-    GoodBye ->
-      T.putStrLn "Goodbye..."
+scrapeSite :: Given Connection => IO ()
+scrapeSite = newVersion do
+  seasons <- scrapeSeasons
+  for_ seasons (uncurry scrapeEpisodes)
 
 scrapeSeasons :: (Given Connection, Given Version) => IO [(Season, String)]
 scrapeSeasons = do

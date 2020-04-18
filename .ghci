@@ -1,0 +1,6 @@
+:set -fno-break-on-exception
+:set -Wno-type-default
+:def! reload (const $ return "::reload\n:load src/Main.hs\nupdate")
+
+:load src/Main.hs
+update

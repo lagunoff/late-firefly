@@ -152,23 +152,26 @@ selectFrom
   . (Given Connection, DbTable t, ToRow p) => Query -> p -> IO [t]
 selectFrom qTail p = do
   let
-    name = getField @"name" (tableInfo @t)
-    q = "SELECT rowid, * FROM " <> esc name <> " " <> fromQuery qTail
+    TableInfo{..} = tableInfo @t
+    cols = T.intercalate ", " $ fmap (esc . fst) columns
+    q = "SELECT " <> cols <> " FROM " <> esc name <> " " <> fromQuery qTail
   S.query given (Query q) p
 
 selectFrom_ :: forall t. (Given Connection, DbTable t) => Query -> IO [t]
 selectFrom_ qTail = do
   let
-    name = getField @"name" (tableInfo @t)
-    q = "SELECT rowid, * FROM " <> esc name <> " " <> fromQuery qTail
+    TableInfo{..} = tableInfo @t
+    cols = T.intercalate ", " $ fmap (esc . fst) columns
+    q = "SELECT " <> cols <> " FROM " <> esc name <> " " <> fromQuery qTail
   S.query_ given (Query q)
 
 selectFromNamed
   :: forall t. (Given Connection, DbTable t) => Query -> [NamedParam] -> IO [t]
 selectFromNamed qTail p = do
   let
-    name = getField @"name" (tableInfo @t)
-    q = "SELECT rowid, * FROM " <> esc name <> " " <> fromQuery qTail
+    TableInfo{..} = tableInfo @t
+    cols = T.intercalate ", " $ fmap (esc . fst) columns
+    q = "SELECT " <> cols <> " FROM " <> esc name <> " " <> fromQuery qTail
   S.queryNamed given (Query q) p
 
 newtype JsonField a = JsonField {unJsonField :: a}
@@ -259,7 +262,7 @@ instance (DbTable t, Typeable t) => DbField (UUID5 t) where
       tName = getField @"name" (tableInfo @t)
 
 instance DbField UTCTime where
-  columnInfo _ = ColumnInfo IntegerColumn False False Nothing
+  columnInfo _ = ColumnInfo TextColumn False False Nothing
 
 instance (Typeable a, FromJSON a, ToJSON a) => DbField [a] where
   columnInfo _ = ColumnInfo TextColumn False False Nothing

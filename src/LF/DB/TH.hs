@@ -38,7 +38,7 @@ deriveDb' DeriveDbConfig{..} n = do
     varType (_, _, ty) = ty
   case info of
     TyConI (DataD _ _ _ _ [RecC name vars] _) -> do
-      patNames <- mapM (\_ -> newName "a") vars
+      patNames <- forM vars \_ -> newName "a"
       vName <- newName "v"
       let
         priFld = flip L.find vars \case

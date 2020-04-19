@@ -193,6 +193,11 @@ instance HasParser P a => HasParser P (Maybe a) where
     par = maybe [(Nothing, Nothing)] (fmap (_1 %~ Just) . parse parser . Just)
     pri = maybe (const Nothing) (print parser)
 
+instance HasParser P Text where
+  parser = Parser par pri where
+    par = maybe [] \s -> [(s, Just s)]
+    pri i _ = Just i
+
 emptyUrl :: UrlChunks
 emptyUrl = UrlChunks mempty M.empty
 

@@ -19,7 +19,7 @@ data Transaction = Transaction
   deriving stock (Show, Eq, Generic)
   deriving anyclass Flat
 
-deriveDbPrio (-99) ''Transaction
+deriveDb ''Transaction
 
 newVersion :: Given Connection => (Given NewVersion => IO a) -> IO a
 newVersion act = do
@@ -33,7 +33,7 @@ newVersion act = do
     [sql|update `transaction` set active=0 where active=1 and rowid <> ?|]
     [newTr]
 
-withConnection :: FilePath -> ((Given Connection) => IO a) -> IO a
+withConnection :: FilePath -> (Given Connection => IO a) -> IO a
 withConnection path act = S.withConnection path \conn -> do
   mapM_ (S.execute_ conn)
     ["PRAGMA journal_mode=WAL"]

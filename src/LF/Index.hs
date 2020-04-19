@@ -2,19 +2,20 @@
 {-# LANGUAGE StaticPointers #-}
 module LF.Index (indexWidget, Model(..)) where
 
-import Control.Monad.Trans
 import Control.Lens
-import Data.Text as T
+import Control.Monad.Trans
 import Data.Maybe
-import LF.Router
-import LF.Prelude
-import LF.Backend
-import Massaraksh as H
-import GHC.Records
-import Language.Javascript.JSaddle
-import LF.DB
+import Data.Text as T
 import Flat.Rpc hiding (remote, to)
+import GHC.Records
+import LF.Backend
+import LF.DB
+import LF.Prelude
+import LF.Router
 import LF.TheOffice.Schema
+import Language.Javascript.JSaddle
+import Massaraksh as H
+import Text.Shakespeare.Text (st)
 
 data Route
   = AboutR
@@ -22,8 +23,8 @@ data Route
   deriving (Show, Eq, Generic, HasParser U)
 
 data Model m = Model
-  { route :: Route
-  } deriving (Generic)
+  { route :: Route }
+  deriving (Generic)
 
 indexWidget :: (HtmlBase m, MonadClient m) => HtmlT m ()
 indexWidget = mdo
@@ -44,9 +45,12 @@ indexWidget = mdo
       IndexR -> indexPage seasons
       AboutR -> aboutPage
 
-getSeasons :: Given Connection => Text -> IO [Season]
+getSeasons :: Given Connection => Text -> IO [Season :. Only Int]
 getSeasons _ = do
-  selectFrom_ @Season [sql|where 1|]
+  query_ [sql|
+    select s.*, (select count(*) from `episode` where season_id=s.uuid)
+    from season s order by `number`
+  |]
 
 aboutPage :: HtmlBase m => HtmlT m ()
 aboutPage = do
@@ -54,12 +58,16 @@ aboutPage = do
     h1_ do
       "About Page Works!!!"
 
-indexPage :: HtmlBase m => [Season] -> HtmlT m ()
+indexPage :: HtmlBase m => [Season :. Only Int] -> HtmlT m ()
 indexPage ss = do
   div_ do
     h1_ do
       "Index Page Works!!!"
-    for_ ss (div_ . text . T.pack . show)
+    ul_ $ for_ ss \(Season{..} :. Only eps) -> do
+      li_ do
+        h3_ do text $ "Season " <> showt number
+        div_ do text [st|#{showt eps} Episodes|]
+        img_ do "src" =: thumbnail
 
 hashRouter :: forall a. HasParser U a => a -> (a -> IO ()) -> JSM a
 hashRouter def hashChange = do

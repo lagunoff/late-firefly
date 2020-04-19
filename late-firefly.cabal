@@ -4,7 +4,7 @@ build-type:          Simple
 cabal-version:       >=1.10
 
 Flag production
-  default: True
+  default: False
   description: Adds optimisation
 
 executable late-firefly
@@ -18,6 +18,7 @@ executable late-firefly
     aeson,
     base,
     bytestring,
+    containers,
     data-default,
     direct-sqlite,
     errors,
@@ -27,18 +28,19 @@ executable late-firefly
     inflections,
     jsaddle,
     lens,
-    mtl,
     massaraksh,
+    mtl,
     network-uri,
     optparse-generic,
+    ordered-containers,
     process,
-    raw-strings-qq,
     reflection,
+    shakespeare,
     split,
     sqlite-simple,
     template-haskell,
-    ordered-containers,
     text,
+    text-show,
     time,
     transformers,
     unliftio-core,

@@ -7,7 +7,6 @@ module LF.DB.Base
   , DbField(..)
   , PKInfo(..)
   , createTableStmt
-  , withConnection
   , execute
   , execute_
   , query
@@ -21,17 +20,17 @@ module LF.DB.Base
   , uuid5FromBS
   , DeriveUUID(..)
   , fixUUID
+  , sql
   ) where
 
 import Control.Lens
-import Data.Function
 import Data.Aeson as AE
 import Data.Aeson.Text as AE
 import Data.ByteString as BS
 import Data.ByteString.Builder as B
 import Data.ByteString.Internal as BS
+import Data.Function
 import Data.Generics.Product
-import Data.List as L
 import Data.Text as T
 import Data.Text.Encoding as T
 import Data.Text.Lazy as T (toStrict)
@@ -49,6 +48,7 @@ import Flat.Rpc
 import GHC.Exception
 import GHC.Int
 import LF.Prelude
+import LF.DB.QQ
 import Text.Read
 import qualified Database.SQLite.Simple as S
 import qualified GHC.Records as G
@@ -73,27 +73,37 @@ data TableInfo = TableInfo
   { name    :: Text
   , primary :: [Text]
   , columns :: [(Text, ColumnInfo)]
+  , prio    :: Int
   } deriving (Eq, Show, Generic)
 
 esc :: Text -> Text
 esc t = "`" <> t <> "`"
 
+isVersioned :: forall t. DbTable t => Bool
+isVersioned = case pkInfo @t of
+  HasVersion -> True
+  _          -> False
+
 createTableStmt :: forall t. DbTable t => [Query]
 createTableStmt = let
-  cs = getField @"columns" $ (tableInfo @t)
-  name = getField @"name" (tableInfo @t)
-  primaryKey = getField @"primary" (tableInfo @t)
-  columns = cs <&> \(k, t) -> esc k <> " " <> ppColumnDesc t
-  _foreignContrains = cs & mapMaybe \case
-    (k, ColumnInfo{foreignKey=Just(ft, ff), ..}) ->
-      if L.all (k /=) primaryKey then
-        Just $ "foreign key(" <> esc k <> ") references " <> esc ft <> "(" <> T.intercalate ", " (fmap esc (L.filter (/="version") ff)) <> ")"
-      else Nothing
-    _ -> Nothing
-  primaryContrains = ["primary key(" <> T.intercalate ", " (fmap esc primaryKey) <> ")"]
-  in [Query $ "CREATE TABLE IF NOT EXISTS " <> esc name <> " (\n  "
-  <> T.intercalate ",\n  " (columns <> primaryContrains)
-  <> "\n)"]
+  TableInfo{..} = tableInfo @t
+  createColumns = columns <&> \(k, t) -> esc k <> " " <> ppColumnDesc t
+  tableName = bool name (name <> "_versions") (isVersioned @t)
+  primaryContrains = ["primary key(" <> T.intercalate ", " (fmap esc primary) <> ")"]
+  createTable = [sql|CREATE TABLE IF NOT EXISTS #{esc tableName} (
+    #{T.intercalate ",\n  " (createColumns <> primaryContrains)}
+  )|]
+  selectColumns = T.intercalate ", " $ fmap (esc . fst) columns
+  createView = [sql|CREATE VIEW IF NOT EXISTS #{name} AS
+    SELECT #{selectColumns} from
+      (SELECT x.* FROM #{tableName} x
+        LEFT JOIN `transaction` t ON t.rowid = x.version
+        WHERE
+          t.rowid <= (SELECT MAX(rowid) FROM `transaction` WHERE active=1)
+          AND t.finished_at NOT NULL
+        ORDER BY version DESC)
+     GROUP BY uuid HAVING deleted=0|]
+  in [createTable] <> bool mempty [createView] (isVersioned @t)
 
 ppColumnDesc :: ColumnInfo -> Text
 ppColumnDesc ColumnInfo{..} =
@@ -107,12 +117,6 @@ ppColumnType = \case
   TextColumn    -> "TEXT"
   BlobColumn    -> "BLOB"
   NullColumn    -> "NULL"
-
-withConnection :: FilePath -> (Given Connection => IO a) -> IO a
-withConnection path act = S.withConnection path \conn -> do
-  mapM_ (S.execute_ conn)
-    ["PRAGMA journal_mode=WAL"]
-  give conn act
 
 uuid5FromBS :: ByteString -> UUID5 a
 uuid5FromBS = UUID5 . generateNamed namespaceURL . BS.unpackBytes
@@ -133,18 +137,19 @@ upsert :: forall t. (Given Connection, DbTable t) => t -> IO t
 upsert t = do
   let
     TableInfo{..} = tableInfo @t
+    tableName = bool name (name <> "_versions") (isVersioned @t)
     cols = T.intercalate ", " $ fmap (esc . fst) columns
     vals = T.intercalate ", " $ fmap (const "?") columns
     sets = T.intercalate ", " $ fmap (\(c, _) -> esc c <> " = ?") columns
   case pkInfo @t of
     NoVersion -> do
-      let q = "INSERT INTO " <> esc name <> " (" <> cols <> ") VALUES (" <> vals <> ") ON CONFLICT(rowid) DO UPDATE SET " <> sets
+      let q = "INSERT INTO " <> esc tableName <> " (" <> cols <> ") VALUES (" <> vals <> ") ON CONFLICT(rowid) DO UPDATE SET " <> sets
       S.execute given (Query q) (toRow t <> toRow t)
       if getField @"rowid" t /= def then pure t else
         S.lastInsertRowId given <&> \idInt -> setField @"rowid" (Id idInt) t
     HasVersion -> do
       -- TODO: Check for duplicates with the previous version
-      let q = "INSERT INTO " <> esc name <> " (" <> cols <> ") VALUES (" <> vals <> ")"
+      let q = "INSERT INTO " <> esc tableName <> " (" <> cols <> ") VALUES (" <> vals <> ")"
       t <$ S.execute given (Query q) (toRow t)
 
 selectFrom
@@ -247,7 +252,7 @@ instance DbField Text where
   columnInfo _ = ColumnInfo TextColumn False False Nothing
 
 instance DbField a => DbField (Maybe a) where
-  columnInfo _ = (columnInfo (Proxy @a)) { nullable = True }
+  columnInfo _ = (columnInfo (Proxy @a)) {nullable = True}
 
 instance (DbTable t, Typeable (Id t)) => DbField (Id t) where
   columnInfo _ = ColumnInfo IntegerColumn False False $ Just (tName, fName)
@@ -272,3 +277,6 @@ instance ToField (UUID5 t) where
 
 instance Typeable (UUID5 t) => FromField (UUID5 t) where
   fromField = textFieldParser (fmap UUID5 . note "Cannot read UUID" . U.fromText)
+
+instance DbField Bool where
+  columnInfo _ = ColumnInfo IntegerColumn False False Nothing

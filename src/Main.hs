@@ -3,16 +3,16 @@ module Main where
 
 import Control.Lens
 import Control.Monad.IO.Unlift
-import Data.Text as T
-import LF.DB
-import LF.Prelude
-import Options.Generic
 import Data.Generics.Product
+import Data.Text as T
+import Data.Text.IO as T
 import Flat.Rpc.Main
 import LF.Backend
+import LF.DB
 import LF.Index
+import LF.Prelude
 import Massaraksh
-import Massaraksh
+import Options.Generic
 import qualified Database.SQLite.Simple as S
 
 #ifndef ghcjs_HOST_OS
@@ -24,6 +24,8 @@ import LF.TheOffice.Scrape as TheOffice
 data Opts
   = TheOffice {dbpath :: Maybe Text}
   | Start {dbpath :: Maybe Text, webPort :: Maybe Int}
+  | Migrate {dbpath :: Maybe Text}
+  | PrintSchema
   deriving (Show, Generic, ParseRecord)
 
 mainWith :: Opts -> IO ()
@@ -35,12 +37,20 @@ mainWith = \case
     withConnection dbpath do
       for_ $(mkDatabaseSetup) execute_
       TheOffice.scrapeSite
-  Start{..} -> do
+  Start{dbpath=mayDb,..} -> do
+    let
+      opts = def & field @"webPort" %~ (maybe id const webPort)
+        & field @"dbPath" %~ (maybe id const mayDb)
+      dbpath = getField @"dbPath" opts
+    S.withConnection (T.unpack dbpath) \conn -> webServer ($ conn) opts
+  Migrate{dbpath=mayDb,..} -> do
     let
       defDb = T.unpack $ getField @"dbPath" (def @WebOpts)
-      opts = def & field @"webPort" %~ (maybe id const webPort)
-        & field @"dbPath" %~ (maybe id const dbpath)
-    S.withConnection defDb \conn -> webServer ($ conn) opts
+      dbpath = maybe defDb T.unpack mayDb
+    withConnection dbpath do for_ $(mkDatabaseSetup) execute_
+  PrintSchema -> do
+    let qSchema = T.intercalate ";\n\n" $ fmap fromQuery $(mkDatabaseSetup)
+    T.putStrLn qSchema
 
 update :: IO ()
 update = do

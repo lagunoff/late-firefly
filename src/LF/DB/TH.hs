@@ -1,15 +1,23 @@
-module LF.DB.TH where
+module LF.DB.TH
+  ( DeriveDbConfig(..)
+  , deriveDb'
+  , deriveDb
+  , deriveUUID
+  , deriveDbUUID
+  , deriveDbPrio
+  , mkDatabaseSetup
+  ) where
 
 import Control.Applicative
 import Control.Lens
 import Data.List as L
 import Data.Text as T
-import Database.SQLite.Simple.FromRow
+import Database.SQLite.Simple
 import Database.SQLite.Simple.ToField
-import Database.SQLite.Simple.ToRow
 import Flat.Rpc as FL
 import LF.DB.Base
 import LF.Prelude
+import GHC.Records
 import Language.Haskell.TH
 import Language.Haskell.TH.Syntax
 import Prelude as P
@@ -18,6 +26,7 @@ import Text.Inflections
 data DeriveDbConfig = DeriveDbConfig
   { tableName :: Maybe Text
   , primary   :: Maybe Text
+  , prio      :: Int
   } deriving (Generic)
 
 deriveDb' :: DeriveDbConfig -> Name -> Q [Dec]
@@ -45,7 +54,7 @@ deriveDb' DeriveDbConfig{..} n = do
         infixAp l r = InfixE (Just l) (VarE '(<*>)) (Just r)
         dbTableInst = InstanceD Nothing [] (ConT ''DbTable `AppT` ConT n) [hasVersionD, tableDescD, pkInfoD]
         columns = vars <&> \v -> TupE [AppE (VarE 'recordFieldToDb) (textE (varName v)), (VarE 'columnInfo `AppE` AppTypeE (ConE 'Proxy) (varType v))]
-        tableDescE = ConE 'TableInfo `AppE` tblName `AppE` primaryListE `AppE` ListE columns
+        tableDescE = ConE 'TableInfo `AppE` tblName `AppE` primaryListE `AppE` ListE columns `AppE` LitE (IntegerL (fromIntegral prio))
         tableDescD = FunD 'tableInfo [Clause [] (NormalB tableDescE) []]
         hasVersionD = TySynInstD ''HasVersion (TySynEqn [(ConT n)] (PromotedT (bool 'False 'True (isJust verFld))))
         pkInfoD = FunD 'pkInfo [Clause [] (NormalB pkInfoE) []]
@@ -65,7 +74,10 @@ deriveDb' DeriveDbConfig{..} n = do
       [] <$ reportError "deriveDb: unsupported data declaration"
 
 deriveDb :: Name -> Q [Dec]
-deriveDb = deriveDb' (DeriveDbConfig Nothing Nothing)
+deriveDb = deriveDb' (DeriveDbConfig Nothing Nothing 0)
+
+deriveDbPrio :: Int -> Name -> Q [Dec]
+deriveDbPrio = deriveDb' . DeriveDbConfig Nothing Nothing
 
 deriveUUID :: [String] -> Name -> Q [Dec]
 deriveUUID flds tcName = reify tcName >>= \case
@@ -89,19 +101,21 @@ deriveDbUUID flds tcName =
 recordFieldToDb :: Text -> Text
 recordFieldToDb n = fromRight n $ parseCamelCase [] n <&> underscore
 
--- get a list of instances
-getInstances :: Name -> Q [_]
-getInstances typ = do
-  ClassI _ instances <- reify typ
-  return instances
-
 -- | Make expression of type [Query] applying 'createTableStmt' to all
 -- the instances of typeclass 'DbTable'
 mkDatabaseSetup :: Q Exp
 mkDatabaseSetup = do
   ClassI _ instances <- reify ''DbTable
-  ins <- forM instances \case
+  ins <- catMaybes <$> forM instances \case
     InstanceD _ _ (AppT _ insTy) _ -> do
-      pure $ Just $ AppTypeE (VarE 'createTableStmt) insTy
-    _ -> pure Nothing
-  pure (VarE 'L.foldl' `AppE` (VarE '(<>)) `AppE` ListE [] `AppE` ListE (catMaybes ins))
+      pure $ Just $ AppTypeE (VarE 'mkSetupPrio) insTy
+    _                              -> pure Nothing
+  [|joinSetupPrio $(pure (ListE ins))|]
+
+mkSetupPrio :: forall t. DbTable t => (Int, [Query])
+mkSetupPrio = (getField @"prio" ti, createTableStmt @t) where
+  ti = tableInfo @t
+
+joinSetupPrio :: [(Int, [Query])] -> [Query]
+joinSetupPrio xs = L.foldl' (<>) [] (fmap snd (L.sortOn fst xs ))
+

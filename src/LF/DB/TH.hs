@@ -10,6 +10,8 @@ module LF.DB.TH
 
 import Control.Applicative
 import Control.Lens
+import Data.ByteString as BS
+import Data.String as S
 import Data.List as L
 import Data.Text as T
 import Database.SQLite.Simple
@@ -86,10 +88,11 @@ deriveUUID flds tcName = reify tcName >>= \case
     patNames <- forM vars \(n, _, _) ->
       if L.any (==occName n) flds
       then fmap Just (newName "a") else pure Nothing
+    tcNameBS <- [|S.fromString @ByteString $(litE (stringL (showName' Alone tcName)))|]
     let
       instD = InstanceD Nothing [] (ConT ''DeriveUUID `AppT` ConT tcName) [uuidSaltD]
       uuidSaltD = FunD 'uuidSalt [Clause [ConP dcName (fmap (maybe WildP VarP) patNames)] (NormalB uuidSaltE) []]
-      uuidSaltE = VarE 'foldMap `AppE` (VarE 'id) `AppE` ListE (fmap (AppE (VarE 'FL.flat) . VarE) (catMaybes patNames))
+      uuidSaltE = VarE 'foldMap `AppE` (VarE 'id) `AppE` ListE ([tcNameBS] <> (fmap (AppE (VarE 'FL.flat) . VarE) (catMaybes patNames)))
     pure [instD]
   _ -> do
     [] <$ reportError "deriveUUID: unsupported data declaration"

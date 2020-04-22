@@ -31,6 +31,3 @@ instance Flat DiffTime where
 
 deriving instance Generic UUID
 instance Flat UUID
-
-deriving via JsonField [a] instance (FromJSON a, Typeable a) => FromField [a]
-deriving via JsonField [a] instance ToJSON a => ToField [a]

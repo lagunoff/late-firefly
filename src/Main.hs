@@ -19,11 +19,16 @@ import qualified Database.SQLite.Simple as S
 import System.Environment
 import System.IO
 import LF.TheOffice.Scrape as TheOffice
+import Network.Wai.Application.Static
+import Flat.Rpc.Wai
+import Network.Wai
+import Network.Wai.Handler.Warp as Warp
+import Network.Wai.Middleware.Gzip
 
 -- | Command line options
 data Opts
   = TheOffice {dbpath :: Maybe Text}
-  | Start {dbpath :: Maybe Text, webPort :: Maybe Int}
+  | Start {dbpath :: Maybe Text, port :: Maybe Int, docroot :: Maybe Text}
   | Migrate {dbpath :: Maybe Text}
   | PrintSchema
   deriving (Show, Generic, ParseRecord)
@@ -37,12 +42,21 @@ mainWith = \case
     withConnection dbpath do
       for_ $(mkDatabaseSetup) execute_
       TheOffice.scrapeSite
-  Start{dbpath=mayDb,..} -> do
+  Start{dbpath=mayDb, docroot=mayDR, port=mayPort, ..} -> do
     let
-      opts = def & field @"webPort" %~ (maybe id const webPort)
+      port = getField @"webPort" opts
+      docroot = fromMaybe "./" mayDR
+      opts = def & field @"webPort" %~ (maybe id const mayPort)
         & field @"dbPath" %~ (maybe id const mayDb)
       dbpath = getField @"dbPath" opts
-    S.withConnection (T.unpack dbpath) \conn -> webServer ($ conn) opts
+    S.withConnection (T.unpack dbpath) \conn -> let
+      cfg = webServer ($ conn) opts
+      sApp = staticApp $ defaultFileServerSettings (T.unpack docroot)
+      fApp = flatRpcApplication @Backend (mcfEvalServer cfg)
+      withGzip = gzip def {gzipFiles=GzipPreCompressed GzipIgnore, gzipCheckMime=const True}
+      in Warp.run port \case
+        req@(pathInfo -> "rpc":_) -> fApp req
+        req                       -> withGzip sApp req
   Migrate{dbpath=mayDb,..} -> do
     let
       defDb = T.unpack $ getField @"dbPath" (def @WebOpts)
@@ -57,20 +71,20 @@ update = do
   hSetBuffering stdout LineBuffering
   hSetBuffering stderr LineBuffering
   let defDb = T.unpack $ getField @"dbPath" (def @WebOpts)
-  webServer (S.withConnection defDb) (def {webPort = 7900})
+  runFlat $ webServer (S.withConnection defDb) def {webPort = 7900}
 
 main = do
   args <- getArgs
   withArgs (case args of "--":rest -> rest; xs -> xs) $
     getRecord "Web site with tons of free videos" >>= mainWith
 #else
-main = webServer undefined def
+main = runFlat (webServer undefined def {webPort = 7900})
 #endif
 
 type ConnectionPool = forall r. (Connection -> IO r) -> IO r
 
-webServer :: ConnectionPool -> WebOpts -> IO ()
-webServer wConn WebOpts{..} = runFlat $
+webServer :: ConnectionPool -> WebOpts -> MainConfig _ _
+webServer wConn WebOpts{..} =
   MainConfig @Backend (Just webPort) (wConn . flip runBackend) \runCli -> do
     un <- askUnliftIO
     void $ attachToBody (unliftIO un . runCli) indexWidget

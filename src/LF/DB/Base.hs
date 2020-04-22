@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 module LF.DB.Base
   ( Id(..)
   , UUID5(..)
@@ -20,7 +21,6 @@ module LF.DB.Base
   , uuid5FromBS
   , DeriveUUID(..)
   , fixUUID
-  , sql
   ) where
 
 import Control.Lens
@@ -280,3 +280,6 @@ instance Typeable (UUID5 t) => FromField (UUID5 t) where
 
 instance DbField Bool where
   columnInfo _ = ColumnInfo IntegerColumn False False Nothing
+
+deriving via JsonField [a] instance (FromJSON a, Typeable a) => FromField [a]
+deriving via JsonField [a] instance ToJSON a => ToField [a]

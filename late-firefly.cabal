@@ -100,14 +100,16 @@ executable late-firefly
       lens-regex,
       regex-tdfa,
       tagsoup-lens,
+      warp,
+      wai,
+      wai-app-static,
+      wai-extra,
       wreq
     other-modules:
       LF.TheOffice.Scrape
+    if flag(production)
+      ghc-options: -O0
   else
     if flag(production)
-    ghc-options: -dedupe
-
-  if flag(production)
-    ghc-options: -O2
-  else
-    ghc-options: -O0
+      -- FIXME: Enabling optimizations in GHCJS breaks flat-rpc
+      ghc-options: -dedupe -O0

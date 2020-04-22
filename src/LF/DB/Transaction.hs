@@ -3,12 +3,13 @@ module LF.DB.Transaction where
 import Data.Generics.Product
 import Data.Time
 import Database.SQLite.Simple
-import Flat.Rpc
-import LF.DB.Base as DB
-import LF.DB.TH
-import LF.Prelude
 import Database.SQLite.Simple.FromField
 import Database.SQLite.Simple.ToField
+import Flat.Rpc
+import LF.DB.Base as DB
+import LF.DB.QQ
+import LF.DB.TH
+import LF.Prelude
 import qualified Database.SQLite.Simple as S
 
 data Transaction = Transaction

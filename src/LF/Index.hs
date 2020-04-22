@@ -52,7 +52,7 @@ indexWidget = mdo
 priUrl = ("#" <>) . printUrl
 
 getSeasons :: Given Connection => Text -> IO [Season :. Only Int]
-getSeasons _ = do
+getSeasons txt = do
   query_ [sql|
     select s.*, (select count(*) from `episode` where season_id=s.uuid)
     from season s order by `number`

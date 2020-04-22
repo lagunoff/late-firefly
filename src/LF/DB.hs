@@ -9,4 +9,5 @@ import Database.SQLite.Simple.ToField as X
 import Database.SQLite3 as X (ColumnType(..))
 import LF.DB.Base as X
 import LF.DB.TH as X
+import LF.DB.QQ as X
 import LF.DB.Transaction as X

@@ -86,7 +86,7 @@ let
           rm $out/bin/late-firefly
           cp $src/assets/index.html $out/bin/late-firefly.jsexe/index.html
           find $out/bin/late-firefly.jsexe/ -type f ! -regex '.*\(index.html\|all.js\)' -delete
-          ${nixpkgs.gzip}/bin/gzip -k $out/bin/late-firefly.jsexe/all.js
+          ${nixpkgs.zopfli}/bin/zopfli -i1000 $out/bin/late-firefly.jsexe/all.js
         '';
       });
   in {

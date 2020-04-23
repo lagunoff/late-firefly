@@ -1,4 +1,4 @@
-module LF.DB.Base where
+module LateFirefly.DB.Base where
 
 import Data.Aeson as AE
 import Data.Typeable as T

@@ -1,6 +1,6 @@
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE OverloadedStrings #-}
-module LF.Router where
+module LateFirefly.Parser where
 
 import Control.Lens hiding (from, to)
 import Control.Monad

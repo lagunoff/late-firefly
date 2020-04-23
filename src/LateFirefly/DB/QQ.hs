@@ -1,4 +1,4 @@
-module LF.DB.QQ where
+module LateFirefly.DB.QQ where
 
 import Language.Haskell.TH
 import Language.Haskell.TH.Quote

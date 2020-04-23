@@ -1,4 +1,4 @@
-module LF.Prelude (module X) where
+module LateFirefly.Prelude (module X) where
 
 import Control.Error.Util as X (note)
 import Control.Monad as X
@@ -16,5 +16,5 @@ import Data.Traversable as X (for)
 import Data.Typeable as X
 import Debug.Trace as X
 import GHC.Generics as X
-import LF.Orphans as X ()
+import LateFirefly.Orphans as X ()
 import TextShow as X

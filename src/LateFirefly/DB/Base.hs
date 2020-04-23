@@ -1,5 +1,5 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
-module LF.DB.Base
+module LateFirefly.DB.Base
   ( Id(..)
   , UUID5(..)
   , ColumnInfo(..)
@@ -21,6 +21,8 @@ module LF.DB.Base
   , uuid5FromBS
   , DeriveUUID(..)
   , fixUUID
+  , esc
+  , escText
   ) where
 
 import Control.Lens
@@ -47,8 +49,8 @@ import Database.SQLite3 (ColumnType(..))
 import Flat.Rpc
 import GHC.Exception
 import GHC.Int
-import LF.Prelude
-import LF.DB.QQ
+import LateFirefly.Prelude
+import LateFirefly.DB.QQ
 import Text.Read
 import qualified Database.SQLite.Simple as S
 import qualified GHC.Records as G
@@ -78,6 +80,9 @@ data TableInfo = TableInfo
 
 esc :: Text -> Text
 esc t = "`" <> t <> "`"
+
+escText :: Text -> Text
+escText t = "\"" <> t <> "\""
 
 isVersioned :: forall t. DbTable t => Bool
 isVersioned = case pkInfo @t of

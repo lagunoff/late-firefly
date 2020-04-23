@@ -1,4 +1,4 @@
-module LF.DB.Transaction where
+module LateFirefly.DB.Transaction where
 
 import Data.Generics.Product
 import Data.Time
@@ -6,10 +6,10 @@ import Database.SQLite.Simple
 import Database.SQLite.Simple.FromField
 import Database.SQLite.Simple.ToField
 import Flat.Rpc
-import LF.DB.Base as DB
-import LF.DB.QQ
-import LF.DB.TH
-import LF.Prelude
+import LateFirefly.DB.Base as DB
+import LateFirefly.DB.QQ
+import LateFirefly.DB.TH
+import LateFirefly.Prelude
 import qualified Database.SQLite.Simple as S
 
 data Transaction = Transaction

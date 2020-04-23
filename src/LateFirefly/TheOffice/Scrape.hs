@@ -1,13 +1,13 @@
-module LF.TheOffice.Scrape (scrapeSite) where
+module LateFirefly.TheOffice.Scrape (scrapeSite) where
 
 import Control.Lens as L hiding (children)
 import Data.Generics.Product
 import Data.Text as T
 import Data.Text.Lazy as TL hiding (Text)
 import Data.Text.Lazy.Encoding as TL
-import LF.DB
-import LF.Prelude
-import LF.TheOffice.Schema
+import LateFirefly.DB
+import LateFirefly.Prelude
+import LateFirefly.TheOffice.Schema
 import Text.HTML.TagSoup.Lens
 import Text.Read
 import Text.Regex.Lens

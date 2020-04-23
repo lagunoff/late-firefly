@@ -1,8 +1,8 @@
-module LF.TheOffice.Schema where
+module LateFirefly.TheOffice.Schema where
 
 import Flat.Rpc
-import LF.DB
-import LF.Prelude
+import LateFirefly.DB
+import LateFirefly.Prelude
 
 data Season = Season
   { uuid      :: UUID5 Season

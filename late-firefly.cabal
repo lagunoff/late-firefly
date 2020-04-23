@@ -49,16 +49,16 @@ executable late-firefly
     uuid-types
 
   other-modules:
-    LF.DB
-    LF.DB.Base
-    LF.DB.TH
-    LF.DB.Transaction
-    LF.Orphans
-    LF.Prelude
-    LF.TheOffice.Schema
-    LF.Router
-    LF.Index
-    LF.Backend
+    LateFirefly.DB
+    LateFirefly.DB.Base
+    LateFirefly.DB.TH
+    LateFirefly.DB.Transaction
+    LateFirefly.Orphans
+    LateFirefly.Prelude
+    LateFirefly.TheOffice.Schema
+    LateFirefly.Router
+    LateFirefly.Index
+    LateFirefly.Backend
 
   default-extensions:
     AllowAmbiguousTypes
@@ -106,7 +106,7 @@ executable late-firefly
       wai-extra,
       wreq
     other-modules:
-      LF.TheOffice.Scrape
+      LateFirefly.TheOffice.Scrape
     if flag(production)
       ghc-options: -O0
   else

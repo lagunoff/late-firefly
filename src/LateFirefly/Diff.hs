@@ -1,4 +1,4 @@
-module LF.Diff where
+module LateFirefly.Diff where
 
 import Data.Generics.Product
 

@@ -7,23 +7,23 @@ import Data.Generics.Product
 import Data.Text as T
 import Data.Text.IO as T
 import Flat.Rpc.Main
-import LF.Backend
-import LF.DB
-import LF.Index
-import LF.Prelude
+import LateFirefly.Backend
+import LateFirefly.DB
+import LateFirefly.Index
+import LateFirefly.Prelude
 import Massaraksh
 import Options.Generic
 import qualified Database.SQLite.Simple as S
 
 #ifndef ghcjs_HOST_OS
-import System.Environment
-import System.IO
-import LF.TheOffice.Scrape as TheOffice
-import Network.Wai.Application.Static
 import Flat.Rpc.Wai
+import LateFirefly.TheOffice.Scrape as TheOffice
 import Network.Wai
+import Network.Wai.Application.Static
 import Network.Wai.Handler.Warp as Warp
 import Network.Wai.Middleware.Gzip
+import System.Environment
+import System.IO
 
 -- | Command line options
 data Opts

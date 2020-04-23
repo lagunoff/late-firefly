@@ -1,17 +1,12 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
-module LF.Orphans where
+module LateFirefly.Orphans where
 
-import Data.Aeson as AE
 import Data.Time.Calendar
 import Data.Time.Clock
-import Data.Typeable
 import Data.UUID.Types.Internal (UUID(..))
 import Database.SQLite.Simple
-import Database.SQLite.Simple.FromField
-import Database.SQLite.Simple.ToField
 import Flat.Rpc as FL (Flat(..))
 import GHC.Generics (Generic)
-import {-# SOURCE #-} LF.DB.Base
 
 instance Flat a => Flat (Only a)
 

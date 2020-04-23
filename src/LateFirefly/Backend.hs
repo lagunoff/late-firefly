@@ -1,12 +1,13 @@
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# LANGUAGE CPP #-}
-module LF.Backend where
+module LateFirefly.Backend where
 
 import Control.Monad.Fail (MonadFail)
 import Control.Monad.IO.Unlift
 import Control.Monad.Reader
 import Flat.Rpc as FL
-import LF.DB
-import LF.Prelude
+import LateFirefly.DB
+import LateFirefly.Prelude
 import Options.Generic
 
 data WebOpts = WebOpts

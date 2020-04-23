@@ -1,4 +1,4 @@
-module LF.DB.TH
+module LateFirefly.DB.TH
   ( DeriveDbConfig(..)
   , deriveDb'
   , deriveDb
@@ -17,8 +17,8 @@ import Data.Text as T
 import Database.SQLite.Simple
 import Database.SQLite.Simple.ToField
 import Flat.Rpc as FL
-import LF.DB.Base
-import LF.Prelude
+import LateFirefly.DB.Base
+import LateFirefly.Prelude
 import GHC.Records
 import Language.Haskell.TH
 import Language.Haskell.TH.Syntax

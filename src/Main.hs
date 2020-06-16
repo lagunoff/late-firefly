@@ -14,6 +14,7 @@ import LateFirefly.Prelude
 import Massaraksh
 import Options.Generic
 import qualified Database.SQLite.Simple as S
+import GHC.StaticPtr
 
 #ifndef ghcjs_HOST_OS
 import Flat.Rpc.Wai
@@ -43,6 +44,7 @@ mainWith = \case
       for_ $(mkDatabaseSetup) execute_
       TheOffice.scrapeSite
   Start{dbpath=mayDb, docroot=mayDR, port=mayPort, ..} -> do
+    print =<< staticPtrKeys
     let
       port = getField @"webPort" opts
       docroot = fromMaybe "./" mayDR
@@ -78,7 +80,9 @@ main = do
   withArgs (case args of "--":rest -> rest; xs -> xs) $
     getRecord "Web site with tons of free videos" >>= mainWith
 #else
-main = runFlat (webServer undefined def {webPort = 7900})
+main = do
+  print =<< staticPtrKeys
+  runFlat (webServer undefined def {webPort = 7900})
 #endif
 
 type ConnectionPool = forall r. (Connection -> IO r) -> IO r

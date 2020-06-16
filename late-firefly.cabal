@@ -86,6 +86,7 @@ executable late-firefly
     RecordWildCards
     ScopedTypeVariables
     StandaloneDeriving
+    StrictData
     TemplateHaskell
     TupleSections
     TypeApplications
@@ -107,9 +108,7 @@ executable late-firefly
       wreq
     other-modules:
       LateFirefly.TheOffice.Scrape
-    if flag(production)
-      ghc-options: -O0
+    ghc-options: -O0
   else
-    if flag(production)
-      -- FIXME: Enabling optimizations in GHCJS breaks flat-rpc
-      ghc-options: -dedupe -O0
+    -- FIXME: Enabling optimizations in GHCJS breaks flat-rpc
+    ghc-options: -dedupe -O0

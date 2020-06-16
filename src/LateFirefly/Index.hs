@@ -26,7 +26,7 @@ import Text.Shakespeare.Text (st)
 
 data Model m = Model
   { route :: Route }
-  deriving (Generic)
+  deriving Generic
 
 indexWidget :: (HtmlBase m, MonadClient m) => HtmlT m ()
 indexWidget = mdo

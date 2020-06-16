@@ -4,8 +4,7 @@ import LateFirefly.Widget.Prelude
 import LateFirefly.TheOffice.Schema
 import LateFirefly.Router
 
-seasonWidget
-  :: (HtmlBase m, MonadClient m) => [(Season, [Episode])] -> HtmlT m ()
+seasonWidget :: HtmlBase m => [(Season, [Episode])] -> HtmlT m ()
 seasonWidget seasons = do
   div_ do
     for_ seasons \(Season{..}, episodes) -> do
@@ -28,4 +27,3 @@ seasonWidget seasons = do
       display: flex
       li
         list-style: none|]
-

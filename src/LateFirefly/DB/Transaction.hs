@@ -5,7 +5,7 @@ import Data.Time
 import Database.SQLite.Simple
 import Database.SQLite.Simple.FromField
 import Database.SQLite.Simple.ToField
-import Flat.Rpc
+import Flat
 import LateFirefly.DB.Base as DB
 import LateFirefly.DB.QQ
 import LateFirefly.DB.TH

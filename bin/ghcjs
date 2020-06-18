@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
-make --silent -f $DIR/env-cache.mk $DIR/../.ghcjs-env || exit 1;
+make --silent -f $DIR/env.mk $DIR/../.ghcjs-env || exit 1;
 source $DIR/../.ghcjs-env
 
-ghcjs $(cabal-cargs -c $DIR/../late-firefly.cabal | sed 's/-package=\(jsaddle-warp\|tagsoup\|lens-regex\|regex-tdfa\|warp\|wai\|wai-app-static\|wai-extra\|wreq\)//g' || exit 1) -odir=$DIR/../out -hidir=$DIR/../out -j "$@"
+ghcjs -isrc-ghcjs $(cabal-cargs -c $DIR/../late-firefly.cabal | sed 's/-package=\(jsaddle-warp\|tagsoup\|lens-regex\|regex-tdfa\|warp\|wai\|wai-app-static\|wai-extra\|wreq\)\|-isrc-ghc\b//g' || exit 1) -odir=$DIR/../out -hidir=$DIR/../out -j "$@"

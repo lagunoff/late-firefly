@@ -16,7 +16,7 @@ import Data.List as L
 import Data.Text as T
 import Database.SQLite.Simple
 import Database.SQLite.Simple.ToField
-import Flat.Rpc as FL
+import Flat as FL
 import LateFirefly.DB.Base
 import LateFirefly.Prelude
 import GHC.Records
@@ -121,4 +121,3 @@ mkSetupPrio = (getField @"prio" ti, createTableStmt @t) where
 
 joinSetupPrio :: [(Int, [Query])] -> [Query]
 joinSetupPrio xs = L.foldl' (<>) [] (fmap snd (L.sortOn fst xs ))
-

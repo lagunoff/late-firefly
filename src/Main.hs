@@ -6,7 +6,7 @@ import Control.Monad.IO.Unlift
 import Data.Generics.Product
 import Data.Text as T
 import Data.Text.IO as T
-import Flat.Rpc.Main
+import Flat
 import LateFirefly.Backend
 import LateFirefly.DB
 import LateFirefly.Index
@@ -17,7 +17,6 @@ import qualified Database.SQLite.Simple as S
 import GHC.StaticPtr
 
 #ifndef ghcjs_HOST_OS
-import Flat.Rpc.Wai
 import LateFirefly.TheOffice.Scrape as TheOffice
 import Network.Wai
 import Network.Wai.Application.Static
@@ -25,6 +24,9 @@ import Network.Wai.Handler.Warp as Warp
 import Network.Wai.Middleware.Gzip
 import System.Environment
 import System.IO
+import Language.Javascript.JSaddle.WebSockets as Warp
+import qualified Network.HTTP.Types as H
+import LateFirefly.RPC
 
 -- | Command line options
 data Opts
@@ -44,20 +46,18 @@ mainWith = \case
       for_ $(mkDatabaseSetup) execute_
       TheOffice.scrapeSite
   Start{dbpath=mayDb, docroot=mayDR, port=mayPort, ..} -> do
-    print =<< staticPtrKeys
     let
       port = getField @"webPort" opts
       docroot = fromMaybe "./" mayDR
-      opts = def & field @"webPort" %~ (maybe id const mayPort)
+      opts = (def :: WebOpts) & field @"webPort" %~ (maybe id const mayPort)
         & field @"dbPath" %~ (maybe id const mayDb)
       dbpath = getField @"dbPath" opts
     S.withConnection (T.unpack dbpath) \conn -> let
-      cfg = webServer ($ conn) opts
       sApp = staticApp $ defaultFileServerSettings (T.unpack docroot)
-      fApp = flatRpcApplication @Backend (mcfEvalServer cfg)
+      rpcApp = give conn $ mkApplication $rpcEps
       withGzip = gzip def {gzipFiles=GzipPreCompressed GzipIgnore, gzipCheckMime=const True}
       in Warp.run port \case
-        req@(pathInfo -> "rpc":_) -> fApp req
+        req@(pathInfo -> "rpc":_) -> rpcApp req
         req                       -> withGzip sApp req
   Migrate{dbpath=mayDb,..} -> do
     let
@@ -72,8 +72,13 @@ update :: IO ()
 update = do
   hSetBuffering stdout LineBuffering
   hSetBuffering stderr LineBuffering
-  let defDb = T.unpack $ getField @"dbPath" (def @WebOpts)
-  runFlat $ webServer (S.withConnection defDb) def {webPort = 7900}
+  let dbPath = T.unpack $ getField @"dbPath" (def :: WebOpts)
+  conn <- S.open dbPath
+  let rpcApp = give conn $ mkApplication $rpcEps
+  Warp.debugOr 7900 (void $ attachToBodySimple indexWidget) \case
+    req@(pathInfo -> "rpc":_) -> rpcApp req
+    _                         ->
+      ($ responseLBS H.status404 [("Content-Type", "text/plain")] "Not found")
 
 main = do
   args <- getArgs
@@ -81,14 +86,7 @@ main = do
     getRecord "Web site with tons of free videos" >>= mainWith
 #else
 main = do
-  print =<< staticPtrKeys
-  runFlat (webServer undefined def {webPort = 7900})
+  void $ attachToBodySimple indexWidget
 #endif
 
 type ConnectionPool = forall r. (Connection -> IO r) -> IO r
-
-webServer :: ConnectionPool -> WebOpts -> MainConfig _ _
-webServer wConn WebOpts{..} =
-  MainConfig @Backend (Just webPort) (wConn . flip runBackend) \runCli -> do
-    un <- askUnliftIO
-    void $ attachToBody (unliftIO un . runCli) indexWidget

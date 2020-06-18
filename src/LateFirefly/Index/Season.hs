@@ -4,7 +4,7 @@ import LateFirefly.Widget.Prelude
 import LateFirefly.TheOffice.Schema
 import LateFirefly.Router
 
-seasonWidget :: HtmlBase m => [(Season, [Episode])] -> HtmlT m ()
+seasonWidget :: [(Season, [Episode])] -> Html
 seasonWidget seasons = do
   div_ do
     for_ seasons \(Season{..}, episodes) -> do
@@ -19,7 +19,7 @@ seasonWidget seasons = do
               "href" =: printRoute (EpisodeR number code)
               img_ do "src" =: thumbnail
               div_ do
-                h4_ [ht|Episode #{code}|]
+                h4_ $ [ht|Episode #{code}|]
                 span_ (text name)
   [style|
     .episodes-list

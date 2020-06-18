@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module LateFirefly.DB.Base
   ( Id(..)
@@ -26,8 +27,6 @@ module LateFirefly.DB.Base
   ) where
 
 import Control.Lens
-import Data.Aeson as AE
-import Data.Aeson.Text as AE
 import Data.ByteString as BS
 import Data.ByteString.Builder as B
 import Data.ByteString.Internal as BS
@@ -46,7 +45,7 @@ import Database.SQLite.Simple.Internal
 import Database.SQLite.Simple.Ok
 import Database.SQLite.Simple.ToField
 import Database.SQLite3 (ColumnType(..))
-import Flat.Rpc
+import Flat
 import GHC.Exception
 import GHC.Int
 import LateFirefly.Prelude
@@ -54,6 +53,10 @@ import LateFirefly.DB.QQ
 import Text.Read
 import qualified Database.SQLite.Simple as S
 import qualified GHC.Records as G
+#ifndef ghcjs_HOST_OS
+import Data.Aeson as AE
+import Data.Aeson.Text as AE
+#endif
 
 newtype Id t = Id {unId :: Int64}
   deriving stock (Eq, Ord, Show)
@@ -186,6 +189,7 @@ selectFromNamed qTail p = do
 
 newtype JsonField a = JsonField {unJsonField :: a}
 
+#ifndef ghcjs_HOST_OS
 instance ToJSON a => ToField (JsonField a) where
   toField = S.SQLText . T.toStrict . AE.encodeToLazyText . unJsonField
 
@@ -193,6 +197,13 @@ instance (FromJSON a, Typeable a) => FromField (JsonField a) where
   fromField  = textFieldParser $
     fmap JsonField . AE.eitherDecode @a . B.toLazyByteString .
     T.encodeUtf8Builder
+#else
+instance ToField (JsonField a) where
+  toField = error "Unimplemented"
+
+instance (Typeable a) => FromField (JsonField a) where
+  fromField = error "Unimplemented"
+#endif
 
 newtype ReadShowField a = ReadShowField {unReadShowField :: a}
 
@@ -274,8 +285,13 @@ instance (DbTable t, Typeable t) => DbField (UUID5 t) where
 instance DbField UTCTime where
   columnInfo _ = ColumnInfo TextColumn False False Nothing
 
+#ifndef ghcjs_HOST_OS
 instance (Typeable a, FromJSON a, ToJSON a) => DbField [a] where
   columnInfo _ = ColumnInfo TextColumn False False Nothing
+#else
+instance (Typeable a) => DbField [a] where
+  columnInfo _ = error "Unimplemented"
+#endif
 
 instance ToField (UUID5 t) where
   toField = S.SQLText . U.toText . unUUID5
@@ -286,5 +302,10 @@ instance Typeable (UUID5 t) => FromField (UUID5 t) where
 instance DbField Bool where
   columnInfo _ = ColumnInfo IntegerColumn False False Nothing
 
+#ifndef ghcjs_HOST_OS
 deriving via JsonField [a] instance (FromJSON a, Typeable a) => FromField [a]
 deriving via JsonField [a] instance ToJSON a => ToField [a]
+#else
+deriving via JsonField [a] instance (Typeable a) => FromField [a]
+deriving via JsonField [a] instance ToField [a]
+#endif

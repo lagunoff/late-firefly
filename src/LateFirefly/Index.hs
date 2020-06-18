@@ -1,11 +1,6 @@
 {-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE StaticPointers #-}
-module LateFirefly.Index
-  ( indexWidget
-  , Model(..)
-  , Route(..)
-  , printRoute
-  ) where
+module LateFirefly.Index where
 
 import Control.Lens
 import Control.Monad.Trans
@@ -15,7 +10,6 @@ import Data.Text as T
 import Data.UUID.Types as U
 import GHC.Records
 import Language.Javascript.JSaddle
-import LateFirefly.Backend
 import LateFirefly.DB
 import LateFirefly.Index.Season
 import LateFirefly.Prelude
@@ -23,12 +17,14 @@ import LateFirefly.Router
 import LateFirefly.TheOffice.Schema
 import LateFirefly.Widget.Prelude
 import Text.Shakespeare.Text (st)
+import LateFirefly.RPC.TH
+import Data.JSString.Text as JSS
 
 data Model m = Model
   { route :: Route }
   deriving Generic
 
-indexWidget :: (HtmlBase m, MonadClient m) => HtmlT m ()
+indexWidget :: HtmlT JSM ()
 indexWidget = mdo
   let Theme{..} = theme
   headerWidget
@@ -52,7 +48,7 @@ indexWidget = mdo
     body
       margin: 0|]
 
-headerWidget :: (HtmlBase m, MonadClient m) => HtmlT m ()
+headerWidget :: HtmlT JSM ()
 headerWidget = do
   let Theme{..} = theme
   div_ do
@@ -124,7 +120,7 @@ headerWidget = do
           font-weight: 600
         |]
 
-sliderWidget :: (HtmlBase m, MonadClient m) => HtmlT m ()
+sliderWidget :: HtmlT JSM ()
 sliderWidget = do
   img_ do
     "src" =: "https://sm.ign.com/t/ign_pl/screenshot/default/the-office-not-leaving-netflix-until-2021_7kc8.1280.jpg"
@@ -160,36 +156,36 @@ getEpisode epCode = do
     where e.`code`=?
   |] [epCode]
 
-aboutPage :: HtmlBase m => HtmlT m ()
+aboutPage :: HtmlT JSM ()
 aboutPage = do
   div_ do
     h1_ do
       "About Page Works!!!"
 
-indexPage :: (HtmlBase m, MonadClient m) => HtmlT m ()
+indexPage :: HtmlT JSM ()
 indexPage = do
-  ss <- lift $ send "" (static (remote getSeasons))
+  ss <- $(sendRpc 'getSeasons) ""
   seasonWidget ss
 
-episodesWidget :: (HtmlBase m, MonadClient m) => Int -> HtmlT m ()
-episodesWidget sNum = mdo
-  episodes <- lift $ send sNum $ static (remote getEpisodes)
+episodesWidget :: Int -> HtmlT JSM ()
+episodesWidget sNum = do
+  episodes <- $(sendRpc 'getEpisodes) sNum
   div_ do
     "className" =: "root"
     ul_ $ for_ episodes \Episode{..} -> do
       li_ do
         a_ do
           "href" =: printRoute (EpisodeR sNum code)
-          h3_ do text [st|Episode #{code}|]
+          h3_ do [ht|Episode #{code}|]
           img_ do "src" =: thumbnail
           p_ do text shortDesc
 
-episodeWidget :: (HtmlBase m, MonadClient m) => Text -> HtmlT m ()
-episodeWidget epCode = mdo
-  Episode{..} <- lift $ send epCode $ static (remote getEpisode)
+episodeWidget :: Text -> HtmlT JSM ()
+episodeWidget epCode = do
+  Episode{..} <- $(sendRpc 'getEpisode) epCode
   div_ do
     "className" =: "root"
-    h3_ do text [st|Episode #{code}|]
+    h3_ do [ht|Episode #{code}|]
     img_ do "src" =: thumbnail
     p_ $ text description
     ul_ $ for_ links (li_ . text)

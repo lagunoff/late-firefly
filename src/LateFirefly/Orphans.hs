@@ -5,7 +5,7 @@ import Data.Time.Calendar
 import Data.Time.Clock
 import Data.UUID.Types.Internal (UUID(..))
 import Database.SQLite.Simple
-import Flat.Rpc as FL (Flat(..))
+import Flat as FL
 import GHC.Generics (Generic)
 
 instance Flat a => Flat (Only a)

@@ -1,4 +1,4 @@
-{ production ? true }:
+{ production ? true, minify ? production }:
 let
   nixpkgs = import <nixpkgs> {};
 
@@ -8,23 +8,23 @@ let
   combine = nixpkgs.lib.foldr nixpkgs.lib.composeExtensions (_: _: {});
 
   filterOutSourceFiles = [
-    "*~" "result" ".ghc.*" "dist" "dist-newstyle" ".cabal-sandbox" "tmp" "packages" "*.sqlite" "TAGS" "default.nix"
+    "*~" "result" ".ghc.*" "dist" "out" "dist-newstyle" ".cabal-sandbox" "tmp" "packages" "*.sqlite" "TAGS" "default.nix"
   ];
 
   packages = {
     late-firefly = gitignoreSourcePure filterOutSourceFiles ./.;
 
+    massaraksh = builtins.fetchTarball {
+      url = "https://github.com/lagunoff/massaraksh/archive/5a4877eb0d632325c4eacc3fe20c5bcd8ebdbebe.tar.gz";
+    };
+
     flat = builtins.fetchTarball {
-      url = "https://github.com/Quid2/flat/archive/936e0d8d6d510058cbd70b22d82e8bf2ba41c9dc.tar.gz";
+      url = "https://github.com/Quid2/flat/archive/59314709b4b79c1cf6d1084ec4ad88b905d4b5f9.tar.gz";
     };
 
     text-show = builtins.fetchTarball {
       url = "https://github.com/RyanGlScott/text-show/archive/56c643a05ef8529dab5850949daefd66cf421e44.tar.gz";
     };
-
-    flat-rpc = gitignoreSourcePure filterOutSourceFiles ../flat-rpc;
-
-    monad-xhr = gitignoreSourcePure filterOutSourceFiles ../monad-xhr;
 
     tagsoup-lens = builtins.fetchGit {
       url = "git@github.com:alpmestan/tagsoup-lens.git";
@@ -35,9 +35,7 @@ let
       url = "git@github.com:lagunoff/tagsoup.git";
       rev = "c61f55d615350cc2368484baf4608bb39e0b34e8";
     };
-
-    massaraksh = ../massaraksh;
-  };
+  } // lib.optionalAttrs (builtins.pathExists ./locals.nix) (import ./locals.nix);
 
   overrides = pkgs: with pkgs.haskell.lib; let
     ovr = x: dontCheck (doJailbreak (dontHaddock x));
@@ -45,18 +43,17 @@ let
       ++ lib.optional production (_: attrs: {
         configureFlags = attrs.configureFlags or [] ++ ["-fproduction"];
       })
-      ++ lib.optional ((hself.ghc.isGhcjs or false) && production) (_: attrs: {
+      ++ lib.optional ((hself.ghc.isGhcjs or false) && minify) (_: attrs: {
         postInstall = (attrs.postInstall or "") + ''
           ${pkgs.closurecompiler}/bin/closure-compiler\
             --compilation_level=ADVANCED_OPTIMIZATIONS --jscomp_off=checkVars\
             --externs=$out/bin/late-firefly.jsexe/all.js.externs\
-            --externs=${packages.monad-xhr}/src-ghcjs/Control/Monad/Xhr/Internal.js.externs\
             $out/bin/late-firefly.jsexe/all.js > $out/bin/late-firefly.jsexe/all.min.js
           rm $out/bin/late-firefly.jsexe/all.js
           mv $out/bin/late-firefly.jsexe/all.min.js $out/bin/late-firefly.jsexe/all.js
         '';
       })
-      ++ lib.optional (hself.ghc.isGhcjs or false) (_: attrs: {
+      ++ lib.optional ((hself.ghc.isGhcjs or false) && minify) (_: attrs: {
         postInstall = (attrs.postInstall or "") + ''
           rm $out/bin/late-firefly
           cp $src/assets/index.html $out/bin/late-firefly.jsexe/index.html
@@ -86,7 +83,7 @@ let
 
 in reflex-platform.project({ pkgs, ... }: {
   useWarp = true;
-  withHoogle = false;
+  withHoogle = true;
   packages = {};
 
   shells = {
@@ -95,7 +92,6 @@ in reflex-platform.project({ pkgs, ... }: {
   };
 
   shellToolOverrides = ghc: super: {
-    closure-compiler = null;
     haskell-ide-engine = null;
     hdevtools = null;
     hlint = null;

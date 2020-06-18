@@ -4,24 +4,25 @@ import Data.Text as T
 import GHC.Word
 import Language.Haskell.TH
 import Language.Haskell.TH.Quote
-import Massaraksh as H
+import Massaraksh.Text as H
 import Text.Cassius
 import Text.Shakespeare.Text as X (st)
 import TextShow
 import qualified Data.Text.Lazy as LT
 
-data Theme = Theme
-  { unit          :: PixelSize
-  , primary       :: RGBA
-  , primaryText   :: RGBA
-  , secondaryText :: RGBA
-  }
+data Theme = Theme {
+  unit          :: PixelSize,
+  primary       :: RGBA,
+  primaryText   :: RGBA,
+  secondaryText :: RGBA
+}
 
-theme = Theme
-  { unit          = PixelSize 8
-  , primary       = RGBA 0 0 255 1
-  , primaryText   = RGBA 0 0 0 0.87
-  , secondaryText = RGBA 0 0 0 0.54 }
+theme = Theme {
+  unit          = PixelSize 8,
+  primary       = RGBA 0 0 255 1,
+  primaryText   = RGBA 0 0 0 0.87,
+  secondaryText = RGBA 0 0 0 0.54
+}
 
 style :: QuasiQuoter
 style = cassius{quoteExp=qExp} where
@@ -29,7 +30,7 @@ style = cassius{quoteExp=qExp} where
 
 ht :: QuasiQuoter
 ht = st{quoteExp=qExp} where
-  qExp = appE [|H.text|] . quoteExp st
+  qExp = appE [|H.text |] . quoteExp st
 
 data RGBA = RGBA Word8 Word8 Word8 Double
 

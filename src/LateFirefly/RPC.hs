@@ -16,13 +16,13 @@ import Control.Applicative
 import LateFirefly.Prelude
 import LateFirefly.DB
 
-mkApplication :: Given Connection => EpMap -> Application
-mkApplication dynEps req response = do
+mkApplication :: Given Connection => DynSPT -> Application
+mkApplication dynSpt req response = do
   RpcRequest{..} <- either (error . show) id <$> parseFlatRequest
   staticEp :: Maybe Ep <- fmap deRefStaticPtr <$> unsafeLookupStaticPtr rr_key
   let
-    dynEp = M.lookup rr_name dynEps
-    ep = fromMaybe (error "unknown method") $ staticEp <|> dynEp
+    dynEp = M.lookup rr_name dynSpt
+    ep = fromMaybe (error $ "unknown method: " ++ show rr_name) $ staticEp <|> dynEp
   r <- unEp ep rr_arg
   response $ responseLBS ok200 [] (LBS.fromStrict r)
   where

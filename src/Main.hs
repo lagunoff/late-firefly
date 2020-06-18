@@ -14,7 +14,6 @@ import LateFirefly.Prelude
 import Massaraksh
 import Options.Generic
 import qualified Database.SQLite.Simple as S
-import GHC.StaticPtr
 
 #ifndef ghcjs_HOST_OS
 import LateFirefly.TheOffice.Scrape as TheOffice
@@ -54,7 +53,7 @@ mainWith = \case
       dbpath = getField @"dbPath" opts
     S.withConnection (T.unpack dbpath) \conn -> let
       sApp = staticApp $ defaultFileServerSettings (T.unpack docroot)
-      rpcApp = give conn $ mkApplication $rpcEps
+      rpcApp = give conn $ mkApplication $readDynSPT
       withGzip = gzip def {gzipFiles=GzipPreCompressed GzipIgnore, gzipCheckMime=const True}
       in Warp.run port \case
         req@(pathInfo -> "rpc":_) -> rpcApp req
@@ -74,7 +73,7 @@ update = do
   hSetBuffering stderr LineBuffering
   let dbPath = T.unpack $ getField @"dbPath" (def :: WebOpts)
   conn <- S.open dbPath
-  let rpcApp = give conn $ mkApplication $rpcEps
+  let rpcApp = give conn $ mkApplication $readDynSPT
   Warp.debugOr 7900 (void $ attachToBodySimple indexWidget) \case
     req@(pathInfo -> "rpc":_) -> rpcApp req
     _                         ->

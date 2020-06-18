@@ -1,6 +1,9 @@
 {-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE StaticPointers #-}
-module LateFirefly.Index where
+module LateFirefly.Index
+  ( Model(..)
+  , indexWidget
+  ) where
 
 import Control.Lens
 import Control.Monad.Trans
@@ -24,7 +27,7 @@ data Model m = Model
   { route :: Route }
   deriving Generic
 
-indexWidget :: HtmlT JSM ()
+indexWidget :: Html
 indexWidget = mdo
   let Theme{..} = theme
   headerWidget
@@ -48,7 +51,7 @@ indexWidget = mdo
     body
       margin: 0|]
 
-headerWidget :: HtmlT JSM ()
+headerWidget :: Html
 headerWidget = do
   let Theme{..} = theme
   div_ do
@@ -120,7 +123,7 @@ headerWidget = do
           font-weight: 600
         |]
 
-sliderWidget :: HtmlT JSM ()
+sliderWidget :: Html
 sliderWidget = do
   img_ do
     "src" =: "https://sm.ign.com/t/ign_pl/screenshot/default/the-office-not-leaving-netflix-until-2021_7kc8.1280.jpg"
@@ -156,20 +159,20 @@ getEpisode epCode = do
     where e.`code`=?
   |] [epCode]
 
-aboutPage :: HtmlT JSM ()
+aboutPage :: Html
 aboutPage = do
   div_ do
     h1_ do
       "About Page Works!!!"
 
-indexPage :: HtmlT JSM ()
+indexPage :: Html
 indexPage = do
-  ss <- $(sendRpc 'getSeasons) ""
+  ss <- $(remote 'getSeasons) ""
   seasonWidget ss
 
-episodesWidget :: Int -> HtmlT JSM ()
+episodesWidget :: Int -> Html
 episodesWidget sNum = do
-  episodes <- $(sendRpc 'getEpisodes) sNum
+  episodes <- $(remote 'getEpisodes) sNum
   div_ do
     "className" =: "root"
     ul_ $ for_ episodes \Episode{..} -> do
@@ -180,9 +183,9 @@ episodesWidget sNum = do
           img_ do "src" =: thumbnail
           p_ do text shortDesc
 
-episodeWidget :: Text -> HtmlT JSM ()
+episodeWidget :: Text -> Html
 episodeWidget epCode = do
-  Episode{..} <- $(sendRpc 'getEpisode) epCode
+  Episode{..} <- $(remote 'getEpisode) epCode
   div_ do
     "className" =: "root"
     h3_ do [ht|Episode #{code}|]

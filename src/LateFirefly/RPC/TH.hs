@@ -2,29 +2,29 @@
 {-# LANGUAGE CPP #-}
 module LateFirefly.RPC.TH where
 
-import Flat
+import Control.Monad
+import Control.Monad.IO.Class
 import Data.ByteString
+import Data.Coerce
+import Data.Either
 import Data.IORef
 import Data.Maybe
-import Data.Coerce
-import Control.Monad.IO.Class
-import Control.Monad
-import qualified Data.Set as S
-import qualified Data.Map as M
-import System.IO.Unsafe
+import Data.Reflection
+import Data.Text.Encoding (decodeUtf8)
+import Debug.Trace
+import Flat
+import GHC.Fingerprint.Type
+import GHC.StaticPtr
+import JavaScript.Web.XMLHttpRequest
 import Language.Haskell.TH as TH
 import Language.Haskell.TH.Syntax
-import Data.Either
-import LateFirefly.DB
 import Language.Javascript.JSaddle
-import JavaScript.Web.XMLHttpRequest
-import Data.Reflection
-import Debug.Trace
-import qualified Data.ByteString.Base64 as B64
-import GHC.StaticPtr
-import Data.Text.Encoding (decodeUtf8)
-import GHC.Fingerprint.Type
+import LateFirefly.DB
+import System.IO.Unsafe
 import Unsafe.Coerce
+import qualified Data.ByteString.Base64 as B64
+import qualified Data.Map as M
+import qualified Data.Set as S
 
 #ifndef ghcjs_HOST_OS
 import JavaScript.TypedArray.Internal.Types
@@ -34,20 +34,11 @@ import Unsafe.Coerce
 import GHCJS.Buffer as Buffer
 #endif
 
-reifyName :: String -> Q Name
-reifyName s = recover assumeLocal
-  $ TH.reify (mkName s) >>= \case
-    VarI n _ _ -> pure n
-  where
-    assumeLocal = do
-      loc <- location
-      pure $ Name (OccName s) (NameG VarName (PkgName (loc_package loc)) (ModName (loc_module loc)))
-
 type (:->) a r = Given Connection => a -> IO r
 
 newtype Ep = Ep {unEp :: ByteString :-> ByteString}
 
-type EpMap = M.Map Name Ep
+type DynSPT = M.Map Name Ep
 
 data RpcRequest = RpcRequest
   { rr_key  :: StaticKey
@@ -55,8 +46,8 @@ data RpcRequest = RpcRequest
   , rr_arg  :: ByteString }
   deriving (Show, Eq, Generic, Flat)
 
-sendRpc_client :: (Flat a, Flat r) => Name -> StaticKey -> (a :-> r) -> a -> JSM r
-sendRpc_client n k _ a = do
+sendRpcXhr :: (Flat a, Flat r) => Name -> StaticKey -> (a :-> r) -> a -> JSM r
+sendRpcXhr n k _ a = do
   origin :: JSString <- fromJSValUnchecked =<< jsg ("window" :: JSString)
     ! ("location" :: JSString) ! ("origin" :: JSString)
   buffer <- byteStringToArrayBuffer $ flat $ RpcRequest k n (flat a)
@@ -69,27 +60,23 @@ sendRpc_client n k _ a = do
     . contents
     <$> xhrByteString req
 
-epRef :: IORef (S.Set Name)
-epRef = unsafePerformIO (newIORef S.empty)
+dynSPT :: IORef (S.Set Name)
+dynSPT = unsafePerformIO (newIORef S.empty)
 
-sendRpc :: Name -> Q Exp
-sendRpc n = do
-#ifdef ghcjs_HOST_OS
-  [| liftJSM . sendRpc_client $(lift n) (staticKey $(staticE ([|toEp|] `appE` varE n))) $(varE n) |]
-#else
-  liftIO $ modifyIORef epRef (S.insert n)
-  [| liftJSM . sendRpc_client $(lift n) (staticKey $(staticE ([|toEp|] `appE` varE n))) $(varE n) |]
-#endif
+remote :: Name -> Q Exp
+remote n = do
+  liftIO $ modifyIORef dynSPT (S.insert n)
+  [| liftJSM . sendRpcXhr $(lift n) (staticKey $(staticE ([|toEp|] `appE` varE n))) $(varE n) |]
 
 toEp :: forall a b. (Flat a, Flat b, Show b) => (a :-> b) -> Ep
 toEp f = Ep (fmap (flat @b) . f . fromRight (error "unflat error") . (unflat @a))
 
-rpcEps :: Q Exp
-rpcEps = do
-  eps <- liftIO (readIORef epRef)
-  epsE <- forM (S.toAscList eps) \n -> do
+readDynSPT :: Q Exp
+readDynSPT = do
+  eps <- liftIO (readIORef dynSPT)
+  epsExp <- forM (S.toAscList eps) \n ->
     pure $ tupE [lift n, varE 'toEp `appE` varE n]
-  [| M.fromList $(listE epsE) |]
+  [| M.fromList $(listE epsExp) |]
 
 instance Flat Name
 instance Flat OccName

@@ -53,7 +53,7 @@ mainWith = \case
       dbpath = getField @"dbPath" opts
     S.withConnection (T.unpack dbpath) \conn -> let
       sApp = staticApp $ defaultFileServerSettings (T.unpack docroot)
-      rpcApp = give conn $ mkApplication $readDynSPT
+      rpcApp = let ?conn = conn in mkApplication $readDynSPT
       withGzip = gzip def {gzipFiles=GzipPreCompressed GzipIgnore, gzipCheckMime=const True}
       in Warp.run port \case
         req@(pathInfo -> "rpc":_) -> rpcApp req
@@ -73,7 +73,7 @@ update = do
   hSetBuffering stderr LineBuffering
   let dbPath = T.unpack $ getField @"dbPath" (def :: WebOpts)
   conn <- S.open dbPath
-  let rpcApp = give conn $ mkApplication $readDynSPT
+  let rpcApp = let ?conn = conn in mkApplication $readDynSPT
   Warp.debugOr 7900 (void $ attachToBodySimple indexWidget) \case
     req@(pathInfo -> "rpc":_) -> rpcApp req
     _                         ->

@@ -22,23 +22,23 @@ data Transaction = Transaction
 
 deriveDb ''Transaction
 
-newVersion :: Given Connection => (Given NewVersion => IO a) -> IO a
+newVersion :: (?conn :: Connection) => ((?version :: NewVersion) => IO a) -> IO a
 newVersion act = do
   startedAt <- getCurrentTime
   t <- upsert (Transaction def True startedAt Nothing)
   let newTr = NewVersion (getField @"rowid" t)
-  a <- give newTr act
+  a <- let ?version = newTr in act
   finishedAt <- Just <$> getCurrentTime
   upsert (t {finishedAt})
   a <$ DB.execute
     [sql|update `transaction` set active=0 where active=1 and rowid <> ?|]
     [newTr]
 
-withConnection :: FilePath -> (Given Connection => IO a) -> IO a
+withConnection :: FilePath -> ((?conn :: Connection) => IO a) -> IO a
 withConnection path act = S.withConnection path \conn -> do
   mapM_ (S.execute_ conn)
     ["PRAGMA journal_mode=WAL"]
-  give conn act
+  let ?conn = conn in act
 
 newtype NewVersion = NewVersion {unNewVersion :: Id Transaction}
   deriving newtype (ToField, FromField)

@@ -9,9 +9,7 @@ import Data.Coerce
 import Data.Either
 import Data.IORef
 import Data.Maybe
-import Data.Reflection
 import Data.Text.Encoding (decodeUtf8)
-import Debug.Trace
 import Flat
 import GHC.Fingerprint.Type
 import GHC.StaticPtr
@@ -34,7 +32,7 @@ import Unsafe.Coerce
 import GHCJS.Buffer as Buffer
 #endif
 
-type (:->) a r = Given Connection => a -> IO r
+type (:->) a r = (?conn :: Connection) => a -> IO r
 
 newtype Ep = Ep {unEp :: ByteString :-> ByteString}
 

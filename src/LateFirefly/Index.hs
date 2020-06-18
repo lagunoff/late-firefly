@@ -136,14 +136,14 @@ sliderWidget = do
       background: rgba(0,0,0,0.05)
     |]
 
-getSeasons :: Given Connection => Text -> IO [(Season, [Episode])]
+getSeasons :: (?conn :: Connection) => Text -> IO [(Season, [Episode])]
 getSeasons txt = do
   seasons <- selectFrom_ @Season [sql|where 1 order by `number`|]
   let seasonIds = T.intercalate ", " $ escText . U.toText . unUUID5 . getField @"uuid" <$> seasons
   episodes <- selectFrom_ @Episode [sql|where season_id in (#{seasonIds}) order by `code`|]
   pure $ seasons <&> \s@Season{uuid} -> (s, L.filter ((==uuid) . getField @"seasonId") episodes)
 
-getEpisodes :: Given Connection => Int -> IO [Episode]
+getEpisodes :: (?conn :: Connection) => Int -> IO [Episode]
 getEpisodes seasonNumber = do
   query [sql|
     select e.* from `episode` e
@@ -151,7 +151,7 @@ getEpisodes seasonNumber = do
     where s.`number`=? order by e.code
   |] [seasonNumber]
 
-getEpisode :: Given Connection => Text -> IO Episode
+getEpisode :: (?conn :: Connection) => Text -> IO Episode
 getEpisode epCode = do
   L.head <$> query [sql|
     select e.* from `episode` e

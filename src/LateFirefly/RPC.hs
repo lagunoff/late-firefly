@@ -16,7 +16,7 @@ import Control.Applicative
 import LateFirefly.Prelude
 import LateFirefly.DB
 
-mkApplication :: Given Connection => DynSPT -> Application
+mkApplication :: (?conn :: Connection) => DynSPT -> Application
 mkApplication dynSpt req response = do
   RpcRequest{..} <- either (error . show) id <$> parseFlatRequest
   staticEp :: Maybe Ep <- fmap deRefStaticPtr <$> unsafeLookupStaticPtr rr_key

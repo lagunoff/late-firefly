@@ -23,13 +23,13 @@ instance Default WebOpts where
 --   deriving newtype (Functor, Applicative, Monad, MonadIO, MonadFail)
 --   deriving newtype (MonadReader Connection)
 
--- backend :: (Given Connection => IO a) -> Backend a
+-- backend :: ((?conn :: Connection) => IO a) -> Backend a
 -- backend io = Backend $ ReaderT \conn -> give conn io
 
 -- type MonadClient = MonadRpc Backend
 
 -- remote
---   :: (Flat a, Flat r) => (Given Connection => a -> IO r)
+--   :: (Flat a, Flat r) => ((?conn :: Connection) => a -> IO r)
 --   -> RemoteMethod Backend a r
 
 -- runBackend :: Connection -> (forall a. Backend a -> IO a)

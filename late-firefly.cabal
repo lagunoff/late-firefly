@@ -35,7 +35,6 @@ executable late-firefly
     ordered-containers,
     http-types,
     process,
-    reflection,
     shakespeare,
     split,
     sqlite-simple,

@@ -129,19 +129,19 @@ ppColumnType = \case
 uuid5FromBS :: ByteString -> UUID5 a
 uuid5FromBS = UUID5 . generateNamed namespaceURL . BS.unpackBytes
 
-execute :: (Given Connection, ToRow p) => Query -> p -> IO ()
-execute = S.execute given
+execute :: (?conn :: Connection, ToRow p) => Query -> p -> IO ()
+execute = S.execute ?conn
 
-execute_ :: Given Connection => Query -> IO ()
-execute_ = S.execute_ given
+execute_ :: (?conn :: Connection) => Query -> IO ()
+execute_ = S.execute_ ?conn
 
-query :: (FromRow r, ToRow p, Given Connection) => Query -> p -> IO [r]
-query = S.query given
+query :: (FromRow r, ToRow p, ?conn :: Connection) => Query -> p -> IO [r]
+query = S.query ?conn
 
-query_ :: (FromRow r, Given Connection) => Query -> IO [r]
-query_ = S.query_ given
+query_ :: (FromRow r, ?conn :: Connection) => Query -> IO [r]
+query_ = S.query_ ?conn
 
-upsert :: forall t. (Given Connection, DbTable t) => t -> IO t
+upsert :: forall t. (?conn :: Connection, DbTable t) => t -> IO t
 upsert t = do
   let
     TableInfo{..} = tableInfo @t
@@ -152,40 +152,40 @@ upsert t = do
   case pkInfo @t of
     NoVersion -> do
       let q = "INSERT INTO " <> esc tableName <> " (" <> cols <> ") VALUES (" <> vals <> ") ON CONFLICT(rowid) DO UPDATE SET " <> sets
-      S.execute given (Query q) (toRow t <> toRow t)
+      S.execute ?conn (Query q) (toRow t <> toRow t)
       if getField @"rowid" t /= def then pure t else
-        S.lastInsertRowId given <&> \idInt -> setField @"rowid" (Id idInt) t
+        S.lastInsertRowId ?conn <&> \idInt -> setField @"rowid" (Id idInt) t
     HasVersion -> do
       -- TODO: Check for duplicates with the previous version
       let q = "INSERT INTO " <> esc tableName <> " (" <> cols <> ") VALUES (" <> vals <> ")"
-      t <$ S.execute given (Query q) (toRow t)
+      t <$ S.execute ?conn (Query q) (toRow t)
 
 selectFrom
   :: forall t p
-  . (Given Connection, DbTable t, ToRow p) => Query -> p -> IO [t]
+  . (?conn :: Connection, DbTable t, ToRow p) => Query -> p -> IO [t]
 selectFrom qTail p = do
   let
     TableInfo{..} = tableInfo @t
     cols = T.intercalate ", " $ fmap (esc . fst) columns
     q = "SELECT " <> cols <> " FROM " <> esc name <> " " <> fromQuery qTail
-  S.query given (Query q) p
+  S.query ?conn (Query q) p
 
-selectFrom_ :: forall t. (Given Connection, DbTable t) => Query -> IO [t]
+selectFrom_ :: forall t. (?conn :: Connection, DbTable t) => Query -> IO [t]
 selectFrom_ qTail = do
   let
     TableInfo{..} = tableInfo @t
     cols = T.intercalate ", " $ fmap (esc . fst) columns
     q = "SELECT " <> cols <> " FROM " <> esc name <> " " <> fromQuery qTail
-  S.query_ given (Query q)
+  S.query_ ?conn (Query q)
 
 selectFromNamed
-  :: forall t. (Given Connection, DbTable t) => Query -> [NamedParam] -> IO [t]
+  :: forall t. (?conn :: Connection, DbTable t) => Query -> [NamedParam] -> IO [t]
 selectFromNamed qTail p = do
   let
     TableInfo{..} = tableInfo @t
     cols = T.intercalate ", " $ fmap (esc . fst) columns
     q = "SELECT " <> cols <> " FROM " <> esc name <> " " <> fromQuery qTail
-  S.queryNamed given (Query q) p
+  S.queryNamed ?conn (Query q) p
 
 newtype JsonField a = JsonField {unJsonField :: a}
 

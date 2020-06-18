@@ -10,7 +10,6 @@ import Data.Either as X
 import Data.Foldable as X
 import Data.Functor as X
 import Data.Maybe as X
-import Data.Reflection as X (give, Given(..))
 import Data.Text as X (Text)
 import Data.Traversable as X (for)
 import Data.Typeable as X

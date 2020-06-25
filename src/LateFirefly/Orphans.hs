@@ -7,6 +7,8 @@ import Data.UUID.Types.Internal (UUID(..))
 import Database.SQLite.Simple
 import Flat as FL
 import GHC.Generics (Generic)
+import Language.Haskell.TH as TH
+import Language.Haskell.TH.Syntax
 
 instance Flat a => Flat (Only a)
 
@@ -26,3 +28,10 @@ instance Flat DiffTime where
 
 deriving instance Generic UUID
 instance Flat UUID
+
+instance Flat Name
+instance Flat OccName
+instance Flat NameFlavour
+instance Flat ModName
+instance Flat NameSpace
+instance Flat PkgName

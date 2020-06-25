@@ -20,6 +20,7 @@ import Language.Javascript.JSaddle
 import LateFirefly.DB
 import System.IO.Unsafe
 import Unsafe.Coerce
+import Debug.Trace
 import qualified Data.ByteString.Base64 as B64
 import qualified Data.Map as M
 import qualified Data.Set as S
@@ -75,13 +76,6 @@ readDynSPT = do
   epsExp <- forM (S.toAscList eps) \n ->
     pure $ tupE [lift n, varE 'toEp `appE` varE n]
   [| M.fromList $(listE epsExp) |]
-
-instance Flat Name
-instance Flat OccName
-instance Flat NameFlavour
-instance Flat ModName
-instance Flat NameSpace
-instance Flat PkgName
 
 byteStringToArrayBuffer :: ByteString -> JSM Uint8Array
 #ifndef ghcjs_HOST_OS

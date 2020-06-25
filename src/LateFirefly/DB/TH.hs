@@ -88,7 +88,7 @@ deriveUUID flds tcName = reify tcName >>= \case
     patNames <- forM vars \(n, _, _) ->
       if L.any (==occName n) flds
       then fmap Just (newName "a") else pure Nothing
-    tcNameBS <- [|S.fromString @ByteString $(litE (stringL (showName' Alone tcName)))|]
+    tcNameBS <- [|FL.flat $(lift tcName)|]
     let
       instD = InstanceD Nothing [] (ConT ''DeriveUUID `AppT` ConT tcName) [uuidSaltD]
       uuidSaltD = FunD 'uuidSalt [Clause [ConP dcName (fmap (maybe WildP VarP) patNames)] (NormalB uuidSaltE) []]

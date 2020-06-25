@@ -10,6 +10,7 @@ import Data.JSString.Internal.Type ( JSString(..) )
 import Language.Javascript.JSaddle hiding (textFromJSString)
 import {-# SOURCE #-} JavaScript.Web.XMLHttpRequest (XHR(..))
 import Data.Coerce
+import Debug.Trace
 import Control.Concurrent.MVar
 
 
@@ -81,16 +82,21 @@ js_send :: Maybe JSVal -> XHR -> JSM Int
 js_send body (coerce @_ @JSVal -> xhr) = do
   mvar <- liftIO newEmptyMVar
   errorCb <- function $ fun \_ _ _ -> do
-    liftIO (putMVar mvar 0)
+    liftIO (putMVar mvar 2)
   loadCb <- function $ fun \_ _ _ -> do
     liftIO (putMVar mvar 0)
   abortCb <- function $ fun \_ _ _ -> do
-    liftIO (putMVar mvar 0)
+    liftIO (putMVar mvar 1)
   xhr # "addEventListener" $ ("error", errorCb)
   xhr # "addEventListener" $ ("load", loadCb)
   xhr # "addEventListener" $ ("abort", abortCb)
   case body of
     Nothing -> xhr # "send" $ ()
     Just b  -> xhr # "send" $ b
-  liftIO (takeMVar mvar)
-    <* freeFunction errorCb <* freeFunction loadCb <* freeFunction abortCb
+  syncPoint
+  r <- liftIO (takeMVar mvar)
+  syncPoint
+  freeFunction errorCb
+  freeFunction loadCb
+  freeFunction abortCb
+  pure r

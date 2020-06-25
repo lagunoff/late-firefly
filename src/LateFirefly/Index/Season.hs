@@ -1,29 +1,66 @@
+{-# LANGUAGE StaticPointers #-}
+{-# LANGUAGE RecursiveDo #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE JavaScriptFFI #-}
+{-# LANGUAGE ForeignFunctionInterface #-}
 module LateFirefly.Index.Season where
 
 import LateFirefly.Widget.Prelude
 import LateFirefly.TheOffice.Schema
 import LateFirefly.Router
+import LateFirefly.DB
+import LateFirefly.RPC.TH
+import LateFirefly.Widget
 
-seasonWidget :: [(Season, [Episode])] -> Html
-seasonWidget seasons = do
-  div_ do
-    for_ seasons \(Season{..}, episodes) -> do
-      h3_ do
-        "className" =: "season-header"
-        [ht|Season #{showt number}|]
-      ul_ do
-        "className" =: "episodes-list"
-        for_ episodes \Episode{..} -> do
-          li_ do
-            a_ do
-              "href" =: printRoute (EpisodeR number code)
-              img_ do "src" =: thumbnail
-              div_ do
-                h4_ $ [ht|Episode #{code}|]
-                span_ (text name)
+seasonWidget :: Int -> Html
+seasonWidget sNum = do
+  let
+    Theme{..} = theme
+    thumbnailWidth = thumbnailHeight * 3 / 2
+  episodes <- $(remote 'getEpisodes) sNum
+  divClass "season" do
+    ul_ $ for_ episodes \Episode{..} -> do
+      li_ do
+        a_ do
+          "href" =: printRoute (EpisodeR sNum code)
+          h3_ do [ht|Episode #{code}|]
+        divClass "row" do
+          a_ do
+            "href" =: printRoute (EpisodeR sNum code)
+            img_ do
+              "src" =: thumbnail
+              "style" =: [st|width: #{showt thumbnailWidth}; height: #{showt thumbnailHeight}|]
+          div_ do
+            p_ do text description
   [style|
-    .episodes-list
-      margin: 0
-      display: flex
-      li
-        list-style: none|]
+    .season
+      max-width: #{pageWidth}
+      margin: 0 auto
+      img
+        border-radius: 6px
+      h3
+        text-transform: uppercase
+        font-weight: 400
+        font-size: 16px
+        margin-bottom: 8px
+        margin-top: 37px
+      ul li
+        list-style: none
+      ul
+        margin: 0 #{unit * 3}
+        padding: 0
+      ul .row
+        display: flex
+      ul .row > * + *
+        margin-left: #{unit * 2}
+      p
+        margin: 0
+  |]
+
+getEpisodes :: (?conn :: Connection) => Int -> IO [Episode]
+getEpisodes seasonNumber = do
+  query [sql|
+    select e.* from `episode` e
+      left join `season` s on e.season_id=s.uuid
+    where s.`number`=? order by e.code
+  |] [seasonNumber]

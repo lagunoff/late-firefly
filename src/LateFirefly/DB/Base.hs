@@ -85,7 +85,7 @@ esc :: Text -> Text
 esc t = "`" <> t <> "`"
 
 escText :: Text -> Text
-escText t = "\"" <> t <> "\""
+escText t = "'" <> t <> "'"
 
 isVersioned :: forall t. DbTable t => Bool
 isVersioned = case pkInfo @t of

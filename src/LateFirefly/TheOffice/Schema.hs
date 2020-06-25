@@ -5,7 +5,7 @@ import LateFirefly.DB
 import LateFirefly.Prelude
 
 data Season = Season {
-  uuid      :: UUID5 Season,
+  uuid      :: ~(UUID5 Season),
   version   :: Id Transaction,
   deleted   :: Bool,
   thumbnail :: Text,
@@ -16,7 +16,7 @@ data Season = Season {
 deriveDbUUID ["number"] ''Season
 
 data Episode = Episode {
-  uuid        :: UUID5 Episode,
+  uuid        :: ~(UUID5 Episode),
   version     :: Id Transaction,
   deleted     :: Bool,
   seasonId    :: UUID5 Season,

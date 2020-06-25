@@ -34,6 +34,7 @@ import Language.Javascript.JSaddle hiding (textFromJSString)
 import GHCJS.Buffer
 import GHCJS.Buffer.Types
 import JavaScript.TypedArray.Internal.Types
+import Debug.Trace
 
 
 data Method = GET | POST | PUT | DELETE | Method JSString

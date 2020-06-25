@@ -12,7 +12,7 @@ executable late-firefly
   ghc-options:
     -Wall -Wno-missing-signatures -Wno-name-shadowing -Wno-unused-matches
     -Wno-unused-do-bind -Wno-partial-type-signatures
-  hs-source-dirs: src
+  hs-source-dirs: src ../massaraksh/src
   
   build-depends:
     base,
@@ -29,6 +29,7 @@ executable late-firefly
     jsaddle,
     lens,
     massaraksh,
+    natural-transformation,
     mtl,
     network-uri,
     optparse-generic,
@@ -66,7 +67,9 @@ executable late-firefly
     ConstraintKinds
     DataKinds
     DeriveAnyClass
+    DeriveFunctor
     DeriveGeneric
+    DerivingStrategies
     DerivingVia
     DuplicateRecordFields
     FlexibleContexts

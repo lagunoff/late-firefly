@@ -13,7 +13,7 @@ import Data.Maybe as X
 import Data.Text as X (Text)
 import Data.Traversable as X (for)
 import Data.Typeable as X
-import Debug.Trace as X
+import Debug.Trace as X hiding (traceEvent)
 import GHC.Generics as X
 import LateFirefly.Orphans as X ()
 import TextShow as X

@@ -14,60 +14,64 @@ import Data.UUID.Types as U
 import GHC.Records
 import Language.Javascript.JSaddle
 import LateFirefly.DB
+import LateFirefly.Index.SeasonItem
 import LateFirefly.Index.Season
+import LateFirefly.Index.Episode
 import LateFirefly.Prelude
 import LateFirefly.Router
 import LateFirefly.TheOffice.Schema
 import LateFirefly.Widget.Prelude
-import Text.Shakespeare.Text (st)
 import LateFirefly.RPC.TH
-import Data.JSString.Text as JSS
 
-data Model m = Model
-  { route :: Route }
-  deriving Generic
+data Model = Model
+  { _idx_route :: Route
+  } deriving (Show)
+
+makeLenses ''Model
 
 indexWidget :: Html
 indexWidget = mdo
   let Theme{..} = theme
   headerWidget
-  sliderWidget
-  mdl <- liftIO $ newDynRef (Model route)
-  route <- liftJSM $ hashRouter IndexR \x -> do
-    modifyDynRef mdl \m -> m {route=x}
-  div_ do
-    "className" =: "root"
+  route <- hashRouter IndexR \r ->
+    liftIO $ sync $ modify (idx_route .~ r)
+  (model, modify) <- liftIO $ newDyn (Model route)
+  divClass "root" do
     div_ do
-      routeDyn <- liftIO $ flip holdUniqDynBy (getDyn mdl)
-        \Model{route=a} Model{route=b} -> a == b
-      dynHtml $ routeDyn <&> getField @"route" <&> \case
-        IndexR -> indexPage
-        AboutR -> aboutPage
-        SeasonR{..} -> episodesWidget season
+      let routeDyn = holdUniqDyn (fmap _idx_route model)
+      dynHtml $ routeDyn <&> \case
+        IndexR       -> indexPage
+        AboutR       -> aboutPage
+        SeasonR{..}  -> seasonWidget season
         EpisodeR{..} -> episodeWidget episode
   [style|
     html, body, body *
       font-family: Arial, sans-serif
     body
-      margin: 0|]
+      margin: 0
+    body a
+      color: #{primaryText}
+      text-decoration: none
+      &:hover
+        color: #{primary}
+  |]
 
 headerWidget :: Html
 headerWidget = do
   let Theme{..} = theme
-  div_ do
-    "className" =: "header"
-    a_ do
-      "className" =: "home-link"
+  divClass "header" do
+    aClass "home-link" do
       "href" =: "#"
-      span_ "telikov.net"
-    ul_ do
-      "className" =: "menu"
+      span_ "Telikov."
+      span_ do
+        "Net"
+        "style" =: [st|color: #{showt primary}|]
+    ulClass "menu" do
       li_ do a_ do "Seasons"; "href" =: printRoute IndexR
       li_ do a_ do "About"; "href" =: printRoute AboutR
-    div_ do
-      "className" =: "search"
-      input_ do
-        "placeholder" =: "Search"
+    -- divClass "search" do
+    --   input_ do
+    --     "placeholder" =: "Search"
     [style|
       .header
         display: flex
@@ -80,18 +84,17 @@ headerWidget = do
         z-index: 2
         position: relative
       .home-link
-        color: black
+        font-size: 33px
+        color: rgba(0,0,0,0.9)
         &:hover
-          color: #{primary}
-        transition: color .2s
-        font-weight: 600
+          background: black
+          color: white
         display: block
         height: 100%
         text-decoration: none
         display: flex
         align-items: center
         padding: 0 #{unit * 2} 0 #{unit * 2}
-        text-transform: uppercase
       .menu
         margin: 0 #{unit * 2}
         padding: 0
@@ -103,11 +106,10 @@ headerWidget = do
         li + li
           margin-left: #{unit * 2}
         a
-          color: #{secondaryText}
+          color: #{primaryText}
           text-decoration: none
-          transition: color .2s
-          &:hover
-            color: #{primaryText}
+          text-transform: uppercase
+          font-size: 13px
       .search
         padding: 0 #{unit * 2}
         height: 100%
@@ -123,17 +125,30 @@ headerWidget = do
           font-weight: 600
         |]
 
-sliderWidget :: Html
-sliderWidget = do
-  img_ do
-    "src" =: "https://sm.ign.com/t/ign_pl/screenshot/default/the-office-not-leaving-netflix-until-2021_7kc8.1280.jpg"
-    "className" =: "slider"
+header2Widget :: Html
+header2Widget = do
+  let Theme{..} = theme
+  divClass  "header-2" do
+    div_ do
+      img_ do
+        "className" =: "poster"
+        "src" =: "https://m.media-amazon.com/images/M/MV5BMDNkOTE4NDQtMTNmYi00MWE0LWE4ZTktYTc0NzhhNWIzNzJiXkEyXkFqcGdeQXVyMzQ2MDI5NjU@._V1_SY999_CR0,0,665,999_AL_.jpg"
+      p_ [ht|The Office is an American mockumentary sitcom television series that depicts the everyday lives of office employees in the Scranton, Pennsylvania, branch of the fictional Dunder Mifflin Paper Company. It aired on NBC from March 24, 2005, to May 16, 2013, lasting a total of nine seasons.[1] It is an adaptation of the 2001-2003 BBC series of the same name, being adapted for American television by Greg Daniels, a veteran writer for Saturday Night Live, King of the Hill, and The Simpsons. It was co-produced by Daniels's Deedle-Dee Productions, and Reveille Productions (later Shine America), in association with Universal Television. The original executive producers were Daniels, Howard Klein, Ben Silverman, Ricky Gervais, and Stephen Merchant, with numerous others being promoted in later seasons.|]
+      div_ ("style" =: "clear: both")
   [style|
-    .slider
+    .header-2
       width: 100%
-      height: 350px
-      object-fit: contain
+      box-sizing: border-box
+      padding: #{unit * 3}
       background: rgba(0,0,0,0.05)
+    .header-2 > *
+      max-width: #{pageWidth}
+      margin: 0 auto
+    .poster
+      object-fit: contain
+      height: 350px
+      float: left
+      padding-right: #{unit * 3}
     |]
 
 getSeasons :: (?conn :: Connection) => Text -> IO [(Season, [Episode])]
@@ -143,22 +158,6 @@ getSeasons txt = do
   episodes <- selectFrom_ @Episode [sql|where season_id in (#{seasonIds}) order by `code`|]
   pure $ seasons <&> \s@Season{uuid} -> (s, L.filter ((==uuid) . getField @"seasonId") episodes)
 
-getEpisodes :: (?conn :: Connection) => Int -> IO [Episode]
-getEpisodes seasonNumber = do
-  query [sql|
-    select e.* from `episode` e
-      left join `season` s on e.season_id=s.uuid
-    where s.`number`=? order by e.code
-  |] [seasonNumber]
-
-getEpisode :: (?conn :: Connection) => Text -> IO Episode
-getEpisode epCode = do
-  L.head <$> query [sql|
-    select e.* from `episode` e
-      left join `season` s on e.season_id=s.uuid
-    where e.`code`=?
-  |] [epCode]
-
 aboutPage :: Html
 aboutPage = do
   div_ do
@@ -167,39 +166,28 @@ aboutPage = do
 
 indexPage :: Html
 indexPage = do
+  let Theme{..} = theme
+  header2Widget
   ss <- $(remote 'getSeasons) ""
-  seasonWidget ss
+  divClass "seasons" do
+    div_ do
+      seasonItemWidget ss
+  [style|
+    .seasons
+      margin: 0 #{unit * 3}
+    .seasons > *
+      max-width: #{pageWidth}
+      margin: 0 auto
+    |]
 
-episodesWidget :: Int -> Html
-episodesWidget sNum = do
-  episodes <- $(remote 'getEpisodes) sNum
-  div_ do
-    "className" =: "root"
-    ul_ $ for_ episodes \Episode{..} -> do
-      li_ do
-        a_ do
-          "href" =: printRoute (EpisodeR sNum code)
-          h3_ do [ht|Episode #{code}|]
-          img_ do "src" =: thumbnail
-          p_ do text shortDesc
-
-episodeWidget :: Text -> Html
-episodeWidget epCode = do
-  Episode{..} <- $(remote 'getEpisode) epCode
-  div_ do
-    "className" =: "root"
-    h3_ do [ht|Episode #{code}|]
-    img_ do "src" =: thumbnail
-    p_ $ text description
-    ul_ $ for_ links (li_ . text)
-
-hashRouter :: forall a. HasParser U a => a -> (a -> IO ()) -> JSM a
+hashRouter :: forall a m. (HasParser U a, HtmlBase m) => a -> (a -> HtmlT m ()) -> HtmlT m a
 hashRouter def hashChange = do
-  win <- jsg ("window" :: Text)
+  win <- Element <$> liftJSM (jsg ("window" :: Text))
   let
     parseRoute = do
       hash <- fromJSValUnchecked =<< jsg ("location" :: Text) ! ("hash" :: Text)
       pure $ fromMaybe def $ listToMaybe $ parseUrl @a (T.drop 1 hash)
-  win <# ("onpopstate" :: Text) $ fun \_ _ _ -> do
-    liftIO . hashChange =<< parseRoute
-  parseRoute
+  route <- liftJSM parseRoute
+  onEvent_ win "popstate" do
+    liftJSM parseRoute >>= hashChange
+  liftJSM parseRoute

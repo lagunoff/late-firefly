@@ -1,4 +1,6 @@
-{-# LANGUAGE ForeignFunctionInterface, JavaScriptFFI #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
+{-# LANGUAGE ForeignFunctionInterface #-}
+{-# LANGUAGE JavaScriptFFI #-}
 {-# LANGUAGE CPP #-}
 module LateFirefly.RPC.TH where
 
@@ -20,7 +22,6 @@ import Language.Javascript.JSaddle
 import LateFirefly.DB
 import System.IO.Unsafe
 import Unsafe.Coerce
-import Debug.Trace
 import qualified Data.ByteString.Base64 as B64
 import qualified Data.Map as M
 import qualified Data.Set as S
@@ -86,7 +87,7 @@ base64ToArrayBuffer :: JSString -> JSM Uint8Array
 base64ToArrayBuffer jss = do
   fromB64 <- eval $
     "(function (base64) {\n" ++
-    "  return Uint8Array.from(atob(base64), c => c.charCodeAt(0));" ++
+    "  return Uint8Array.from(atob(base64), function(c) { return c.charCodeAt(0); });\n" ++
     "})"
   jss' <- toJSVal jss
   coerce <$> call fromB64 valUndefined jss'

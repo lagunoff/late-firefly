@@ -10,9 +10,7 @@ import Data.JSString.Internal.Type ( JSString(..) )
 import Language.Javascript.JSaddle hiding (textFromJSString)
 import {-# SOURCE #-} JavaScript.Web.XMLHttpRequest (XHR(..))
 import Data.Coerce
-import Debug.Trace
 import Control.Concurrent.MVar
-
 
 js_setWithCredentials :: XHR -> JSM ()
 js_setWithCredentials (coerce @_ @JSVal -> xhr) = do

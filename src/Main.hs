@@ -1,8 +1,8 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE CPP #-}
 module Main where
 
 import Control.Lens
-import Control.Monad.IO.Unlift
 import Data.Generics.Product
 import Data.Text as T
 import Data.Text.IO as T
@@ -26,6 +26,7 @@ import System.IO
 import Language.Javascript.JSaddle.WebSockets as Warp
 import qualified Network.HTTP.Types as H
 import LateFirefly.RPC
+import LateFirefly.Router.Wai
 
 -- | Command line options
 data Opts
@@ -52,12 +53,12 @@ mainWith = \case
         & field @"dbPath" %~ (maybe id const mayDb)
       dbpath = getField @"dbPath" opts
     S.withConnection (T.unpack dbpath) \conn -> let
-      sApp = staticApp $ defaultFileServerSettings (T.unpack docroot)
       rpcApp = let ?conn = conn in mkApplication $readDynSPT
       withGzip = gzip def {gzipFiles=GzipPreCompressed GzipIgnore, gzipCheckMime=const True}
+      sApp = html5Router $ withGzip $ staticApp $ defaultFileServerSettings (T.unpack docroot)
       in Warp.run port \case
         req@(pathInfo -> "rpc":_) -> rpcApp req
-        req                       -> withGzip sApp req
+        req                       -> sApp req
   Migrate{dbpath=mayDb,..} -> do
     let
       defDb = T.unpack $ getField @"dbPath" (def @WebOpts)

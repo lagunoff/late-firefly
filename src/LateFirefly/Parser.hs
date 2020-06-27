@@ -5,6 +5,7 @@ module LateFirefly.Parser where
 import Control.Lens hiding (from, to)
 import Control.Monad
 import Data.Bool
+
 import Data.Either
 import Data.List as L
 import Data.Map.Ordered as M
@@ -15,6 +16,7 @@ import Network.URI
 import Prelude hiding (print)
 import Text.Inflections
 import Text.Read
+
 
 -- Local shortcuts for convenience
 type U = UrlChunks
@@ -101,6 +103,12 @@ param n = Parser par pri where
   par u@(UrlChunks _ ps) = parse parser (M.lookup n ps) <&> _2 .~ u
   pri a (UrlChunks ss ps) = UrlChunks ss (alterOMap (print parser a) n ps)
 
+pSegment :: HasParser Text a => Text -> Parser' U a
+pSegment n = Parser par pri where
+  par u@(UrlChunks [] _)      = []
+  par u@(UrlChunks (s:ss) ps) = parse parser s <&> _2 .~ UrlChunks ss ps
+  pri a (UrlChunks ss ps) = UrlChunks (print parser a "":ss) ps
+
 paramOr
   :: (Eq a, HasParser ParamState a) => Text -> a -> Parser' U a
 paramOr n d = Parser par pri where
@@ -136,7 +144,10 @@ printChunks (UrlChunks ss ps) =
       <&> bimap enURI enURI <&> \(k, v) -> k <> "=" <> v
 
 parseUrl :: HasParser U a => Text -> [a]
-parseUrl = fmap fst . parse parser . prepareUrl
+parseUrl = fmap fst . L.filter pp . parse parser . prepareUrl
+  where
+    pp (_, UrlChunks [] _) = True
+    pp (_, UrlChunks _ _)  = False
 {-# INLINE parseUrl #-}
 
 printUrl :: HasParser U a =>  a -> Text
@@ -167,26 +178,44 @@ instance Profunctor (Parser s) where
   dimap g f p = Parser (fmap (_1 %~ f) . parse p) (print p . g)
   {-# INLINE dimap #-}
 
-class HasParser s a | a -> s where
+class HasParser s a where
   parser :: Parser s a a
   default parser :: (Generic a, GParser (Rep a), s ~ U) => Parser s a a
   parser = dimap from to (gParser @(Rep a))
 
-newtype ReadShowParser a = ReadShowParser {unReadShowParser :: a}
+newtype ReadShowParam a = ReadShowParam {unReadShowParam :: a}
+newtype ReadShowSegment a = ReadShowSegment {unReadShowSegment :: a}
+newtype Seg a = Seg {unSeg :: a}
+  deriving (Show, Eq, Ord)
 
-instance (Read a, Show a) => HasParser P (ReadShowParser a) where
+deriving newtype instance HasParser s a => HasParser s (Seg a)
+
+instance (Read a, Show a) => HasParser P (ReadShowParam a) where
   parser = Parser par pri where
     par st = fromMaybe [] do
       s <- fmap T.unpack st
       i <- readMaybe @a s
-      pure [(ReadShowParser i, st)]
-    pri (ReadShowParser i) _ =
+      pure [(ReadShowParam i, st)]
+    pri (ReadShowParam i) _ =
       Just $ T.pack (show i)
 
-deriving via ReadShowParser Int instance HasParser P Int
-deriving via ReadShowParser Integer instance HasParser P Integer
-deriving via ReadShowParser Double instance HasParser P Double
-deriving via ReadShowParser Float instance HasParser P Float
+instance (Read a, Show a) => HasParser Text (ReadShowSegment a) where
+  parser = Parser par pri where
+    par st = fromMaybe [] do
+      i <- readMaybe @a (T.unpack st)
+      pure [(ReadShowSegment i, st)]
+    pri (ReadShowSegment i) _ =
+      T.pack (show i)
+
+deriving via ReadShowParam Int instance HasParser P Int
+deriving via ReadShowParam Integer instance HasParser P Integer
+deriving via ReadShowParam Double instance HasParser P Double
+deriving via ReadShowParam Float instance HasParser P Float
+
+deriving via ReadShowSegment Int instance HasParser Text Int
+deriving via ReadShowSegment Integer instance HasParser Text Integer
+deriving via ReadShowSegment Double instance HasParser Text Double
+deriving via ReadShowSegment Float instance HasParser Text Float
 
 instance HasParser P a => HasParser P (Maybe a) where
   parser = Parser par pri where
@@ -198,12 +227,22 @@ instance HasParser P Text where
     par = maybe [] \s -> [(s, Just s)]
     pri i _ = Just i
 
+instance HasParser Text Text where
+  parser = Parser par pri where
+    par = \s -> [(s, s)]
+    pri i _ = i
+
 emptyUrl :: UrlChunks
 emptyUrl = UrlChunks mempty M.empty
 
-constructorToSegment :: String -> Text
-constructorToSegment (T.dropWhileEnd (== 'R') . T.pack -> n) = fromRight n $
-  parseCamelCase [] n <&> dasherize
+constructorToSegment :: String -> Maybe Text
+constructorToSegment (T.pack -> n)
+  | '_' <- T.last n = Nothing
+  | otherwise       =
+    let n' = T.dropWhileEnd shouldDrop n
+    in Just $ fromRight n' $
+    (parseCamelCase [] n' <&> dasherize)
+    where shouldDrop c = c == 'R' || c == '_'
 
 alterOMap :: Ord k => (Maybe a -> Maybe a) -> k -> OMap k a -> OMap k a
 alterOMap f k old =
@@ -218,25 +257,30 @@ instance GParser f => GParser (D1 c f) where
 instance {-# OVERLAPPING #-} (GParser f, Constructor c) => GParser (C1 c f) where
   gParser = dimap unM1 M1 $ pSegment /> gParser @f
     where
-      pSegment = if ctr == "index" then pUnit else segment ctr
+      pSegment = maybe pUnit segment ctr
       ctr = constructorToSegment $ conName (undefined :: t c f a)
 
 instance {-# OVERLAPS #-} Constructor c => GParser (C1 c U1) where
-  gParser = dimap unM1 M1 $ if ctr == "index" then pSuccess U1 else gsegment ctr
+  gParser = dimap unM1 M1 pSegment -- $ if ctr == "index" then pSuccess U1 else gsegment ctr
     where
+      pSegment = maybe (pSuccess U1) gsegment ctr
       ctr = constructorToSegment $ conName (undefined :: t c U1 a)
 
 instance {-# OVERLAPS #-} (HasParser U a, Constructor c) =>
   GParser (C1 c (S1 (d 'Nothing f g h) (Rec0 a))) where
   gParser = dimap (unK1 . unM1 . unM1) (M1 . M1 . K1) (pSegment /> parser @U @a)
     where
-      pSegment = if ctr == "index" then pUnit else segment ctr
+      pSegment = maybe pUnit segment ctr
       ctr = constructorToSegment
         $ conName (undefined :: t c (S1 (d 'Nothing f g h) (Rec0 a)) x)
 
 -- If datatype has single constructor, ignore the name
 instance {-# OVERLAPS #-} GParser f => GParser (D1 d (C1 c f)) where
   gParser = dimap (unM1 . unM1) (M1 . M1) gParser
+
+instance {-# OVERLAPS #-} (HasParser Text a, Selector s) => GParser (S1 s (Rec0 (Seg a))) where
+  gParser = dimap (unSeg . unK1 . unM1) (M1 . K1 . Seg)
+    $ pSegment @a $ T.pack $ selName (undefined :: t s (Rec0 (Seg a)) a)
 
 instance (HasParser P a, Selector s) => GParser (S1 s (Rec0 a)) where
   gParser = dimap (unK1 . unM1) (M1 . K1)

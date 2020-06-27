@@ -1,7 +1,8 @@
 #!/usr/bin/env sh
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
-make --silent -f $DIR/env.mk $DIR/../.ghc-env || exit 1;
-source $DIR/../.ghc-env
+CABAL_ARGS=$(for a in $(cd $DIR; cabal-cargs || exit 1); do echo "--ghc-arg=$a"; done | tr '\r\n' ' ')
+OUT_ARGS="-outputdir=$DIR/../out"
+FORWARD_ARGS=$@
 
-runghc $(for a in $(cabal-cargs -c $DIR/../late-firefly.cabal); do echo "--ghc-arg=$a"; done) -j -O0 "$@"
+cached-nix-shell $DIR/../default.nix -A shells.ghc --run "runghc $CABAL_ARGS $OUT_ARGS $args $FORWARD_ARGS"

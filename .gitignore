@@ -14,7 +14,6 @@
 **/*.sqlite-shm
 **/*.sqlite-wal
 **/.ghc.environment*
-/.*-env
 result
 dist
 out

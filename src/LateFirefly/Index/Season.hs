@@ -10,7 +10,6 @@ import LateFirefly.TheOffice.Schema
 import LateFirefly.Router
 import LateFirefly.DB
 import LateFirefly.RPC.TH
-import LateFirefly.Widget
 
 seasonWidget :: Int -> Html
 seasonWidget sNum = do
@@ -21,17 +20,15 @@ seasonWidget sNum = do
   divClass "season" do
     ul_ $ for_ episodes \Episode{..} -> do
       li_ do
-        a_ do
-          "href" =: printRoute (EpisodeR sNum code)
+        linkTo (EpisodeR (coerce sNum) (coerce code)) do
           h3_ do [ht|Episode #{code}|]
         divClass "row" do
-          a_ do
-            "href" =: printRoute (EpisodeR sNum code)
+          linkTo (EpisodeR (coerce sNum) (coerce code)) do
             img_ do
               "src" =: thumbnail
               "style" =: [st|width: #{showt thumbnailWidth}; height: #{showt thumbnailHeight}|]
           div_ do
-            p_ do text description
+            p_ (text description)
   [style|
     .season
       max-width: #{pageWidth}

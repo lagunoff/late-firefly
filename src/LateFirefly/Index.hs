@@ -5,7 +5,7 @@ module LateFirefly.Index
   , indexWidget
   ) where
 
-import Control.Lens
+import Control.Lens hiding ((#))
 import Control.Monad.Trans
 import Data.List as L
 import Data.Maybe
@@ -14,14 +14,16 @@ import Data.UUID.Types as U
 import GHC.Records
 import Language.Javascript.JSaddle
 import LateFirefly.DB
-import LateFirefly.Index.SeasonItem
-import LateFirefly.Index.Season
 import LateFirefly.Index.Episode
+import LateFirefly.Index.Season
+import LateFirefly.Index.SeasonItem
 import LateFirefly.Prelude
+import LateFirefly.RPC.TH
 import LateFirefly.Router
 import LateFirefly.TheOffice.Schema
 import LateFirefly.Widget.Prelude
-import LateFirefly.RPC.TH
+import LateFirefly.Disqus
+import LateFirefly.Icons
 
 data Model = Model
   { _idx_route :: Route
@@ -33,17 +35,21 @@ indexWidget :: Html
 indexWidget = mdo
   let Theme{..} = theme
   headerWidget
-  route <- hashRouter IndexR \r ->
+  setupDisqus
+--  eitherDecode
+  route <- htmlRouter IndexR_ \r ->
     liftIO $ sync $ modify (idx_route .~ r)
   (model, modify) <- liftIO $ newDyn (Model route)
   divClass "root" do
     div_ do
       let routeDyn = holdUniqDyn (fmap _idx_route model)
       dynHtml $ routeDyn <&> \case
-        IndexR       -> indexPage
-        AboutR       -> aboutPage
-        SeasonR{..}  -> seasonWidget season
-        EpisodeR{..} -> episodeWidget episode
+        IndexR_      -> indexPage <* restoreState
+        AboutR       -> aboutPage <* restoreState
+        SeasonR{..}  -> seasonWidget (coerce season) <* restoreState
+        EpisodeR{..} -> episodeWidget (coerce episode) <* restoreState
+    embedDisqus "home" "Telikov.Net — Home"
+
   [style|
     html, body, body *
       font-family: Arial, sans-serif
@@ -60,69 +66,100 @@ headerWidget :: Html
 headerWidget = do
   let Theme{..} = theme
   divClass "header" do
-    aClass "home-link" do
-      "href" =: "#"
-      span_ "Telikov."
-      span_ do
-        "Net"
-        "style" =: [st|color: #{showt primary}|]
-    ulClass "menu" do
-      li_ do a_ do "Seasons"; "href" =: printRoute IndexR
-      li_ do a_ do "About"; "href" =: printRoute AboutR
-    -- divClass "search" do
-    --   input_ do
-    --     "placeholder" =: "Search"
+    divClass "header-wrapper" do
+      divClass "header-left" do
+        linkTo IndexR_ do
+          "className" =:"home-link"
+          span_ "Telikov."
+          span_ do
+            "Net"
+            "style" =: [st|color: #{showt primary}|]
+        ulClass "menu" do
+          li_ do linkTo IndexR_ do div_ "Seasons"
+          li_ do linkTo AboutR do div_ "About"
+      divClass "search" do
+        input_ do
+          "placeholder" =: "Search"
+        searchIcon ("className" =: "search")
+--        xCircleIcon ("className" =: "x-circle")
     [style|
       .header
-        display: flex
-        align-items: center
         background: white
-        color: #{primaryText}
         height: #{unit * 5}
         width: 100%
-        box-shadow: 0 0 1px rgba(0,0,0,0.2)
+        box-shadow: 0 0 1px rgba(0,0,0,0.4)
         z-index: 2
         position: relative
+        padding: 0 #{unit * 2} 0 #{unit * 2}
+        box-sizing: border-box
+        .header-wrapper
+          height: 100%
+          display: flex
+          align-items: center
+          justify-content: space-between
+          margin: 0 auto
+          max-width: #{pageWidth}
+        .header-left
+          height: 100%
+          display: flex
+          align-items: center
       .home-link
         font-size: 33px
         color: rgba(0,0,0,0.9)
-        &:hover
-          background: black
-          color: white
         display: block
         height: 100%
         text-decoration: none
         display: flex
         align-items: center
-        padding: 0 #{unit * 2} 0 #{unit * 2}
+        padding: 0 #{unit} 0 #{unit}
+        &:hover
+          background: black
+          color: white
       .menu
-        margin: 0 #{unit * 2}
-        padding: 0
         display: flex
         align-items: center
+        margin: 0
+        padding: 0
+        height: 100%
         li
           list-style: none
           margin: 0
+          height: 100%
         li + li
           margin-left: #{unit * 2}
         a
+          display: flex
+          align-items: center
           color: #{primaryText}
           text-decoration: none
           text-transform: uppercase
           font-size: 13px
+          height: 100%
       .search
         padding: 0 #{unit * 2}
         height: 100%
         display: flex
         align-items: center
-        &:hover
-          background: rgba(0,0,0,0.05)
+        height: #{unit * 4}
+        box-sizing: border-box
+        border-radius: #{unit * 2}
+        border: solid 2px transparent
+        box-shadow: 0 0 2px rgba(0,0,0,0.4)
         input
+          padding-left: #{unit}
           border: none
           outline: none
           font-size: 16px
           background: transparent
-          font-weight: 600
+          &:focus
+            width: 400px
+        svg
+          opacity: 0.2
+        &:hover
+          border: solid 2px #{primary}
+          box-shadow: none
+          svg
+            opacity: 1
         |]
 
 header2Widget :: Html
@@ -141,14 +178,16 @@ header2Widget = do
       box-sizing: border-box
       padding: #{unit * 3}
       background: rgba(0,0,0,0.05)
-    .header-2 > *
-      max-width: #{pageWidth}
-      margin: 0 auto
-    .poster
-      object-fit: contain
-      height: 350px
-      float: left
-      padding-right: #{unit * 3}
+      p
+        margin-top: 0
+      & > *
+        max-width: #{pageWidth}
+        margin: 0 auto
+      .poster
+        object-fit: contain
+        height: 350px
+        float: left
+        padding-right: #{unit * 3}
     |]
 
 getSeasons :: (?conn :: Connection) => Text -> IO [(Season, [Episode])]
@@ -180,13 +219,14 @@ indexPage = do
       margin: 0 auto
     |]
 
-hashRouter :: forall a m. (HasParser U a, HtmlBase m) => a -> (a -> HtmlT m ()) -> HtmlT m a
-hashRouter def hashChange = do
+htmlRouter :: forall a m. (HasParser U a, HtmlBase m) => a -> (a -> HtmlT m ()) -> HtmlT m a
+htmlRouter def hashChange = do
   win <- Element <$> liftJSM (jsg ("window" :: Text))
   let
     parseRoute = do
-      hash <- fromJSValUnchecked =<< jsg ("location" :: Text) ! ("hash" :: Text)
-      pure $ fromMaybe def $ listToMaybe $ parseUrl @a (T.drop 1 hash)
+      search <- fromJSValUnchecked =<< jsg ("location" :: Text) ! ("search" :: Text)
+      pathname <- fromJSValUnchecked =<< jsg ("location" :: Text) ! ("pathname" :: Text)
+      pure $ fromMaybe def $ listToMaybe $ parseUrl @a (pathname <> search)
   route <- liftJSM parseRoute
   onEvent_ win "popstate" do
     liftJSM parseRoute >>= hashChange

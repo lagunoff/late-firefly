@@ -1,0 +1,32 @@
+import LateFirefly.Widget.Prelude
+    ( MonadIO(liftIO),
+      Text,
+      for_,
+      st,
+      TextShow(showt),
+      holdUniqDyn,
+      newDyn,
+      sync,
+      Html,
+      a_,
+      h3_,
+      iframe_,
+      li_,
+      p_,
+      divClass,
+      ulClass,
+      (=:),
+      attr,
+      dynClassList,
+      on_,
+      text,
+      (~:),
+      ht,
+      style,
+      theme,
+      Theme(Theme, unit, primary, primaryText, secondaryText,
+            thumbnailHeight, pageWidth) )
+import LateFirefly.TheOffice.Schema ( Episode(..) )
+import LateFirefly.DB ( sql, Connection, query )
+import LateFirefly.RPC.TH ( remote )
+import Data.List as L ( zip, (!!), head )

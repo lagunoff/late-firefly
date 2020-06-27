@@ -21,8 +21,8 @@ seasonItemWidget seasons = do
   for_ seasons \(Season{..}, episodes) -> mdo
     el' "div" do
       "className" =: "season"
-      aClass "season-header-link" do
-        "href" =: printRoute (SeasonR number)
+      linkTo (SeasonR (coerce number)) do
+        "className" =: "season-header-link"
         h3Class "season-header"
           [ht|Season #{showt number}|]
       divClass "wrapper" do
@@ -30,8 +30,8 @@ seasonItemWidget seasons = do
           "className" =: "episodes-list"
           for_ episodes \Episode{..} -> do
             li_ do
-              aClass "link" do
-                "href" =: printRoute (EpisodeR number code)
+              linkTo (EpisodeR (coerce number) (coerce code)) do
+                "className" =: "link"
                 img_ do
                   "src" =: thumbnail
                   "style" =: [st|width: #{showt thumbnailWidth}; height: #{showt thumbnailHeight}|]

@@ -25,7 +25,7 @@ theme = Theme
   , primaryText   = RGBA 0 0 0 0.87
   , secondaryText = RGBA 0 0 0 0.54
   , thumbnailHeight = PixelSize 170
-  , pageWidth       = PixelSize 1200 }
+  , pageWidth       = PixelSize 1600 }
 
 unPixelSize (PixelSize x) = x
 

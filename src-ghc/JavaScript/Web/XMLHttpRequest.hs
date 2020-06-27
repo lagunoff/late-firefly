@@ -8,7 +8,7 @@ import Control.Monad.IO.Class
 import GHCJS.Types
 import GHCJS.Marshal
 import GHCJS.Internal.Types
-import Data.Text.Encoding (encodeUtf8, decodeUtf8)
+import Data.Text.Encoding (encodeUtf8)
 import qualified Data.ByteString.Base64 as B64
 
 import qualified GHCJS.Buffer as Buffer
@@ -31,10 +31,6 @@ import JavaScript.TypedArray.ArrayBuffer (ArrayBuffer)
 import JavaScript.TypedArray.ArrayBuffer.Internal (SomeArrayBuffer(..))
 import JavaScript.Web.XMLHttpRequest.Internal
 import Language.Javascript.JSaddle hiding (textFromJSString)
-import GHCJS.Buffer
-import GHCJS.Buffer.Types
-import JavaScript.TypedArray.Internal.Types
-import Debug.Trace
 
 
 data Method = GET | POST | PUT | DELETE | Method JSString
@@ -139,6 +135,8 @@ xhr req =
             js_send (Just s) x
           TypedArrayData (SomeTypedArray t) ->
             js_send (Just t) x
+          FormData xs                       ->
+            fail "FormData is not yet supported"
           -- FormData xs                       -> do
           --   fd@(JSFormData fd') <- js_createFormData
           --   forM_ xs $ \(name, val) -> case val of
@@ -162,6 +160,7 @@ xhr req =
                               (\h -> getResponseHeader' h x)
           1 -> liftIO (throwIO XHRAborted)
           2 -> liftIO $ throwIO (XHRError "network request error")
+          _ -> error "impossible"
   in doRequest
 
 -- appendFormData :: JSString -> JSVal
@@ -207,7 +206,7 @@ arrayBufferToBase64 :: ArrayBuffer -> JSM JSString
 arrayBufferToBase64 ab = do
   toB64 <- eval $
     "(function (buffer) {\n" ++
-    "  return btoa(String.fromCharCode.apply(null, new Uint8Array(buffer)));" ++
+    "  return btoa(String.fromCharCode.apply(null, new Uint8Array(buffer)));\n" ++
     "})"
   s <- call toB64 valUndefined (coerce @_ @JSVal ab)
   fromJSValUnchecked s

@@ -10,7 +10,6 @@ module LateFirefly.DB.TH
 
 import Control.Applicative
 import Control.Lens
-import Data.ByteString as BS
 import Data.String as S
 import Data.List as L
 import Data.Text as T

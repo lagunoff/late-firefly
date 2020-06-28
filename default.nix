@@ -26,14 +26,12 @@ let
       url = "https://github.com/RyanGlScott/text-show/archive/56c643a05ef8529dab5850949daefd66cf421e44.tar.gz";
     };
 
-    tagsoup-lens = builtins.fetchGit {
-      url = "git@github.com:alpmestan/tagsoup-lens.git";
-      rev = "83ea5b820271f7d72767989b4f5663727229de95";
+    tagsoup-lens = builtins.fetchTarball {
+      url = "https://github.com/alpmestan/tagsoup-lens/archive/83ea5b820271f7d72767989b4f5663727229de95.tar.gz";
     };
 
-    tagsoup = builtins.fetchGit {
-      url = "git@github.com:lagunoff/tagsoup.git";
-      rev = "c61f55d615350cc2368484baf4608bb39e0b34e8";
+    tagsoup = builtins.fetchTarball {
+      url = "https://github.com/lagunoff/tagsoup/archive/c61f55d615350cc2368484baf4608bb39e0b34e8.tar.gz";
     };
   } // lib.optionalAttrs (builtins.pathExists ./locals.nix) (import ./locals.nix);
 

@@ -14,9 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
-    - uses: fusion-engineering/setup-git-credentials@v2
-      with:
-        credentials: ${{secrets.GIT_CREDENTIALS}}
     - name: Build action
       uses: ./build-docker-action # Uses an action in the root directory
       id: build
+      with:
+        credentials: ${{secrets.GIT_CREDENTIALS}}

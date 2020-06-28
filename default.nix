@@ -1,6 +1,8 @@
 { production ? true, minify ? production }:
 let
-  nixpkgs = import <nixpkgs> {};
+  nixpkgs = import (builtins.fetchTarball {
+    url = "https://github.com/NixOS/nixpkgs/archive/db5bbef31fa05b9634fa6ea9a5afbea463da88ea.tar.gz";
+  }) {};
 
   inherit (nixpkgs.pkgs.nix-gitignore) gitignoreSourcePure;
   inherit (nixpkgs) lib;

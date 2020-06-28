@@ -9,7 +9,10 @@ in with pkgs.dockerTools; buildImage {
     imageDigest = "sha256:2da921898aa6c89e2e60b1fb72d74525b8464b47412482c7f1cf77b8e707a099";
     sha256 = "17bhjbsv2crgngbnklz0wp22lplahahy5547bn209xngmp30izsb";
   };
-  contents = x.ghc.late-firefly.env.buildInputs ++ x.ghc.late-firefly.env.nativeBuildInputs ++ [
-    pkgs.bashInteractive pkgs.nix pkgs.git
+
+  contents =
+    x.ghc.late-firefly.env.buildInputs ++ x.ghc.late-firefly.env.nativeBuildInputs ++
+    x.ghcjs.late-firefly.env.buildInputs ++ x.ghcjs.late-firefly.env.nativeBuildInputs ++ [
+    pkgs.bashInteractive pkgs.git
   ];
 }

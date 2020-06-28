@@ -74,9 +74,8 @@ let
     })
   ];
 
-  reflex-platform = import (builtins.fetchGit {
-    url = "git@github.com:reflex-frp/reflex-platform.git";
-    rev = "846964a0895e819946c1a415202aee414d27cfa3";
+  reflex-platform = import (builtins.fetchTarball {
+    url = "https://github.com/reflex-frp/reflex-platform/archive/846964a0895e819946c1a415202aee414d27cfa3.tar.gz";
   }) { config.allowBroken = true; };
 
 in reflex-platform.project({ pkgs, ... }: {

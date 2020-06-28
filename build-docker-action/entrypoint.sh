@@ -1,5 +1,4 @@
-#!/bin/sh -l
+#!/bin/bash
 
-time=$(date)
+time=$(ghc --version)
 echo "::set-output name=time::$time"
-# nix-build -A ghc.late-firefly

@@ -1,4 +1,0 @@
-import Language.Javascript.JSaddle
-    ( eval, (!), (#), (<#), jsg, new, liftJSM )
-import Massaraksh.Text ( createElement, Html, div_, (=:) )
-import LateFirefly.Widget.Prelude ( void, Text, st )

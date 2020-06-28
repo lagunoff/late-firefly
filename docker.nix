@@ -13,6 +13,6 @@ in with pkgs.dockerTools; buildImage {
   contents =
     x.ghc.late-firefly.env.buildInputs ++ x.ghc.late-firefly.env.nativeBuildInputs ++
     x.ghcjs.late-firefly.env.buildInputs ++ x.ghcjs.late-firefly.env.nativeBuildInputs ++ [
-    pkgs.bashInteractive pkgs.git
+    pkgs.bashInteractive pkgs.nix pkgs.git
   ];
 }

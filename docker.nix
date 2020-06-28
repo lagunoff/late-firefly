@@ -10,6 +10,6 @@ in with pkgs.dockerTools; buildImage {
     sha256 = "17bhjbsv2crgngbnklz0wp22lplahahy5547bn209xngmp30izsb";
   };
   contents = x.ghc.late-firefly.env.buildInputs ++ x.ghc.late-firefly.env.nativeBuildInputs ++ [
-    pkgs.bashInteractive pkgs.nix
+    pkgs.bashInteractive pkgs.nix pkgs.git
   ];
 }

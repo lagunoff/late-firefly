@@ -16,6 +16,7 @@ data Theme = Theme
   , primary         :: RGBA
   , primaryText     :: RGBA
   , secondaryText   :: RGBA
+  , borderColor     :: RGBA
   , thumbnailHeight :: PixelSize
   , pageWidth       :: PixelSize }
 
@@ -24,8 +25,9 @@ theme = Theme
   , primary       = RGBA 203 121 34 1
   , primaryText   = RGBA 0 0 0 0.87
   , secondaryText = RGBA 0 0 0 0.54
-  , thumbnailHeight = PixelSize 170
-  , pageWidth       = PixelSize 1600 }
+  , borderColor   = RGBA 0 0 0 0.20
+  , thumbnailHeight = PixelSize 150
+  , pageWidth       = PixelSize 1190 }
 
 unPixelSize (PixelSize x) = x
 

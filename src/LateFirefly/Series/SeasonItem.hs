@@ -2,7 +2,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE JavaScriptFFI #-}
 {-# LANGUAGE ForeignFunctionInterface #-}
-module LateFirefly.Index.SeasonItem where
+module LateFirefly.Series.SeasonItem where
 
 import LateFirefly.Widget.Prelude
 import LateFirefly.TheOffice.Schema
@@ -49,8 +49,6 @@ seasonItemWidget seasons = do
             liftJSM (scrollHoriz 1 wrapperEl)
     blank
   [style|
-    .season .wrapper:hover .chevron
-      opacity: 1
     .season
       .link
         text-decoration: none
@@ -59,28 +57,32 @@ seasonItemWidget seasons = do
         h4
           margin: 0
           font-size: 14px
-          font-weight: 400
+          font-weight: 600
+          color: #{primaryText}
           &:hover
-            text-decoration: underline
+            color: #{primary}
       h3
         text-transform: uppercase
         font-weight: 400
         font-size: 16px
         margin-bottom: 8px
-        margin-top: 37px
+        margin-top: #{unit * 3}
       .season-header-link
         text-decoration: none
+      .episodes-list::-webkit-scrollbar
+        display: none
       .episodes-list
         width: 100%
-        overflow: hidden
-        margin: 0
+        overflow-x: scroll
+        -ms-overflow-style: none
+        scrollbar-width: none
         display: flex
         padding: 0
         scroll-behavior: smooth
         li
           list-style: none
           img
-            border-radius: 6px
+            border-radius: 0px
         li + li
           margin-left: #{unit * 2}
       .chevron
@@ -88,7 +90,7 @@ seasonItemWidget seasons = do
         position: absolute
         top: #{(thumbnailHeight / 2) - (chevronWidth / 2)}
         z-index: 10
-        opacity: 0
+        opacity: 0.65
         cursor: pointer
         border: none
         padding: 0
@@ -102,6 +104,7 @@ seasonItemWidget seasons = do
         box-shadow: 0 4px 6px 0 rgba(0,0,0,0.05), 0 1px 0 1px rgba(0,0,0,0.05), 0 0 0 1px rgba(0,0,0,0.05)
         &:hover
           box-shadow: 0 10px 20px rgba(0,0,0,0.19), 0 6px 6px rgba(0,0,0,0.23);
+          opacity: 1
       .chevron svg
         display: block
       .chevron-left
@@ -111,7 +114,7 @@ seasonItemWidget seasons = do
       .placeholder > *
         width: 300px
         height: 200px
-        border-radius: 6px
+        border-radius: 0px
         background: rgba(155, 147, 127, 0.06)
       .wrapper
         position: relative

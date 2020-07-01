@@ -54,11 +54,15 @@ mainWith = \case
       dbpath = getField @"dbPath" opts
     S.withConnection (T.unpack dbpath) \conn -> let
       rpcApp = let ?conn = conn in mkApplication $readDynSPT
-      withGzip = gzip def {gzipFiles=GzipPreCompressed GzipIgnore, gzipCheckMime=const True}
-      sApp = html5Router $ withGzip $ staticApp $ defaultFileServerSettings (T.unpack docroot)
-      in Warp.run port \case
+      withGzip = gzip def
+        { gzipFiles=GzipPreCompressed GzipIgnore
+        , gzipCheckMime=const True }
+      staticApp' = html5Router $ withGzip $ staticApp
+        $ defaultFileServerSettings (T.unpack docroot)
+      sett = setServerName "" . setPort port $ defaultSettings
+      in Warp.runSettings sett \case
         req@(pathInfo -> "rpc":_) -> rpcApp req
-        req                       -> sApp req
+        req                       -> staticApp' req
   Migrate{dbpath=mayDb,..} -> do
     let
       defDb = T.unpack $ getField @"dbPath" (def @WebOpts)

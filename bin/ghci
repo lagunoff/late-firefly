@@ -5,4 +5,4 @@ CABAL_ARGS=$(cd $DIR; cabal-cargs)
 OUT_ARGS="-outputdir=$DIR/../out"
 FORWARD_ARGS=$@
 
-cached-nix-shell $DIR/../default.nix -A shells.ghc --run "ghc $CABAL_ARGS $OUT_ARGS -fobject-code -O0 --interactive $FORWARD_ARGS"
+cached-nix-shell $DIR/../default.nix -A shells.ghc --run "ghc $CABAL_ARGS $OUT_ARGS -O0 --interactive $FORWARD_ARGS"

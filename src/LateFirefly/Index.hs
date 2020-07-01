@@ -1,53 +1,44 @@
-{-# LANGUAGE RecursiveDo #-}
-{-# LANGUAGE StaticPointers #-}
 module LateFirefly.Index
-  ( Model(..)
+  ( IndexState(..)
   , indexWidget
   ) where
 
 import Control.Lens hiding ((#))
 import Control.Monad.Trans
-import Data.List as L
 import Data.Maybe
 import Data.Text as T
-import Data.UUID.Types as U
-import GHC.Records
 import Language.Javascript.JSaddle
-import LateFirefly.DB
-import LateFirefly.Index.Episode
-import LateFirefly.Index.Season
-import LateFirefly.Index.SeasonItem
+import LateFirefly.Series.Episode
+import LateFirefly.Series.Season
 import LateFirefly.Prelude
-import LateFirefly.RPC.TH
 import LateFirefly.Router
-import LateFirefly.TheOffice.Schema
 import LateFirefly.Widget.Prelude
 import LateFirefly.Disqus
+import LateFirefly.Series
 import LateFirefly.Icons
 
-data Model = Model
+data IndexState = IndexState
   { _idx_route :: Route
   } deriving (Show)
 
-makeLenses ''Model
+makeLenses ''IndexState
 
 indexWidget :: Html
 indexWidget = mdo
   let Theme{..} = theme
   headerWidget
   setupDisqus
---  eitherDecode
-  route <- htmlRouter IndexR_ \r ->
+  route <- htmlRouter SeriesR \r ->
     liftIO $ sync $ modify (idx_route .~ r)
-  (model, modify) <- liftIO $ newDyn (Model route)
+  (model, modify) <- liftIO $ newDyn (IndexState route)
   divClass "root" do
     div_ do
       let routeDyn = holdUniqDyn (fmap _idx_route model)
       dynHtml $ routeDyn <&> \case
-        IndexR_      -> indexPage <* restoreState
-        AboutR       -> aboutPage <* restoreState
-        SeasonR{..}  -> seasonWidget (coerce season) <* restoreState
-        EpisodeR{..} -> episodeWidget (coerce episode) <* restoreState
+        HomeR_       -> homeWidget >>= (<* restoreState)
+        SeriesR      -> seriesWidget >>= (<* restoreState)
+        SeasonR{..}  -> seasonWidget (coerce season) >>= (<* restoreState)
+        EpisodeR{..} -> episodeWidget (coerce episode) >>= (<* restoreState)
     embedDisqus "home" "Telikov.Net — Home"
 
   [style|
@@ -62,35 +53,74 @@ indexWidget = mdo
         color: #{primary}
   |]
 
+homeWidget :: HtmlM Html
+homeWidget = do
+  let Theme{..} = theme
+  pure do
+    divClass "home" do
+      divClass "home-wrapper" do
+        h1_ do
+          "Telikov.Net"
+        div_ do
+          input_ do
+            "type" =: "search"
+    [style|
+      .home
+        padding: 0 #{unit * 2} 0 #{unit * 2}
+        box-sizing: border-box
+      .home-wrapper
+        margin: 0 auto
+        max-width: #{pageWidth}
+        text-align: center
+        h1
+          margin-top: 160px
+          font-size: 60px
+          font-weight: 400
+        input[type=search]
+          width: 540px
+          height: 43px
+          border-radius: 3px
+          outline: none
+          border: solid 1px #{borderColor}
+          padding: 0px 8px
+          font-size: 18px
+          &:focus
+            border: solid 1px #{primary}
+    |]
+
 headerWidget :: Html
 headerWidget = do
   let Theme{..} = theme
   divClass "header" do
     divClass "header-wrapper" do
       divClass "header-left" do
-        linkTo IndexR_ do
+        linkTo HomeR_ do
           "className" =:"home-link"
           span_ "Telikov."
           span_ do
             "Net"
             "style" =: [st|color: #{showt primary}|]
         ulClass "menu" do
-          li_ do linkTo IndexR_ do div_ "Seasons"
-          li_ do linkTo AboutR do div_ "About"
+          li_ do linkTo SeriesR do div_ "Series"
+          li_ do linkTo SeriesR do div_ "Movies"
+          li_ do linkTo SeriesR do div_ "Genre"
+          li_ do linkTo SeriesR do div_ "Top IMBd"
+          li_ do linkTo SeriesR do div_ "A-Z List"
       divClass "search" do
         input_ do
           "placeholder" =: "Search"
         searchIcon ("className" =: "search")
---        xCircleIcon ("className" =: "x-circle")
     [style|
+      body
+        background: rgba(0,0,0,0.04)
       .header
         background: white
-        height: #{unit * 5}
+        height: #{unit * 7}
         width: 100%
-        box-shadow: 0 0 1px rgba(0,0,0,0.4)
+        box-shadow: 0 0 16px rgba(0,0,0,0.1)
         z-index: 2
         position: relative
-        padding: 0 #{unit * 2} 0 #{unit * 2}
+        padding: 0 #{unit * 3} 0 #{unit * 3}
         box-sizing: border-box
         .header-wrapper
           height: 100%
@@ -112,22 +142,22 @@ headerWidget = do
         display: flex
         align-items: center
         padding: 0 #{unit} 0 #{unit}
+        margin-left: -#{unit}
         &:hover
           background: black
           color: white
       .menu
         display: flex
         align-items: center
-        margin: 0
+        margin: 0 0 0 #{unit * 2}
         padding: 0
         height: 100%
         li
           list-style: none
           margin: 0
           height: 100%
-        li + li
-          margin-left: #{unit * 2}
         a
+          padding: 0 #{unit}
           display: flex
           align-items: center
           color: #{primaryText}
@@ -140,7 +170,7 @@ headerWidget = do
         height: 100%
         display: flex
         align-items: center
-        height: #{unit * 4}
+        height: #{(unit * 4) - 2}
         box-sizing: border-box
         border-radius: #{unit * 2}
         border: solid 2px transparent
@@ -162,64 +192,7 @@ headerWidget = do
             opacity: 1
         |]
 
-header2Widget :: Html
-header2Widget = do
-  let Theme{..} = theme
-  divClass  "header-2" do
-    div_ do
-      img_ do
-        "className" =: "poster"
-        "src" =: "https://m.media-amazon.com/images/M/MV5BMDNkOTE4NDQtMTNmYi00MWE0LWE4ZTktYTc0NzhhNWIzNzJiXkEyXkFqcGdeQXVyMzQ2MDI5NjU@._V1_SY999_CR0,0,665,999_AL_.jpg"
-      p_ [ht|The Office is an American mockumentary sitcom television series that depicts the everyday lives of office employees in the Scranton, Pennsylvania, branch of the fictional Dunder Mifflin Paper Company. It aired on NBC from March 24, 2005, to May 16, 2013, lasting a total of nine seasons.[1] It is an adaptation of the 2001-2003 BBC series of the same name, being adapted for American television by Greg Daniels, a veteran writer for Saturday Night Live, King of the Hill, and The Simpsons. It was co-produced by Daniels's Deedle-Dee Productions, and Reveille Productions (later Shine America), in association with Universal Television. The original executive producers were Daniels, Howard Klein, Ben Silverman, Ricky Gervais, and Stephen Merchant, with numerous others being promoted in later seasons.|]
-      div_ ("style" =: "clear: both")
-  [style|
-    .header-2
-      width: 100%
-      box-sizing: border-box
-      padding: #{unit * 3}
-      background: rgba(0,0,0,0.05)
-      p
-        margin-top: 0
-      & > *
-        max-width: #{pageWidth}
-        margin: 0 auto
-      .poster
-        object-fit: contain
-        height: 350px
-        float: left
-        padding-right: #{unit * 3}
-    |]
-
-getSeasons :: (?conn :: Connection) => Text -> IO [(Season, [Episode])]
-getSeasons txt = do
-  seasons <- selectFrom_ @Season [sql|where 1 order by `number`|]
-  let seasonIds = T.intercalate ", " $ escText . U.toText . unUUID5 . getField @"uuid" <$> seasons
-  episodes <- selectFrom_ @Episode [sql|where season_id in (#{seasonIds}) order by `code`|]
-  pure $ seasons <&> \s@Season{uuid} -> (s, L.filter ((==uuid) . getField @"seasonId") episodes)
-
-aboutPage :: Html
-aboutPage = do
-  div_ do
-    h1_ do
-      "About Page Works!!!"
-
-indexPage :: Html
-indexPage = do
-  let Theme{..} = theme
-  header2Widget
-  ss <- $(remote 'getSeasons) ""
-  divClass "seasons" do
-    div_ do
-      seasonItemWidget ss
-  [style|
-    .seasons
-      margin: 0 #{unit * 3}
-    .seasons > *
-      max-width: #{pageWidth}
-      margin: 0 auto
-    |]
-
-htmlRouter :: forall a m. (HasParser U a, HtmlBase m) => a -> (a -> HtmlT m ()) -> HtmlT m a
+htmlRouter :: forall a m. (HasParser U a, HtmlBase m, Show a) => a -> (a -> HtmlT m ()) -> HtmlT m a
 htmlRouter def hashChange = do
   win <- Element <$> liftJSM (jsg ("window" :: Text))
   let

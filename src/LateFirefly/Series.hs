@@ -13,10 +13,8 @@ import LateFirefly.RPC.TH
 import LateFirefly.TheOffice.Schema
 import LateFirefly.Widget.Prelude
 
-
-
-getSeasons :: (?conn :: Connection) => Text -> IO [(Season, [Episode])]
-getSeasons txt = do
+apiGetSeasons :: (?conn :: Connection) => Text -> IO [(Season, [Episode])]
+apiGetSeasons txt = do
   seasons <- selectFrom_ @Season [sql|where 1 order by `number`|]
   let seasonIds = T.intercalate ", " $ escText . U.toText . unUUID5 . getField @"uuid" <$> seasons
   episodes <- selectFrom_ @Episode [sql|where season_id in (#{seasonIds}) order by `code`|]
@@ -24,7 +22,7 @@ getSeasons txt = do
 
 seriesWidget :: HtmlM Html
 seriesWidget = do
-  ss <- $(remote 'getSeasons) ""
+  ss <- $(remote 'apiGetSeasons) ""
   pure do
     let Theme{..} = theme
     header2Widget

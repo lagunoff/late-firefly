@@ -10,7 +10,7 @@ import LateFirefly.Router
 import LateFirefly.Icons
 import Data.Text as T
 import Data.Char
-import Language.Javascript.JSaddle
+
 
 seasonItemWidget :: [(Season, [Episode])] -> Html
 seasonItemWidget seasons = do
@@ -18,7 +18,10 @@ seasonItemWidget seasons = do
     Theme{..} = theme
     thumbnailWidth = thumbnailHeight * 3 / 2
     chevronWidth = unit * 5
+    scrollRelTo cw sw = max 0 . min (sw - cw) . (+ cw)
   for_ seasons \(Season{..}, episodes) -> mdo
+    (size, mSize) <- liftIO (newDyn (Nothing::Maybe (Int, Int)))
+    (scrollLeft, mScrollLeft) <- liftIO (newDyn (0::Int))
     el' "div" do
       "className" =: "season"
       linkTo (SeasonR (coerce number)) do
@@ -26,8 +29,10 @@ seasonItemWidget seasons = do
         h3Class "season-header"
           [ht|Season #{showt number}|]
       divClass "wrapper" do
-        wrapperEl <- el' "ul" do
+        ul_ do
           "className" =: "episodes-list"
+          "scrollLeft" ~: scrollLeft
+          elementSize mSize
           for_ episodes \Episode{..} -> do
             li_ do
               linkTo (EpisodeR (coerce number) (coerce code)) do
@@ -40,13 +45,21 @@ seasonItemWidget seasons = do
           -- liClass "placeholder" $
           --   div_ blank
         buttonClass "chevron chevron-left" do
+          "tabindex" `attr` "-1"
+          toggleAttr "disabled" $ fmap (==0) scrollLeft
           chevronLeft_
-          on_ "click" do
-            liftJSM (scrollHoriz (-1) wrapperEl)
+          on_ "click" $ liftIO do
+            dyn_read size >>= mapM_ \(cw, sw) -> sync $
+              mScrollLeft (scrollRelTo (-cw) sw)
         buttonClass "chevron chevron-right" do
+          "tabindex" `attr` "-1"
+          toggleAttr "disabled" $
+            liftA2 ((fromMaybe False .) . liftA2 \x (cw, sw) -> x >= sw - cw)
+              (fmap Just scrollLeft) size
           chevronRight_
-          on_ "click" do
-            liftJSM (scrollHoriz 1 wrapperEl)
+          on_ "click" $ liftIO do
+            dyn_read size >>= mapM_ \(cw, sw) -> sync $
+              mScrollLeft (scrollRelTo cw sw)
     blank
   [style|
     .season
@@ -82,7 +95,7 @@ seasonItemWidget seasons = do
         li
           list-style: none
           img
-            border-radius: 0px
+            border-radius: 5px
         li + li
           margin-left: #{unit * 2}
       .chevron
@@ -90,7 +103,6 @@ seasonItemWidget seasons = do
         position: absolute
         top: #{(thumbnailHeight / 2) - (chevronWidth / 2)}
         z-index: 10
-        opacity: 0.65
         cursor: pointer
         border: none
         padding: 0
@@ -105,12 +117,16 @@ seasonItemWidget seasons = do
         &:hover
           box-shadow: 0 10px 20px rgba(0,0,0,0.19), 0 6px 6px rgba(0,0,0,0.23);
           opacity: 1
+        &[disabled]
+          opacity: 0.65
+        &[disabled]:hover
+          box-shadow: 0 4px 6px 0 rgba(0,0,0,0.05), 0 1px 0 1px rgba(0,0,0,0.05), 0 0 0 1px rgba(0,0,0,0.05)
       .chevron svg
         display: block
       .chevron-left
-        left: #{unit}
+        left: -#{chevronWidth *  0.5}
       .chevron-right
-        right: #{unit}
+        right: -#{chevronWidth *  0.5}
       .placeholder > *
         width: 300px
         height: 200px
@@ -122,17 +138,17 @@ seasonItemWidget seasons = do
   where
     episodeNumber = T.dropWhile (=='0') . T.takeWhileEnd isDigit
 
-#ifndef __GHCJS__
-scrollHoriz :: Int -> Element -> JSM ()
-scrollHoriz dir elm = do
-  fn <- eval [st|
-    (function(dir, elm) {
-      if (dir > 0) elm.scrollLeft += elm.clientWidth;
-      else elm.scrollLeft -= elm.clientWidth;
-    })|]
-  void $ call fn jsUndefined (dir, elm)
-#else
-foreign import javascript unsafe
-  "if ($1 > 0) { $2.scrollLeft += $2.clientWidth; } else { $2.scrollLeft -= $2.clientWidth; }"
-  scrollHoriz :: Int -> Element -> JSM ()
-#endif
+-- #ifndef __GHCJS__
+-- scrollHoriz :: Int -> Element -> JSM ()
+-- scrollHoriz dir elm = do
+--   fn <- eval [st|
+--     (function(dir, elm) {
+--       if (dir > 0) elm.scrollLeft += elm.clientWidth;
+--       else elm.scrollLeft -= elm.clientWidth;
+--     })|]
+--   void $ call fn jsUndefined (dir, elm)
+-- #else
+-- foreign import javascript unsafe
+--   "if ($1 > 0) { $2.scrollLeft += $2.clientWidth; } else { $2.scrollLeft -= $2.clientWidth; }"
+--   scrollHoriz :: Int -> Element -> JSM ()
+-- #endif

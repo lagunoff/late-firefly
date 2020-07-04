@@ -270,6 +270,9 @@ instance DbField Text where
 instance DbField a => DbField (Maybe a) where
   columnInfo _ = (columnInfo (Proxy @a)) {nullable = True}
 
+instance DbField ByteString where
+  columnInfo _ = ColumnInfo BlobColumn False False Nothing
+
 instance (DbTable t, Typeable (Id t)) => DbField (Id t) where
   columnInfo _ = ColumnInfo IntegerColumn False False $ Just (tName, fName)
     where

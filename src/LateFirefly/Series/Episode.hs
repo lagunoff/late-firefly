@@ -1,4 +1,3 @@
-{-# LANGUAGE StaticPointers #-}
 module LateFirefly.Series.Episode (episodeWidget) where
 
 import LateFirefly.Widget.Prelude
@@ -6,13 +5,15 @@ import LateFirefly.TheOffice.Schema
 import LateFirefly.DB
 import LateFirefly.RPC.TH
 import Data.List as L
+import LateFirefly.Series.Rules
+import Data.Generics.Product
 
 episodeWidget :: Text -> HtmlM Html
 episodeWidget epCode = do
   Episode{..} <- $(remote 'getEpisode) epCode
   pure do
     let Theme{..} = theme
-    (holdUniqDyn -> linkIdx, modifyIdx) <- liftIO (newDyn 1)
+    (holdUniqDyn -> linkIdx, modifyIdx) <- liftIO (newDyn 0)
     divClass "episode-root" do
       h3_ [ht|Episode #{code}|]
       ulClass "tabs" $ for_ (L.zip links [0..]) \(_, idx) -> do
@@ -55,8 +56,10 @@ episodeWidget epCode = do
 
 getEpisode :: (?conn :: Connection) => Text -> IO Episode
 getEpisode epCode = do
-  L.head <$> query [sql|
+  episode <- L.head <$> flip query [epCode] [sql|
     select e.* from `episode` e
       left join `season` s on e.season_id=s.uuid
     where e.`code`=?
-  |] [epCode]
+  |]
+  links <- applyLinkRule' "iwatchtheoffice.com" $ getField @"links" episode
+  pure episode {links=links}

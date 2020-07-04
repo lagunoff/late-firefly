@@ -77,15 +77,18 @@ homeWidget = do
           font-size: 60px
           font-weight: 400
         input[type=search]
-          width: 540px
-          height: 43px
+          display: block
+          width: 100%
+          margin: 0 auto
+          max-width: #{unit * 70}
+          height: #{unit * 6}
           border-radius: 3px
           outline: none
           border: solid 1px #{borderColor}
           padding: 0px 8px
           font-size: 18px
           &:focus
-            border: solid 1px #{primary}
+            border: solid 2px #{primary}
     |]
 
 headerWidget :: Html
@@ -104,7 +107,7 @@ headerWidget = do
           li_ do linkTo SeriesR do div_ "Series"
           li_ do linkTo SeriesR do div_ "Movies"
           li_ do linkTo SeriesR do div_ "Genre"
-          li_ do linkTo SeriesR do div_ "Top IMBd"
+          li_ do linkTo SeriesR do div_ "Top IMDB"
           li_ do linkTo SeriesR do div_ "A-Z List"
       divClass "search" do
         input_ do

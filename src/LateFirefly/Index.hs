@@ -33,19 +33,29 @@ indexWidget = mdo
   (model, modify) <- liftIO $ newDyn (IndexState route)
   divClass "root" do
     div_ do
-      let routeDyn = holdUniqDyn (fmap _idx_route model)
-      dynHtml $ routeDyn <&> \case
-        HomeR_       -> homeWidget >>= (<* restoreState)
-        SeriesR      -> seriesWidget >>= (<* restoreState)
-        SeasonR{..}  -> seasonWidget (coerce season) >>= (<* restoreState)
-        EpisodeR{..} -> episodeWidget (coerce episode) >>= (<* restoreState)
+      let
+        routeDyn = holdUniqDyn (fmap _idx_route model)
+        withRestore = ((<* restoreState) <=<)
+      dynHtml $ routeDyn <&> withRestore \case
+        HomeR_       -> homeWidget
+        SeriesR      -> seriesWidget
+        SeasonR{..}  -> seasonWidget (coerce season)
+        EpisodeR{..} -> episodeWidget (coerce episode)
     embedDisqus "home" "Telikov.Net — Home"
-
+  footerWidget
   [style|
     html, body, body *
       font-family: Arial, sans-serif
+    .root
+      padding-bottom: calc(150px + #{unit * 6})
+    html
+      height:100%
     body
       margin: 0
+      min-height:100%
+      padding:0
+      margin:0
+      position:relative
     body a
       color: #{primaryText}
       text-decoration: none
@@ -72,8 +82,8 @@ homeWidget = do
         margin: 0 auto
         max-width: #{pageWidth}
         text-align: center
+        padding: 160px 0 160px 0
         h1
-          margin-top: 160px
           font-size: 60px
           font-weight: 400
         input[type=search]
@@ -136,64 +146,119 @@ headerWidget = do
           height: 100%
           display: flex
           align-items: center
+        .home-link
+          font-size: 33px
+          color: rgba(0,0,0,0.9)
+          display: block
+          height: 100%
+          text-decoration: none
+          display: flex
+          align-items: center
+          padding: 0 #{unit} 0 #{unit}
+          margin-left: -#{unit}
+          &:hover
+            background: black
+            color: white
+        .menu
+          display: flex
+          align-items: center
+          margin: 0 0 0 #{unit * 2}
+          padding: 0
+          height: 100%
+          li
+            list-style: none
+            margin: 0
+            height: 100%
+          a
+            padding: 0 #{unit}
+            display: flex
+            align-items: center
+            color: #{primaryText}
+            text-decoration: none
+            text-transform: uppercase
+            font-size: 13px
+            height: 100%
+            &:hover
+              color: #{primary}
+        .search
+          padding: 0 #{unit * 2}
+          height: 100%
+          display: flex
+          align-items: center
+          height: #{(unit * 4) - 2}
+          box-sizing: border-box
+          border-radius: #{unit * 2}
+          border: solid 2px transparent
+          box-shadow: 0 0 2px rgba(0,0,0,0.4)
+          input
+            padding-left: #{unit}
+            border: none
+            outline: none
+            font-size: 16px
+            background: transparent
+            &:focus
+              width: 400px
+          svg
+            opacity: 0.2
+          &:hover
+            border: solid 2px #{primary}
+            box-shadow: none
+            svg
+              opacity: 1
+        |]
+
+footerWidget :: Html
+footerWidget = do
+  let Theme{..} = theme
+  divClass "footer" do
+    divClass "footer-wrapper" do
+      div_ do
+        ulClass "menu" do
+          li_ do linkTo SeriesR do "Series"
+          li_ do linkTo SeriesR do "Movies"
+          li_ do linkTo SeriesR do "Genre"
+          li_ do linkTo SeriesR do "Top IMDB"
+          li_ do linkTo SeriesR do "A-Z List"
+      div_ do
+        linkTo HomeR_ do
+          "className" =:"home-link"
+          span_ "Telikov."
+          span_ do
+            "Net"
+            "style" =: [st|color: #{showt primary}|]
+  [style|
+    .footer
+      margin-top: #{unit * 8}
+      height: 150px
+      background: rgba(0,0,0,0.9)
+      color: rgba(255,255,255,0.87)
+      position:absolute
+      bottom:0
+      width:100%
+      a
+        color: rgba(255,255,255,0.87)
+      .footer-wrapper
+        display: flex
+        align-items: top
+        justify-content: space-between
+        margin: 0 auto
+        max-width: #{pageWidth}
       .home-link
         font-size: 33px
-        color: rgba(0,0,0,0.9)
         display: block
-        height: 100%
         text-decoration: none
         display: flex
         align-items: center
-        padding: 0 #{unit} 0 #{unit}
-        margin-left: -#{unit}
+        margin-top: #{unit * 3}
+        color: rgba(255,255,255,0.87)
         &:hover
-          background: black
-          color: white
+          color: rgba(255,255,255,0.87)
       .menu
-        display: flex
-        align-items: center
-        margin: 0 0 0 #{unit * 2}
         padding: 0
-        height: 100%
+        margin: #{unit * 3} 0 0 0
         li
           list-style: none
-          margin: 0
-          height: 100%
-        a
-          padding: 0 #{unit}
-          display: flex
-          align-items: center
-          color: #{primaryText}
-          text-decoration: none
-          text-transform: uppercase
-          font-size: 13px
-          height: 100%
-      .search
-        padding: 0 #{unit * 2}
-        height: 100%
-        display: flex
-        align-items: center
-        height: #{(unit * 4) - 2}
-        box-sizing: border-box
-        border-radius: #{unit * 2}
-        border: solid 2px transparent
-        box-shadow: 0 0 2px rgba(0,0,0,0.4)
-        input
-          padding-left: #{unit}
-          border: none
-          outline: none
-          font-size: 16px
-          background: transparent
-          &:focus
-            width: 400px
-        svg
-          opacity: 0.2
-        &:hover
-          border: solid 2px #{primary}
-          box-shadow: none
-          svg
-            opacity: 1
-        |]
+  |]
 
 htmlRouter :: forall a m. (HasParser U a, HtmlBase m, Show a) => a -> (a -> HtmlT m ()) -> HtmlT m a
 htmlRouter def hashChange = do

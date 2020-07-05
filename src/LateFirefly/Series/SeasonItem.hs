@@ -72,7 +72,7 @@ seasonItemWidget seasons = do
         h4
           margin: 0
           font-size: 14px
-          font-weight: 600
+          font-weight: 400
           color: #{primaryText}
           &:hover
             color: #{primary}

@@ -16,22 +16,25 @@ import Text.Shakespeare.Text as X (st)
 import qualified Data.Text.Lazy as LT
 
 data Theme = Theme
-  { unit            :: PixelSize
-  , primary         :: RGBA
-  , primaryText     :: RGBA
-  , secondaryText   :: RGBA
-  , borderColor     :: RGBA
-  , thumbnailHeight :: PixelSize
-  , pageWidth       :: PixelSize }
+  { unit           :: PixelSize
+  , primary        :: RGBA
+  , primaryText    :: RGBA
+  , secondaryText  :: RGBA
+  , borderColor    :: RGBA
+  , thumbnailWidth :: PixelSize
+  , pageWidth      :: PixelSize
+  , thumbnailBorderRadius :: PixelSize
+  }
 
-theme = Theme
-  { unit          = PixelSize 8
-  , primary       = RGBA 203 121 34 1
-  , primaryText   = RGBA 0 0 0 0.87
-  , secondaryText = RGBA 0 0 0 0.54
-  , borderColor   = RGBA 0 0 0 0.20
-  , thumbnailHeight = PixelSize 150
-  , pageWidth       = PixelSize 1190 }
+theme = Theme{..} where
+  unit           = PixelSize 8
+  primary        = RGBA 203 121 34 1
+  primaryText    = RGBA 0 0 0 0.87
+  secondaryText  = RGBA 0 0 0 0.54
+  borderColor    = RGBA 0 0 0 0.20
+  thumbnailWidth = PixelSize 225
+  pageWidth      = (thumbnailWidth + unit) * 5 - unit
+  thumbnailBorderRadius = PixelSize 5
 
 unPixelSize (PixelSize x) = x
 
@@ -70,7 +73,8 @@ ht = st{quoteExp=qExp} where
 data RGBA = RGBA Word8 Word8 Word8 Double
 
 instance ToCss RGBA where
-  toCss (RGBA r g b a) = fromText $ "rgba(" <> showt r <> ", " <> showt g <> ", " <> showt b <> ", " <> showt a <> ")"
+  toCss (RGBA r g b a) = fromText $
+    "rgba(" <> showt r <> ", " <> showt g <> ", " <> showt b <> ", " <> showt a <> ")"
 
 instance TextShow PixelSize where
   showb = toCss

@@ -16,13 +16,15 @@ seasonItemWidget :: [(Season, [Episode])] -> Html
 seasonItemWidget seasons = do
   let
     Theme{..} = theme
-    thumbnailWidth = thumbnailHeight * 3 / 2
+    thumbnailHeight = thumbnailWidth * 2 / 3
     chevronWidth = unit * 5
-    scrollRelTo cw sw = max 0 . min (sw - cw) . (+ cw)
+    gap = unit
+    unGap = unPixelSize gap
+    scrollRelTo cw sw = max 0 . min (sw - cw) . (+ (cw + round unGap))
   for_ seasons \(Season{..}, episodes) -> mdo
     (size, mSize) <- liftIO (newDyn (Nothing::Maybe (Int, Int)))
     (scrollLeft, mScrollLeft) <- liftIO (newDyn (0::Int))
-    el' "div" do
+    div_ do
       "className" =: "season"
       linkTo (SeasonR (coerce number)) do
         "className" =: "season-header-link"
@@ -95,9 +97,10 @@ seasonItemWidget seasons = do
         li
           list-style: none
           img
-            border-radius: 5px
+            border-radius: #{thumbnailBorderRadius}
+            object-fit: cover
         li + li
-          margin-left: #{unit * 2}
+          margin-left: #{gap}
       .chevron
         outline: none
         position: absolute
@@ -130,7 +133,7 @@ seasonItemWidget seasons = do
       .placeholder > *
         width: 300px
         height: 200px
-        border-radius: 0px
+        border-radius: #{thumbnailBorderRadius}
         background: rgba(155, 147, 127, 0.06)
       .wrapper
         position: relative

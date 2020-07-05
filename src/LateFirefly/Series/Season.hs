@@ -17,7 +17,7 @@ seasonWidget sNum = do
   pure do
     let
       Theme{..} = theme
-      thumbnailWidth = thumbnailHeight * 3 / 2
+      thumbnailHeight = thumbnailWidth * 2 / 3
     divClass "season" do
       ul_ $ for_ episodes \Episode{..} -> do
         li_ do
@@ -35,7 +35,7 @@ seasonWidget sNum = do
         max-width: #{pageWidth}
         margin: 0 auto
         img
-          border-radius: 0px
+          border-radius: #{thumbnailBorderRadius}
         h3
           text-transform: uppercase
           font-weight: 400

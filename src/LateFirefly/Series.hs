@@ -7,6 +7,7 @@ import Data.List as L
 import Data.Text as T
 import Data.UUID.Types as U
 import GHC.Records
+import LateFirefly.Router
 import LateFirefly.DB
 import LateFirefly.Series.SeasonItem
 import LateFirefly.RPC.TH
@@ -20,15 +21,15 @@ apiGetSeasons txt = do
   episodes <- selectFrom_ @Episode [sql|where season_id in (#{seasonIds}) order by `code`|]
   pure $ seasons <&> \s@Season{uuid} -> (s, L.filter ((==uuid) . getField @"seasonId") episodes)
 
-seriesWidget :: HtmlM Html
-seriesWidget = do
-  ss <- $(remote 'apiGetSeasons) ""
+seriesWidget :: SeriesRoute -> HtmlM Html
+seriesWidget r@SeriesRoute{..} = do
+  ss <- $(remote 'apiGetSeasons) (coerce series)
   pure do
     let Theme{..} = theme
     header2Widget
     divClass "seasons" do
       div_ do
-        seasonItemWidget ss
+        seasonItemWidget r ss
     [style|
       .seasons
         margin: 0 #{unit * 3}

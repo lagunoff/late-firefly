@@ -57,8 +57,10 @@ mainWith = \case
       withGzip = gzip def
         { gzipFiles=GzipPreCompressed GzipIgnore
         , gzipCheckMime=const True }
-      staticApp' = html5Router $ withGzip $ staticApp
+      ss404Handler = Just $ html5Router $ withGzip $ staticApp
         $ defaultFileServerSettings (T.unpack docroot)
+      staticApp' = withGzip $ staticApp
+        $ (defaultFileServerSettings (T.unpack docroot)) {ss404Handler=ss404Handler}
       sett = setServerName "" . setPort port $ defaultSettings
       in Warp.runSettings sett \case
         req@(pathInfo -> "rpc":_) -> rpcApp req

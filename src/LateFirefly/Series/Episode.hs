@@ -4,18 +4,20 @@ import LateFirefly.Widget.Prelude
 import LateFirefly.TheOffice.Schema
 import LateFirefly.DB
 import LateFirefly.RPC.TH
+import LateFirefly.Router
 import Data.List as L
 import LateFirefly.Series.Rules
 import Data.Generics.Product
 
-episodeWidget :: Text -> HtmlM Html
-episodeWidget epCode = do
-  Episode{..} <- $(remote 'getEpisode) epCode
+episodeWidget :: EpisodeRoute -> HtmlM Html
+episodeWidget r@EpisodeRoute{..} = do
+  Episode{..} <- $(remote 'getEpisode) (coerce episode)
   pure do
     let Theme{..} = theme
     (holdUniqDyn -> linkIdx, modifyIdx) <- liftIO (newDyn 0)
     divClass "episode-root" do
       h3_ [ht|Episode #{code}|]
+      breadcrumbsWidget (EpisodeR_ r)
       ulClass "tabs" $ for_ (L.zip links [0..]) \(_, idx) -> do
         li_ do
           dynClassList [("active", (fmap (==idx) linkIdx))]

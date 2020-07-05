@@ -12,8 +12,8 @@ import Data.Text as T
 import Data.Char
 
 
-seasonItemWidget :: [(Season, [Episode])] -> Html
-seasonItemWidget seasons = do
+seasonItemWidget :: SeriesRoute -> [(Season, [Episode])] -> Html
+seasonItemWidget SeriesRoute{..} seasons = do
   let
     Theme{..} = theme
     thumbnailHeight = thumbnailWidth * 2 / 3
@@ -26,7 +26,7 @@ seasonItemWidget seasons = do
     (scrollLeft, mScrollLeft) <- liftIO (newDyn (0::Int))
     div_ do
       "className" =: "season"
-      linkTo (SeasonR (coerce number)) do
+      linkTo (SeasonR_ SeasonRoute{season=coerce number,..}) do
         "className" =: "season-header-link"
         h3Class "season-header"
           [ht|Season #{showt number}|]
@@ -37,7 +37,7 @@ seasonItemWidget seasons = do
           elementSize mSize
           for_ episodes \Episode{..} -> do
             li_ do
-              linkTo (EpisodeR (coerce number) (coerce code)) do
+              linkTo (EpisodeR_ EpisodeRoute {season=coerce number, episode=coerce code, ..}) do
                 "className" =: "link"
                 img_ do
                   "src" =: thumbnail

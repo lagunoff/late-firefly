@@ -3,4 +3,5 @@
 DIR="$(dirname "${BASH_SOURCE[0]}")"
 source $DIR/config.sh
 FORWARD_ARGS=$@
-cached-nix-shell $DIR/../default.nix -A shells.ghc --run "ghcjs $CABAL_ARGS $OUT_ARGS $FORWARD_ARGS"
+CABAL_ARGS_2=$(echo $CABAL_ARGS | sed 's/-package=\(jsaddle-warp\|tagsoup\|aeson\|lens-regex\|regex-tdfa\|tagsoup-lens\|warp\|wai\|wai-app-static\|wai-extra\|jsaddle-warp\|wreq\)//g' | sed 's/-isrc-ghc//g'|| exit 1)
+cached-nix-shell $DIR/../default.nix -A shells.ghcjs --run "ghcjs -isrc-ghcjs $CABAL_ARGS_2 $OUT_ARGS $FORWARD_ARGS"

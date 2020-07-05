@@ -1,8 +1,3 @@
-{-# LANGUAGE StaticPointers #-}
-{-# LANGUAGE RecursiveDo #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE JavaScriptFFI #-}
-{-# LANGUAGE ForeignFunctionInterface #-}
 module LateFirefly.Series.Season where
 
 import LateFirefly.Widget.Prelude
@@ -11,20 +6,21 @@ import LateFirefly.Router
 import LateFirefly.DB
 import LateFirefly.RPC.TH
 
-seasonWidget :: Int -> HtmlM Html
-seasonWidget sNum = do
-  episodes <- $(remote 'getEpisodes) sNum
+seasonWidget :: SeasonRoute -> HtmlM Html
+seasonWidget r@SeasonRoute{..} = do
+  episodes <- $(remote 'getEpisodes) (coerce season)
   pure do
     let
       Theme{..} = theme
       thumbnailHeight = thumbnailWidth * 2 / 3
     divClass "season" do
+      breadcrumbsWidget (SeasonR_ r)
       ul_ $ for_ episodes \Episode{..} -> do
         li_ do
-          linkTo (EpisodeR (coerce sNum) (coerce code)) do
+          linkTo (EpisodeR_ EpisodeRoute{episode=coerce code, ..}) do
             h3_ do [ht|Episode #{code}|]
           divClass "row" do
-            linkTo (EpisodeR (coerce sNum) (coerce code)) do
+            linkTo (EpisodeR_ EpisodeRoute{episode=coerce code, ..}) do
               img_ do
                 "src" =: thumbnail
                 "style" =: [st|width: #{showt thumbnailWidth}; height: #{showt thumbnailHeight}|]

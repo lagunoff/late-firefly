@@ -28,19 +28,19 @@ indexWidget = mdo
   let Theme{..} = theme
   headerWidget
   setupDisqus
-  route <- htmlRouter SeriesR \r ->
+  route <- htmlRouter HomeR_ \r ->
     liftIO $ sync $ modify (idx_route .~ r)
   (model, modify) <- liftIO $ newDyn (IndexState route)
   divClass "root" do
     div_ do
       let
         routeDyn = holdUniqDyn (fmap _idx_route model)
-        withRestore = ((<* restoreState) <=<)
-      dynHtml $ routeDyn <&> withRestore \case
-        HomeR_       -> homeWidget
-        SeriesR      -> seriesWidget
-        SeasonR{..}  -> seasonWidget (coerce season)
-        EpisodeR{..} -> episodeWidget (coerce episode)
+        withRestoreState = ((<* restoreState) <=<)
+      dynHtml $ routeDyn <&> withRestoreState \case
+        HomeR_     -> homeWidget
+        SeriesR_ r  -> seriesWidget r
+        SeasonR_ r  -> seasonWidget r
+        EpisodeR_ r -> episodeWidget r
     embedDisqus "home" "Telikov.Net — Home"
   footerWidget
   [style|
@@ -114,11 +114,11 @@ headerWidget = do
             "Net"
             "style" =: [st|color: #{showt primary}|]
         ulClass "menu" do
-          li_ do linkTo SeriesR do div_ "Series"
-          li_ do linkTo SeriesR do div_ "Movies"
-          li_ do linkTo SeriesR do div_ "Genre"
-          li_ do linkTo SeriesR do div_ "Top IMDB"
-          li_ do linkTo SeriesR do div_ "A-Z List"
+          li_ do linkTo (SeriesR_ (SeriesRoute "theoffice")) do div_ "Series"
+          li_ do linkTo (SeriesR_ (SeriesRoute "theoffice")) do div_ "Movies"
+          li_ do linkTo (SeriesR_ (SeriesRoute "theoffice")) do div_ "Genre"
+          li_ do linkTo (SeriesR_ (SeriesRoute "theoffice")) do div_ "Top IMDB"
+          li_ do linkTo (SeriesR_ (SeriesRoute "theoffice")) do div_ "A-Z List"
       divClass "search" do
         input_ do
           "placeholder" =: "Search"
@@ -214,11 +214,11 @@ footerWidget = do
     divClass "footer-wrapper" do
       div_ do
         ulClass "menu" do
-          li_ do linkTo SeriesR do "Series"
-          li_ do linkTo SeriesR do "Movies"
-          li_ do linkTo SeriesR do "Genre"
-          li_ do linkTo SeriesR do "Top IMDB"
-          li_ do linkTo SeriesR do "A-Z List"
+          li_ do linkTo (SeriesR_ (SeriesRoute "theoffice")) do div_ "Series"
+          li_ do linkTo (SeriesR_ (SeriesRoute "theoffice")) do div_ "Movies"
+          li_ do linkTo (SeriesR_ (SeriesRoute "theoffice")) do div_ "Genre"
+          li_ do linkTo (SeriesR_ (SeriesRoute "theoffice")) do div_ "Top IMDB"
+          li_ do linkTo (SeriesR_ (SeriesRoute "theoffice")) do div_ "A-Z List"
       div_ do
         linkTo HomeR_ do
           "className" =:"home-link"

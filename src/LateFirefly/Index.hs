@@ -5,6 +5,7 @@ module LateFirefly.Index
 
 import Control.Lens hiding ((#))
 import Control.Monad.Trans
+import Control.Monad.Reader
 import Data.Maybe
 import Data.Text as T
 import Language.Javascript.JSaddle
@@ -16,6 +17,7 @@ import LateFirefly.Widget.Prelude
 import LateFirefly.Disqus
 import LateFirefly.Series
 import LateFirefly.Icons
+import Data.Constraint
 
 data IndexState = IndexState
   { _idx_route :: Route
@@ -23,24 +25,13 @@ data IndexState = IndexState
 
 makeLenses ''IndexState
 
-indexWidget :: Html
-indexWidget = mdo
+htmlTemplate :: Html () -> Html ()
+htmlTemplate content = do
   let Theme{..} = theme
   headerWidget
   setupDisqus
-  route <- htmlRouter HomeR_ \r ->
-    liftIO $ sync $ modify (idx_route .~ r)
-  (model, modify) <- liftIO $ newDyn (IndexState route)
   divClass "root" do
-    div_ do
-      let
-        routeDyn = holdUniqDyn (fmap _idx_route model)
-        withRestoreState = ((<* restoreState) <=<)
-      dynHtml $ routeDyn <&> withRestoreState \case
-        HomeR_     -> homeWidget
-        SeriesR_ r  -> seriesWidget r
-        SeasonR_ r  -> seasonWidget r
-        EpisodeR_ r -> episodeWidget r
+    div_ content
     embedDisqus "home" "Telikov.Net — Home"
   footerWidget
   [style|
@@ -63,7 +54,23 @@ indexWidget = mdo
         color: #{primary}
   |]
 
-homeWidget :: HtmlM Html
+indexWidget :: Html ()
+indexWidget = mdo
+  route <- htmlRouter HomeR_ \r ->
+    liftIO $ sync $ modify (idx_route .~ r)
+  (model, modify) <- liftIO $ newDyn (IndexState route)
+  let
+    routeDyn = fmap _idx_route model
+    withRestoreState = ((((<* restoreState) .  htmlTemplate)  <=<) .) . flip
+    handleError e = void $ liftJSM do
+      jsg ("console"::Text) # ("log"::Text) $ [show e]
+  dynHtml2 handleError $ routeDyn <&> withRestoreState \Dict -> \case
+    HomeR_      -> homeWidget
+    SeriesR_ r  -> seriesWidget r
+    SeasonR_ r  -> seasonWidget r
+    EpisodeR_ r -> episodeWidget r
+
+homeWidget :: (?throw::FrontendError) => Html (Html ())
 homeWidget = do
   let Theme{..} = theme
   pure do
@@ -101,7 +108,7 @@ homeWidget = do
             border: solid 2px #{primary}
     |]
 
-headerWidget :: Html
+headerWidget :: Html ()
 headerWidget = do
   let Theme{..} = theme
   divClass "header" do
@@ -207,7 +214,7 @@ headerWidget = do
               opacity: 1
         |]
 
-footerWidget :: Html
+footerWidget :: Html ()
 footerWidget = do
   let Theme{..} = theme
   divClass "footer" do
@@ -260,15 +267,24 @@ footerWidget = do
           list-style: none
   |]
 
-htmlRouter :: forall a m. (HasParser U a, HtmlBase m, Show a) => a -> (a -> HtmlT m ()) -> HtmlT m a
+htmlRouter
+  :: forall a . (HasParser U a, Show a)
+  => a -> (a -> Html ()) -> Html a
 htmlRouter def hashChange = do
-  win <- Element <$> liftJSM (jsg ("window" :: Text))
+  win <- Element <$> liftJSM (jsg ("window"::Text))
   let
     parseRoute = do
-      search <- fromJSValUnchecked =<< jsg ("location" :: Text) ! ("search" :: Text)
-      pathname <- fromJSValUnchecked =<< jsg ("location" :: Text) ! ("pathname" :: Text)
+      search <- fromJSValUnchecked =<< jsg ("location"::Text) ! ("search"::Text)
+      pathname <- fromJSValUnchecked =<< jsg ("location"::Text) ! ("pathname"::Text)
       pure $ fromMaybe def $ listToMaybe $ parseUrl @a (pathname <> search)
   route <- liftJSM parseRoute
   onEvent_ win "popstate" do
     liftJSM parseRoute >>= hashChange
   liftJSM parseRoute
+
+dynHtml2
+  :: (FrontendError -> Html ())
+  -> Dynamic (Dict (?throw::FrontendError) -> Html ())
+  -> Html ()
+dynHtml2 h dyn = dynHtml' dyn' where
+  dyn' = dyn <&> \f commit revert -> either ((revert <*) . h) (\_ -> commit) =<< Html (ReaderT \e -> throwToEither (runHtml e (f Dict)))

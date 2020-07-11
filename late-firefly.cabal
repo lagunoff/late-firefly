@@ -19,6 +19,7 @@ executable late-firefly
     bytestring,
     base64-bytestring,
     containers,
+    constraints,
     data-default,
     direct-sqlite,
     errors,

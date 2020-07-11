@@ -12,7 +12,7 @@ import Data.Text as T
 import Data.Char
 
 
-seasonItemWidget :: SeriesRoute -> [(Season, [Episode])] -> Html
+seasonItemWidget :: SeriesRoute -> [(Season, [Episode])] -> Html ()
 seasonItemWidget SeriesRoute{..} seasons = do
   let
     Theme{..} = theme

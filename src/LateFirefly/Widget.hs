@@ -42,7 +42,7 @@ style :: QuasiQuoter
 style = cassius{quoteExp=qExp} where
   qExp = appE [|H.el "style" . (H.prop "type" ("text/css" :: T.Text) *>) . H.text . LT.toStrict . renderCss . ($ undefined)|] . quoteExp cassius
 
-elementSize' :: Element -> Modifier (Maybe (Int, Int)) -> Html
+elementSize' :: Element -> Modifier (Maybe (Int, Int)) -> Html ()
 elementSize' elm modSize = do
   win <- liftJSM $ jsg ("window"::Text)
   let
@@ -53,10 +53,10 @@ elementSize' elm modSize = do
   onEvent_ (coerce win) "resize" $ liftJSM handleResize
   liftJSM $ setTimeout 0 $ handleResize
 
-elementSize :: Modifier (Maybe (Int, Int)) -> Html
+elementSize :: Modifier (Maybe (Int, Int)) -> Html ()
 elementSize f = flip elementSize' f =<< askElement
 
-newSizeDyn :: HtmlM (Dynamic (Maybe (Int, Int)))
+newSizeDyn :: Html (Dynamic (Maybe (Int, Int)))
 newSizeDyn = do
   (dSize, modSize) <- liftIO (newDyn Nothing)
   dSize <$ elementSize modSize

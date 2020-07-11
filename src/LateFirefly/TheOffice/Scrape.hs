@@ -16,7 +16,7 @@ import Text.Regex.TDFA
 import qualified Network.Wreq as Wreq
 
 scrapeSite :: (?conn :: Connection) => IO ()
-scrapeSite = newVersion do
+scrapeSite = void $ newVersion do
   seasons <- scrapeSeasons
   for_ seasons (uncurry scrapeEpisodes)
 

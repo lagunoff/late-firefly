@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module LateFirefly.Orphans where
 
@@ -7,19 +8,23 @@ import Data.UUID.Types.Internal (UUID(..))
 import Database.SQLite.Simple
 import Flat as FL
 import GHC.Generics (Generic)
+import GHC.Stack.Types
 import Language.Haskell.TH as TH
 import Language.Haskell.TH.Syntax
+#ifndef __GHCJS__
+import Data.Aeson
+#endif
 
-instance Flat a => Flat (Only a)
+deriving anyclass instance Flat a => Flat (Only a)
 
 deriving instance Generic (a :. b)
-instance (Flat a, Flat b) => Flat (a :. b)
+deriving anyclass instance (Flat a, Flat b) => Flat (a :. b)
 
 deriving instance Generic Day
-instance Flat Day
+deriving anyclass instance Flat Day
 
 deriving instance Generic UTCTime
-instance Flat UTCTime
+deriving anyclass instance Flat UTCTime
 
 instance Flat DiffTime where
   encode = FL.encode . diffTimeToPicoseconds
@@ -27,11 +32,24 @@ instance Flat DiffTime where
   size = size . diffTimeToPicoseconds
 
 deriving instance Generic UUID
-instance Flat UUID
+deriving anyclass instance Flat UUID
 
-instance Flat Name
-instance Flat OccName
-instance Flat NameFlavour
-instance Flat ModName
-instance Flat NameSpace
-instance Flat PkgName
+deriving anyclass instance Flat Name
+deriving anyclass instance Flat OccName
+deriving anyclass instance Flat NameFlavour
+deriving anyclass instance Flat ModName
+deriving anyclass instance Flat NameSpace
+deriving anyclass instance Flat PkgName
+
+deriving stock instance Generic CallStack
+deriving anyclass instance Flat CallStack
+
+deriving stock instance Generic SrcLoc
+deriving anyclass instance Flat SrcLoc
+
+#ifndef __GHCJS__
+deriving anyclass instance FromJSON CallStack
+deriving anyclass instance FromJSON SrcLoc
+deriving anyclass instance ToJSON CallStack
+deriving anyclass instance ToJSON SrcLoc
+#endif

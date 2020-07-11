@@ -4,19 +4,21 @@ module LateFirefly.RPC (
   mkApplication
 ) where
 
-import LateFirefly.RPC.TH
-import Network.Wai
-import qualified Data.ByteString.Lazy as LBS
-import Network.HTTP.Types.Status
+import Control.Applicative
 import Data.ByteString as BS
-import qualified Data.Map as M
+import Data.Text as T
+import Data.Bifunctor
 import Flat
 import GHC.StaticPtr
-import Control.Applicative
-import LateFirefly.Prelude
 import LateFirefly.DB
+import LateFirefly.Prelude
+import LateFirefly.RPC.TH
+import Network.HTTP.Types.Status
+import Network.Wai
+import qualified Data.ByteString.Lazy as LBS
+import qualified Data.Map as M
 
-mkApplication :: (?conn :: Connection) => DynSPT -> Application
+mkApplication :: (?conn::Connection) => DynSPT -> Application
 mkApplication dynSpt req response = do
   RpcRequest{..} <- either (error . show) id <$> parseFlatRequest
   staticEp :: Maybe Ep <- fmap deRefStaticPtr <$> unsafeLookupStaticPtr rr_key

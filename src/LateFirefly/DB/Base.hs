@@ -1,9 +1,7 @@
 {-# LANGUAGE CPP #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module LateFirefly.DB.Base
-  ( Id(..)
-  , UUID5(..)
-  , ColumnInfo(..)
+  ( ColumnInfo(..)
   , TableInfo(..)
   , DbTable(..)
   , DbField(..)
@@ -57,14 +55,6 @@ import qualified GHC.Records as G
 import Data.Aeson as AE
 import Data.Aeson.Text as AE
 #endif
-
-newtype Id t = Id {unId :: Int64}
-  deriving stock (Eq, Ord, Show)
-  deriving newtype Flat
-
-newtype UUID5 t = UUID5 {unUUID5 :: UUID}
-  deriving stock (Show, Read, Eq, Typeable, Generic)
-  deriving newtype Flat
 
 data ColumnInfo = ColumnInfo
   { colType    :: ColumnType
@@ -162,7 +152,7 @@ upsert t = do
 
 selectFrom
   :: forall t p
-  . (?conn :: Connection, DbTable t, ToRow p) => Query -> p -> IO [t]
+  . (?conn::Connection, DbTable t, ToRow p) => Query -> p -> IO [t]
 selectFrom qTail p = do
   let
     TableInfo{..} = tableInfo @t

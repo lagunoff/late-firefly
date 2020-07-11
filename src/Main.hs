@@ -16,6 +16,10 @@ import Options.Generic
 import qualified Database.SQLite.Simple as S
 
 #ifndef ghcjs_HOST_OS
+import Language.Javascript.JSaddle.WebSockets as Warp
+import LateFirefly.IMDB.Scrape as IMDB
+import LateFirefly.RPC
+import LateFirefly.Router.Wai
 import LateFirefly.TheOffice.Scrape as TheOffice
 import Network.Wai
 import Network.Wai.Application.Static
@@ -23,14 +27,12 @@ import Network.Wai.Handler.Warp as Warp
 import Network.Wai.Middleware.Gzip
 import System.Environment
 import System.IO
-import Language.Javascript.JSaddle.WebSockets as Warp
 import qualified Network.HTTP.Types as H
-import LateFirefly.RPC
-import LateFirefly.Router.Wai
 
 -- | Command line options
 data Opts
   = TheOffice {dbpath :: Maybe Text}
+  | IMDB {dbpath :: Maybe Text}
   | Start {dbpath :: Maybe Text, port :: Maybe Int, docroot :: Maybe Text}
   | Migrate {dbpath :: Maybe Text}
   | PrintSchema
@@ -39,12 +41,17 @@ data Opts
 mainWith :: Opts -> IO ()
 mainWith = \case
   TheOffice{dbpath=mayDb} -> do
-    let
-      defDb = T.unpack $ getField @"dbPath" (def @WebOpts)
-      dbpath = maybe defDb T.unpack mayDb
+    let defDb = T.unpack $ getField @"dbPath" (def @WebOpts)
+    let dbpath = maybe defDb T.unpack mayDb
     withConnection dbpath do
       for_ $(mkDatabaseSetup) execute_
       TheOffice.scrapeSite
+  IMDB{dbpath=mayDb} -> do
+    let defDb = T.unpack $ getField @"dbPath" (def @WebOpts)
+    let dbpath = maybe defDb T.unpack mayDb
+    withConnection dbpath do
+      for_ $(mkDatabaseSetup) execute_
+      IMDB.scrapeSite
   Start{dbpath=mayDb, docroot=mayDR, port=mayPort, ..} -> do
     let
       port = getField @"webPort" opts
@@ -81,7 +88,7 @@ update = do
   let dbPath = T.unpack $ getField @"dbPath" (def :: WebOpts)
   conn <- S.open dbPath
   let rpcApp = let ?conn = conn in mkApplication $readDynSPT
-  Warp.debugOr 7900 (void $ attachToBodySimple indexWidget) \case
+  Warp.debugOr 7900 (void $ attachToBody indexWidget) \case
     req@(pathInfo -> "rpc":_) -> rpcApp req
     _                         ->
       ($ responseLBS H.status404 [("Content-Type", "text/plain")] "Not found")

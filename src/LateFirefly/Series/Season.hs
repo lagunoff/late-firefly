@@ -6,7 +6,7 @@ import LateFirefly.Router
 import LateFirefly.DB
 import LateFirefly.RPC.TH
 
-seasonWidget :: SeasonRoute -> HtmlM Html
+seasonWidget :: (?throw::FrontendError) => SeasonRoute -> Html (Html ())
 seasonWidget r@SeasonRoute{..} = do
   episodes <- $(remote 'getEpisodes) (coerce season)
   pure do

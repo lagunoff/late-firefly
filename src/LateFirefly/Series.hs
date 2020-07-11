@@ -21,7 +21,7 @@ apiGetSeasons txt = do
   episodes <- selectFrom_ @Episode [sql|where season_id in (#{seasonIds}) order by `code`|]
   pure $ seasons <&> \s@Season{uuid} -> (s, L.filter ((==uuid) . getField @"seasonId") episodes)
 
-seriesWidget :: SeriesRoute -> HtmlM Html
+seriesWidget :: (?throw::FrontendError) => SeriesRoute -> Html (Html ())
 seriesWidget r@SeriesRoute{..} = do
   ss <- $(remote 'apiGetSeasons) (coerce series)
   pure do
@@ -38,7 +38,7 @@ seriesWidget r@SeriesRoute{..} = do
         margin: 0 auto
       |]
 
-header2Widget :: Html
+header2Widget :: Html ()
 header2Widget = do
   let Theme{..} = theme
   divClass  "header-2" do

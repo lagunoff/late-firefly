@@ -3,7 +3,7 @@ module LateFirefly.Icons where
 import Massaraksh.Text
 import LateFirefly.Widget.Prelude
 
-svgIcon :: Text -> HtmlM x -> HtmlM x
+svgIcon :: Text -> Html x -> Html x
 svgIcon contents attrs = do
   elNS (Just "http://www.w3.org/2000/svg") "svg" do
     "width"   `attr` "1em"

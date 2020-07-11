@@ -4,7 +4,7 @@ import Language.Javascript.JSaddle
 import Massaraksh.Text
 import LateFirefly.Widget.Prelude
 
-setupDisqus :: Html
+setupDisqus :: Html ()
 setupDisqus = if True then blank else liftJSM do
   scriptEl <- createElement "script"
   scriptEl2 <- createElement "script"
@@ -22,7 +22,7 @@ setupDisqus = if True then blank else liftJSM do
   jsg ("document" :: Text) ! ("body" :: Text) # ("appendChild" :: Text) $ scriptEl
   pure ()
 
-embedDisqus :: Text -> Text -> Html
+embedDisqus :: Text -> Text -> Html ()
 embedDisqus pageId pageTitle = if True then blank else do
   div_ ("id" =: "disqus_thread")
   void $ liftJSM $ eval [st|

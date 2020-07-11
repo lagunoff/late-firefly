@@ -50,7 +50,7 @@ data SeriesRoute = SeriesRoute {series :: Seg Text}
 printRoute :: Route -> Text
 printRoute = ("/" <>) . printUrl
 
-linkTo :: (HtmlBase m, HasParser U r) => r -> HtmlT m x -> HtmlT m x
+linkTo :: (HasParser U r) => r -> Html x -> Html x
 linkTo r attrs = do
   H.a_ do
     "href" =: ("/" <> printUrl r)
@@ -64,7 +64,7 @@ linkTo r attrs = do
       blank
     attrs
 
-restoreState :: Html
+restoreState :: Html ()
 restoreState = do
   pb <- fmap he_post_build ask
   liftIO $ modifyIORef pb $ (:) do
@@ -86,7 +86,7 @@ routeTitle = \case
   SeriesR_ SeriesRoute{..} -> let series'::Text = coerce series in [st|Series #{series'}|]
   HomeR_ -> [st|Home|]
 
-breadcrumbsWidget :: Route -> Html
+breadcrumbsWidget :: Route -> Html ()
 breadcrumbsWidget route = do
   ulClass "breadcrumbs" do
   for_ (breadcrumbs route) \r ->

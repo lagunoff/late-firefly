@@ -1,0 +1,8 @@
+#!/usr/bin/env sh
+
+DIR="$(dirname "${BASH_SOURCE[0]}")"
+FORWARD_ARGS=$@
+source $DIR/config.sh
+RUNGHC_ARGS=$(for a in $CABAL_ARGS; do echo "--ghc-arg=$a"; done | tr '\r\n' ' ')
+
+runghc $RUNGHC_ARGS $FORWARD_ARGS

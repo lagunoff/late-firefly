@@ -20,7 +20,7 @@ episodeWidget r@EpisodeRoute{..} = do
       breadcrumbsWidget (EpisodeR_ r)
       ulClass "tabs" $ for_ (L.zip links [0..]) \(_, idx) -> do
         li_ do
-          dynClassList [("active", (fmap (==idx) linkIdx))]
+          toggleClass "active" (fmap (==idx) linkIdx)
           a_ do
             "href" =: "javascript:void 0"
             on_ "click" do

@@ -99,7 +99,7 @@ main = do
     getRecord "Web site with tons of free videos" >>= mainWith
 #else
 main = do
-  void $ attachToBodySimple indexWidget
+  void $ attachToBody indexWidget
 #endif
 
 type ConnectionPool = forall r. (Connection -> IO r) -> IO r

@@ -28,6 +28,9 @@ seriesWidget r@SeriesRoute{..} = do
     let Theme{..} = theme
     header2Widget
     divClass "seasons" do
+      button_ do
+        "emit error"
+        on_ "click" do safeThrow (FlatError "")
       div_ do
         seasonItemWidget r ss
     [style|

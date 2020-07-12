@@ -5,7 +5,7 @@ import LateFirefly.Widget.Prelude
 
 svgIcon :: Text -> Html x -> Html x
 svgIcon contents attrs = do
-  elNS (Just "http://www.w3.org/2000/svg") "svg" do
+  elNS "http://www.w3.org/2000/svg" "svg" do
     "width"   `attr` "1em"
     "height"  `attr` "1em"
     "viewBox" `attr` "0 0 16 16"

@@ -3,6 +3,7 @@
 module Main where
 
 import Control.Lens
+import Control.Error
 import Data.Generics.Product
 import Data.Text as T
 import Data.Text.IO as T
@@ -32,7 +33,7 @@ import qualified Network.HTTP.Types as H
 -- | Command line options
 data Opts
   = TheOffice {dbpath :: Maybe Text}
-  | IMDB {dbpath :: Maybe Text}
+  | IMDB {dbpath :: Maybe Text, continue :: Bool, percentile :: Maybe Double }
   | Start {dbpath :: Maybe Text, port :: Maybe Int, docroot :: Maybe Text}
   | Migrate {dbpath :: Maybe Text}
   | PrintSchema
@@ -46,12 +47,12 @@ mainWith = \case
     withConnection dbpath do
       for_ $(mkDatabaseSetup) execute_
       TheOffice.scrapeSite
-  IMDB{dbpath=mayDb} -> do
+  IMDB{dbpath=mayDb,..} -> do
     let defDb = T.unpack $ getField @"dbPath" (def @WebOpts)
     let dbpath = maybe defDb T.unpack mayDb
     withConnection dbpath do
       for_ $(mkDatabaseSetup) execute_
-      IMDB.scrapeSite
+      (IMDB.scrapeSite continue (percentile ?: 0.02))
   Start{dbpath=mayDb, docroot=mayDR, port=mayPort, ..} -> do
     let
       port = getField @"webPort" opts

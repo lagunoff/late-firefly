@@ -6,7 +6,7 @@ import LateFirefly.Router
 import LateFirefly.DB
 import LateFirefly.RPC.TH
 
-seasonWidget :: (?throw::FrontendError) => SeasonRoute -> Html (Html ())
+seasonWidget :: SeasonRoute -> Html (Html ())
 seasonWidget r@SeasonRoute{..} = do
   episodes <- $(remote 'getEpisodes) (coerce season)
   pure do
@@ -51,8 +51,8 @@ seasonWidget r@SeasonRoute{..} = do
           margin: 0
     |]
 
-getEpisodes :: (?conn :: Connection) => Int -> IO [Episode]
-getEpisodes seasonNumber = do
+getEpisodes :: (?conn::Connection) => Int -> Eio BackendError [Episode]
+getEpisodes seasonNumber = liftIO do
   query [sql|
     select e.* from `episode` e
       left join `season` s on e.season_id=s.uuid

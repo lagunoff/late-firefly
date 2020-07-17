@@ -1,6 +1,8 @@
 #!/usr/bin/env sh
-DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
-FORWARD_ARGS=$@
+DIR="$(dirname "${BASH_SOURCE[0]}")"
+OUT_ARGS="-outputdir=$DIR/../out"
+make --silent -f $DIR/envrc.mk $DIR/../.envrc || exit 1;
+source $DIR/../.envrc
 
-cached-nix-shell $DIR/../default.nix -A shells.ghc --run "hoogle $FORWARD_ARGS"
+hoogle $@

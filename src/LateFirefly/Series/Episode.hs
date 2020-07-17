@@ -9,7 +9,7 @@ import Data.List as L
 import LateFirefly.Series.Rules
 import Data.Generics.Product
 
-episodeWidget :: (?throw::FrontendError) => EpisodeRoute -> Html (Html ())
+episodeWidget :: EpisodeRoute -> Html (Html ())
 episodeWidget r@EpisodeRoute{..} = do
   Episode{..} <- $(remote 'getEpisode) (coerce episode)
   pure do
@@ -56,8 +56,8 @@ episodeWidget r@EpisodeRoute{..} = do
           color: #{primaryText}
     |]
 
-getEpisode :: (?conn :: Connection) => Text -> IO Episode
-getEpisode epCode = do
+getEpisode :: (?conn::Connection) => Text -> Eio BackendError Episode
+getEpisode epCode = liftIO do
   episode <- L.head <$> flip query [epCode] [sql|
     select e.* from `episode` e
       left join `season` s on e.season_id=s.uuid

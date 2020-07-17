@@ -18,3 +18,4 @@ result
 dist
 out
 locals.nix
+.envrc

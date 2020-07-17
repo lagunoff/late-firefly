@@ -12,6 +12,8 @@ module LateFirefly.DB.Base
   , query
   , query_
   , upsert
+  , upsert'
+  , upsertWith
   , selectFrom
   , selectFrom_
   , selectFromNamed
@@ -29,15 +31,17 @@ import Data.ByteString as BS
 import Data.ByteString.Builder as B
 import Data.ByteString.Internal as BS
 import Data.Function
+import Data.List as L
 import Data.Generics.Product
 import Data.Text as T
+import qualified Data.Map as M
 import Data.Text.Encoding as T
 import Data.Text.Lazy as T (toStrict)
 import Data.Time.Clock
 import Data.UUID (UUID)
 import Data.UUID.Types as U
 import Data.UUID.V5
-import Database.SQLite.Simple (Connection, Query(..), FromRow(..), ToRow(..), NamedParam)
+import Database.SQLite.Simple (Connection, Query(..), FromRow(..), ToRow(..), NamedParam, Only(..), SQLData)
 import Database.SQLite.Simple.FromField
 import Database.SQLite.Simple.Internal
 import Database.SQLite.Simple.Ok
@@ -51,7 +55,7 @@ import LateFirefly.DB.QQ
 import Text.Read
 import qualified Database.SQLite.Simple as S
 import qualified GHC.Records as G
-#ifndef ghcjs_HOST_OS
+#ifndef __GHCJS__
 import Data.Aeson as AE
 import Data.Aeson.Text as AE
 #endif
@@ -68,8 +72,8 @@ data TableInfo = TableInfo
   { name    :: Text
   , primary :: [Text]
   , columns :: [(Text, ColumnInfo)]
-  , prio    :: Int
-  } deriving (Eq, Show, Generic)
+  , prio    :: Int }
+  deriving stock (Eq, Show, Generic)
 
 esc :: Text -> Text
 esc t = "`" <> t <> "`"
@@ -131,8 +135,18 @@ query = S.query ?conn
 query_ :: (FromRow r, ?conn :: Connection) => Query -> IO [r]
 query_ = S.query_ ?conn
 
-upsert :: forall t. (?conn :: Connection, DbTable t) => t -> IO t
-upsert t = do
+upsert :: forall t. (?conn::Connection, Eq t, DbTable t) => t -> IO t
+upsert = fmap fst . upsert'
+
+data UpsertResult
+  = New | Updated | Cached | Rewritten
+  deriving (Eq, Show, Generic)
+
+upsert' :: forall t. (?conn::Connection, Eq t, DbTable t) => t -> IO (t, UpsertResult)
+upsert' = upsertWith (\_ -> id)
+
+upsertWith :: forall t. (?conn::Connection, Eq t, DbTable t) => (t -> t -> t) -> t -> IO (t, UpsertResult)
+upsertWith f t = do
   let
     TableInfo{..} = tableInfo @t
     tableName = bool name (name <> "_versions") (isVersioned @t)
@@ -143,12 +157,35 @@ upsert t = do
     NoVersion -> do
       let q = "INSERT INTO " <> esc tableName <> " (" <> cols <> ") VALUES (" <> vals <> ") ON CONFLICT(rowid) DO UPDATE SET " <> sets
       S.execute ?conn (Query q) (toRow t <> toRow t)
-      if getField @"rowid" t /= def then pure t else
-        S.lastInsertRowId ?conn <&> \idInt -> setField @"rowid" (Id idInt) t
+      if getField @"rowid" t /= def then pure (t, Updated) else
+        fmap (,New) $ S.lastInsertRowId ?conn <&> \idInt -> setField @"rowid" (Id idInt) t
     HasVersion -> do
-      -- TODO: Check for duplicates with the previous version
-      let q = "INSERT INTO " <> esc tableName <> " (" <> cols <> ") VALUES (" <> vals <> ")"
-      t <$ S.execute ?conn (Query q) (toRow t)
+      -- FIXME: Implementation implies that HasVersion only supports uuid PKs
+      let row = toRow t
+      let versionIdx = L.findIndex ((=="version") . fst) columns
+      let kvs = L.zip (fmap fst columns) row
+      let uuidVersion = liftA2 (,) (L.lookup "uuid" kvs) (L.lookup "version" kvs)
+      let existingQ = "SELECT " <> cols <> " FROM " <> esc tableName <> " WHERE uuid=? AND version=?"
+      let lastQ = "SELECT " <> cols <> " FROM " <> esc tableName <> " WHERE uuid=? AND version = (SELECT MAX(version) FROM " <> esc tableName <> " WHERE version < ?)"
+      let q = "INSERT INTO " <> esc tableName <> " (" <> cols <> ") VALUES (" <> vals <> ") ON CONFLICT(uuid, version) DO UPDATE SET " <> sets
+      mayExist::Maybe t <- join <$> for uuidVersion \(u, v) -> do
+        fmap fst . L.uncons <$> S.query ?conn (Query existingQ) [u, v]
+      case mayExist of
+        Just x -> (t, Rewritten) <$ S.execute ?conn (Query q) (toRow (f x t) <> toRow (f x t))
+        Nothing -> do
+          mayLast::Maybe [SQLData] <- join <$> for uuidVersion \(u, v) -> do
+            fmap fst . L.uncons <$> S.query ?conn (Query lastQ) [u, v]
+          case (flip rowsEq row <$> versionIdx <*> mayLast) of
+            (Just True)  -> pure (t, Cached)
+            (Just False) -> (t, Updated) <$ S.execute ?conn (Query q) (row <> row)
+            Nothing      -> (t, New) <$ S.execute ?conn (Query q) (row <> row)
+          where
+            rowsEq :: Eq a => Int -> [a] -> [a] -> Bool
+            rowsEq _ [] [] = True
+            rowsEq _ _ []  = False
+            rowsEq _ [] _  = False
+            rowsEq 0 (_:xs) (_:ys) = rowsEq (-1) xs ys
+            rowsEq n (x:xs) (y:ys) = x == y && rowsEq (max (-1) (n - 1)) xs ys
 
 selectFrom
   :: forall t p
@@ -179,7 +216,7 @@ selectFromNamed qTail p = do
 
 newtype JsonField a = JsonField {unJsonField :: a}
 
-#ifndef ghcjs_HOST_OS
+#ifndef __GHCJS__
 instance ToJSON a => ToField (JsonField a) where
   toField = S.SQLText . T.toStrict . AE.encodeToLazyText . unJsonField
 
@@ -188,11 +225,8 @@ instance (FromJSON a, Typeable a) => FromField (JsonField a) where
     fmap JsonField . AE.eitherDecode @a . B.toLazyByteString .
     T.encodeUtf8Builder
 #else
-instance ToField (JsonField a) where
-  toField = error "Unimplemented"
-
-instance (Typeable a) => FromField (JsonField a) where
-  fromField = error "Unimplemented"
+instance ToField (JsonField a) where toField = error "Unimplemented"
+instance (Typeable a) => FromField (JsonField a) where fromField = error "Unimplemented"
 #endif
 
 newtype ReadShowField a = ReadShowField {unReadShowField :: a}
@@ -278,12 +312,14 @@ instance (DbTable t, Typeable t) => DbField (UUID5 t) where
 instance DbField UTCTime where
   columnInfo _ = ColumnInfo TextColumn False False Nothing
 
-#ifndef ghcjs_HOST_OS
+#ifndef __GHCJS__
 instance (Typeable a, FromJSON a, ToJSON a) => DbField [a] where
   columnInfo _ = ColumnInfo TextColumn False False Nothing
+instance (FromJSON (M.Map k v), ToJSON (M.Map k v), Typeable k, Typeable v) => DbField (M.Map k v) where
+  columnInfo _ = ColumnInfo TextColumn False False Nothing
 #else
-instance (Typeable a) => DbField [a] where
-  columnInfo _ = error "Unimplemented"
+instance (Typeable a) => DbField [a] where columnInfo _ = error "Unimplemented"
+instance (Typeable k, Typeable v) => DbField (M.Map k v) where columnInfo _ = error "Unimplemented"
 #endif
 
 instance ToField (UUID5 t) where
@@ -295,10 +331,14 @@ instance Typeable (UUID5 t) => FromField (UUID5 t) where
 instance DbField Bool where
   columnInfo _ = ColumnInfo IntegerColumn False False Nothing
 
-#ifndef ghcjs_HOST_OS
+#ifndef __GHCJS__
 deriving via JsonField [a] instance (FromJSON a, Typeable a) => FromField [a]
 deriving via JsonField [a] instance ToJSON a => ToField [a]
+deriving via JsonField (M.Map k v) instance (FromJSON (M.Map k v), Typeable k, Typeable v) => FromField (M.Map k v)
+deriving via JsonField (M.Map k v) instance ToJSON (M.Map k v) => ToField (M.Map k v)
 #else
 deriving via JsonField [a] instance (Typeable a) => FromField [a]
 deriving via JsonField [a] instance ToField [a]
+deriving via JsonField (M.Map k v) instance (Typeable k, Typeable v) => FromField (M.Map k v)
+deriving via JsonField (M.Map k v) instance ToField (M.Map k v)
 #endif

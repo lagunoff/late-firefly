@@ -3,6 +3,8 @@ module LateFirefly.DB.Transaction where
 
 import Data.Generics.Product
 import Data.Time
+import Data.Text as T
+import Data.List as L
 import Database.SQLite.Simple
 import Database.SQLite.Simple.FromField
 import Database.SQLite.Simple.ToField
@@ -11,7 +13,6 @@ import LateFirefly.DB.Base as DB
 import LateFirefly.DB.QQ
 import LateFirefly.DB.TH
 import LateFirefly.Prelude
-import GHC.Stack
 import qualified Database.SQLite.Simple as S
 import Database.SQLite3 (ColumnType(..))
 import Control.Exception as E
@@ -43,25 +44,36 @@ data Transaction = Transaction
   , active     :: Bool
   , startedAt  :: UTCTime
   , finishedAt :: Maybe UTCTime
-  , exception  :: Maybe (CaughtException CallStack) }
-  deriving stock (Show, Generic)
+  , exception  :: Maybe Text }
+  deriving stock (Eq, Show, Generic)
   deriving anyclass Flat
 
 deriveDb ''Transaction
 
-newVersion :: (?conn::Connection) => ((?version::NewVersion, ?throw::CallStack) => IO a) -> IO (Either (CaughtException CallStack) a)
-newVersion act = do
-  startedAt <- getCurrentTime
-  t <- upsert (Transaction def True startedAt Nothing Nothing)
+newVersion :: (?conn::Connection) => ((?version::NewVersion) => IO a) -> IO a
+newVersion = newVersionOrContinue False
+
+newVersionOrContinue :: (?conn::Connection) => Bool -> ((?version::NewVersion) => IO a) -> IO a
+newVersionOrContinue continue act = do
+  let
+    takeTransaction = \case
+      False -> do
+        startedAt <- getCurrentTime
+        upsert (Transaction def True startedAt Nothing Nothing)
+      True -> selectFrom_
+        [sql|where rowid=(select max(rowid) from `transaction`) and finished_at is null|]
+        >>= maybe (takeTransaction False) pure . fmap fst . L.uncons
+  t <- takeTransaction continue
   let newTr = NewVersion (getField @"rowid" t)
   a <- let ?version = newTr in fmap Right act
-    `E.catch` (\(ThrowException cs) -> pure $ Left $ KnownException cs)
-    `E.catch` (\(e::SomeException)  -> pure $ Left $ UnknownException $ show e)
-  finishedAt <- Just <$> getCurrentTime
-  upsert (t {finishedAt, exception = either Just (const Nothing) a})
-  a <$ DB.execute
+    `catchSync` (pure . Left)
+  currTime <- getCurrentTime
+  let finishedAt = bool Nothing (Just currTime) $ isRight a
+  upsert (t {finishedAt, exception = either (Just . T.pack . displayException) (const Nothing) a})
+  DB.execute
     [sql|update `transaction` set active=0 where active=1 and rowid <> ?|]
     [newTr]
+  either throwIO pure a
 
 withConnection :: FilePath -> ((?conn::Connection) => IO a) -> IO a
 withConnection path act = S.withConnection path \conn -> do

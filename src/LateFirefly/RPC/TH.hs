@@ -6,6 +6,7 @@ module LateFirefly.RPC.TH where
 
 import Control.Error
 import Control.Monad
+import Control.Exception
 import Control.Monad.IO.Class
 import Control.Monad.Catch as Catch
 import qualified Control.Monad.Except as E
@@ -32,6 +33,7 @@ import LateFirefly.Utils as Utils
 import qualified Data.ByteString.Base64 as B64
 import qualified Data.Map as M
 import qualified Data.Set as S
+import LateFirefly.Eio
 
 #ifndef ghcjs_HOST_OS
 import JavaScript.TypedArray.Internal.Types
@@ -51,20 +53,20 @@ data RpcRequest = RpcRequest
   , rr_arg  :: ByteString }
   deriving (Show, Eq, Generic, Flat)
 
-sendRpcXhr :: (?throw::FrontendError, Flat a, Flat r) => Name -> StaticKey -> (a `Backend` r) -> a -> JSM r
+sendRpcXhr :: (Flat a, Flat r) => Name -> StaticKey -> (a `Backend` r) -> a -> JSM r
 sendRpcXhr n k _ a = do
-  origin :: JSString <- fromJSValUnchecked =<< jsg ("window"::JSString)
+  origin::JSString <- fromJSValUnchecked =<< jsg ("window"::JSString)
     ! ("location"::JSString) ! ("origin"::JSString)
   buffer <- byteStringToArrayBuffer $ flat $ RpcRequest k n (flat a)
   let
     dat = TypedArrayData (unsafeCoerce buffer)
     req = Request POST (origin <> "/rpc") Nothing [] False dat
-  either (safeThrow . BackendError) id
-    . either (safeThrow . FlatError . show) id
+  either (throw . BackendError) id
+    . either (throw . FlatError . show) id
     . unflat
-    . fromMaybe (safeThrow (BadResponse "responce body empty"))
+    . fromMaybe (throw (BadResponse "responce body empty"))
     . contents
-    <$> xhrByteString req `Catch.catch` (safeThrow . Utils.XHRError)
+    <$> (xhrByteString req `Catch.catch` (throwM . Utils.XHRError))
 
 dynSPT :: IORef (S.Set Name)
 dynSPT = unsafePerformIO (newIORef S.empty)
@@ -77,7 +79,7 @@ remote n = do
 toEp :: forall a b. (Flat a, Flat b, Show b) => a `Backend` b -> Ep
 toEp f = Ep \arg -> flat @(Either PublicBackendError b) <$> E.runExceptT do
   a <- E.ExceptT $ ee (BEFlatError . show) (unflat @a arg)
-  E.ExceptT $ ee id =<< throwToEither (f a)
+  E.ExceptT $ ee id =<< runEio (f a)
   where
     ee e = either (fmap Left . logError . e) (fmap Right . pure)
     logError _ = pure $ ErrorCode (coerce (0::Int64))

@@ -61,23 +61,22 @@ indexWidget = mdo
   (model, modify) <- liftIO $ newDyn (IndexState route)
   let
     routeDyn = fmap _idx_route model
-    withRestoreState = ((((<* restoreState) .  htmlTemplate)  <=<) .) . flip
+    withRestoreState f r = restoreState *> (htmlTemplate =<< f r)
     handleError e = void $ liftJSM do
       jsg ("console"::Text) # ("log"::Text) $ [show e]
-  dynHtml2 handleError $ routeDyn <&> withRestoreState \Dict -> \case
+  dynHtml2 handleError $ routeDyn <&> withRestoreState \case
     HomeR_      -> homeWidget
     SeriesR_ r  -> seriesWidget r
     SeasonR_ r  -> seasonWidget r
     EpisodeR_ r -> episodeWidget r
 
-homeWidget :: (?throw::FrontendError) => Html (Html ())
+homeWidget :: Html (Html ())
 homeWidget = do
   let Theme{..} = theme
   pure do
     divClass "home" do
       divClass "home-wrapper" do
-        h1_ do
-          "Telikov.Net"
+        h1_ do "Telikov.Net"
         div_ do
           input_ do
             "type" =: "search"
@@ -284,7 +283,7 @@ htmlRouter def hashChange = do
 
 dynHtml2
   :: (FrontendError -> Html ())
-  -> Dynamic (Dict (?throw::FrontendError) -> Html ())
+  -> Dynamic (Html ())
   -> Html ()
-dynHtml2 h dyn = dynHtml' dyn' where
-  dyn' = dyn <&> \f commit revert -> either ((revert <*) . h) (\_ -> commit) =<< Html (ReaderT \e -> throwToEither (runHtml e (f Dict)))
+dynHtml2 e dyn = dynHtml' dyn' where
+  dyn' = dyn <&> \h commit revert -> either ((revert <*) . e) (\_ -> commit) =<< (fmap Right h `catchError` (pure . Left))

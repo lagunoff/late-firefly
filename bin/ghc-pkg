@@ -4,7 +4,5 @@ DIR="$(dirname "${BASH_SOURCE[0]}")"
 OUT_ARGS="-outputdir=$DIR/../out"
 make --silent -f $DIR/envrc.mk $DIR/../.envrc || exit 1;
 source $DIR/../.envrc
-CABAL_ARGS=$(cd $DIR/../; cabal-cargs || exit 1)
-RUNGHC_ARGS=$(for a in $CABAL_ARGS; do echo "--ghc-arg=$a"; done | tr '\r\n' ' ')
 
-runghc $RUNGHC_ARGS @
+ghc-pkg $@

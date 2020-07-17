@@ -14,14 +14,14 @@ import LateFirefly.RPC.TH
 import LateFirefly.TheOffice.Schema
 import LateFirefly.Widget.Prelude
 
-apiGetSeasons :: (?conn :: Connection) => Text -> IO [(Season, [Episode])]
-apiGetSeasons txt = do
+apiGetSeasons :: (?conn::Connection) => Text -> Eio BackendError [(Season, [Episode])]
+apiGetSeasons txt = liftIO do
   seasons <- selectFrom_ @Season [sql|where 1 order by `number`|]
   let seasonIds = T.intercalate ", " $ escText . U.toText . unUUID5 . getField @"uuid" <$> seasons
   episodes <- selectFrom_ @Episode [sql|where season_id in (#{seasonIds}) order by `code`|]
   pure $ seasons <&> \s@Season{uuid} -> (s, L.filter ((==uuid) . getField @"seasonId") episodes)
 
-seriesWidget :: (?throw::FrontendError) => SeriesRoute -> Html (Html ())
+seriesWidget :: SeriesRoute -> Html (Html ())
 seriesWidget r@SeriesRoute{..} = do
   ss <- $(remote 'apiGetSeasons) (coerce series)
   pure do
@@ -30,7 +30,7 @@ seriesWidget r@SeriesRoute{..} = do
     divClass "seasons" do
       button_ do
         "emit error"
-        on_ "click" do safeThrow (FlatError "")
+        on_ "click" do throwError (FlatError "")
       div_ do
         seasonItemWidget r ss
     [style|

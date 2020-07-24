@@ -5,6 +5,7 @@ import Control.Error
 import GHC.Stack
 import GHC.Generics
 import Data.Typeable
+import Data.String
 import Flat
 import qualified Control.Exception as P
 import Data.Text
@@ -20,6 +21,7 @@ import LateFirefly.Orphans ()
 import LateFirefly.Eio
 import GHC.Int
 import qualified Control.Exception as Exception
+import GHC.Stack.Types
 #ifndef __GHCJS__
 import Data.Aeson
 #endif
@@ -27,6 +29,10 @@ import Data.Aeson
 newtype Id t = Id {unId :: Int64}
   deriving stock (Eq, Ord, Show, Generic)
   deriving newtype Flat
+
+newtype Tid t = Tid {unTid :: Text}
+  deriving stock (Eq, Ord, Generic)
+  deriving newtype (Show, Flat, IsString)
 
 newtype UUID5 t = UUID5 {unUUID5 :: UUID}
   deriving stock (Show, Read, Eq, Generic)
@@ -74,3 +80,28 @@ catchSync io f = io `Exception.catch` \e ->
   case Exception.fromException e of
     Just (Exception.SomeAsyncException _) -> Exception.throwIO e
     Nothing                               -> f e
+
+errorTrace :: HasCallStack => a
+errorTrace = withFrozenCallStack (error "errorTrace")
+
+headTrace :: HasCallStack => [a] -> a
+headTrace []    = withFrozenCallStack (error "headTrace")
+headTrace (x:_) = x
+
+headNote :: HasCallStack => String -> [a] -> a
+headNote m []    = withFrozenCallStack (error m)
+headNote _ (x:_) = x
+
+maybeTrace :: HasCallStack => Maybe a -> a
+maybeTrace Nothing  = withFrozenCallStack (error "maybeTrace")
+maybeTrace (Just x) = x
+
+maybeNote :: HasCallStack => String -> Maybe a -> a
+maybeNote m Nothing  = withFrozenCallStack (error m)
+maybeNote _ (Just x) = x
+
+nemptyTrace :: (Eq a, Monoid a, HasCallStack) => a -> a
+nemptyTrace x = if x == mempty then withFrozenCallStack (error "neTrace") else x
+
+nemptyNote :: (Eq a, Monoid a, HasCallStack) => String -> a -> a
+nemptyNote m x = if x == mempty then withFrozenCallStack (error m) else x

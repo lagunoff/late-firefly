@@ -1,7 +1,7 @@
 module LateFirefly.Prelude (module X) where
 
 import Control.Applicative as X hiding ((<**>))
-import Control.Error.Util as X (note)
+import Control.Error.Util as X (note, (?:))
 import Control.Monad as X
 import Control.Monad.Error as X (MonadError(..))
 import Control.Monad.IO.Class as X

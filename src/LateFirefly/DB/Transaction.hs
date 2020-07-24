@@ -40,11 +40,11 @@ instance
     columnInfo _ = ColumnInfo TextColumn False False Nothing
 
 data Transaction = Transaction
-  { rowid      :: Id Transaction
-  , active     :: Bool
-  , startedAt  :: UTCTime
-  , finishedAt :: Maybe UTCTime
-  , exception  :: Maybe Text }
+  { rowid       :: Id Transaction
+  , active      :: Bool
+  , started_at  :: UTCTime
+  , finished_at :: Maybe UTCTime
+  , exception   :: Maybe Text }
   deriving stock (Eq, Show, Generic)
   deriving anyclass Flat
 
@@ -60,7 +60,7 @@ newVersionOrContinue continue act = do
       False -> do
         startedAt <- getCurrentTime
         upsert (Transaction def True startedAt Nothing Nothing)
-      True -> selectFrom_
+      True -> selectFrom
         [sql|where rowid=(select max(rowid) from `transaction`) and finished_at is null|]
         >>= maybe (takeTransaction False) pure . fmap fst . L.uncons
   t <- takeTransaction continue
@@ -68,17 +68,15 @@ newVersionOrContinue continue act = do
   a <- let ?version = newTr in fmap Right act
     `catchSync` (pure . Left)
   currTime <- getCurrentTime
-  let finishedAt = bool Nothing (Just currTime) $ isRight a
-  upsert (t {finishedAt, exception = either (Just . T.pack . displayException) (const Nothing) a})
+  let finished_at = bool Nothing (Just currTime) $ isRight a
+  upsert (t {finished_at, exception = either (Just . T.pack . displayException) (const Nothing) a})
   DB.execute
-    [sql|update `transaction` set active=0 where active=1 and rowid <> ?|]
-    [newTr]
+    [sql|update `transaction` set active=0 where active=1 and rowid <> {newTr}|]
   either throwIO pure a
 
 withConnection :: FilePath -> ((?conn::Connection) => IO a) -> IO a
 withConnection path act = S.withConnection path \conn -> do
-  mapM_ (S.execute_ conn)
-    ["PRAGMA journal_mode=WAL"]
+  mapM_ (S.execute_ conn) ["PRAGMA journal_mode=WAL"]
   let ?conn = conn in act
 
 newtype NewVersion = NewVersion {unNewVersion :: Id Transaction}

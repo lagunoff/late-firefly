@@ -15,12 +15,12 @@ import Text.Regex.Quote
 import Text.Regex.TDFA
 import qualified Network.Wreq as Wreq
 
-scrapeSite :: (?conn :: Connection) => IO ()
+scrapeSite :: (?conn::Connection) => IO ()
 scrapeSite = void $ newVersion do
   seasons <- scrapeSeasons
   for_ seasons (uncurry scrapeEpisodes)
 
-scrapeSeasons :: (?conn :: Connection, ?version :: NewVersion) => IO [(Season, String)]
+scrapeSeasons :: (?conn::Connection, ?version::NewVersion) => IO [(Season, String)]
 scrapeSeasons = do
   markup <- TL.decodeUtf8 . (^. Wreq.responseBody) <$> httpGet "https://iwatchtheoffice.com/season-list/"
   let seasonOuters = markup^.._DOM .traverse.allAttributed(ix "id" . traverse . only "outer")

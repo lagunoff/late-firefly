@@ -4,15 +4,16 @@ import Flat
 import Data.Map as M
 import LateFirefly.DB
 import LateFirefly.Prelude
+import LateFirefly.Aeson
 
 type Genre = Text
-type ImdbId = Text
 
-data SearchItem = SearchItem
-  { uuid        :: ~(UUID5 SearchItem)
+data Imdb
+
+data ImdbSearch = ImdbSearch
+  { rowid       :: Tid Imdb
   , version     :: Id Transaction
   , deleted     :: Bool
-  , imdbId      :: ImdbId
   , year        :: Maybe Text
   , popularity  :: Map Genre Int
   , header      :: Text
@@ -26,33 +27,31 @@ data SearchItem = SearchItem
   deriving stock (Show, Eq, Generic)
   deriving anyclass Flat
 
-deriveDbUUID ["imdbId"] ''SearchItem
+deriveDb ''ImdbSearch
 
-data ImdbTitle = ImdbTitle
-  { uuid        :: ~(UUID5 ImdbTitle)
-  , version     :: Id Transaction
-  , deleted     :: Bool
-  , imdbId      :: ImdbId
-  , poster      :: Maybe Text
-  , summary     :: Text
-  , storyline   :: Maybe Text
-  , ratingValue :: Int
-  , ratingCount :: Int
-  , seasons     :: Map Text ImdbId }
+data ImdbDetail = ImdbDetail
+  { rowid        :: Tid Imdb
+  , version      :: Id Transaction
+  , deleted      :: Bool
+  , title        :: Text
+  , posters      :: [Text]
+  , summary      :: Text
+  , storyline    :: Maybe Text
+  , rating_value :: Int
+  , rating_count :: Int }
   deriving stock (Show, Eq, Generic)
   deriving anyclass Flat
 
-deriveDbUUID ["imdbId"] ''ImdbTitle
+deriveDb ''ImdbDetail
 
 data ImdbEpisode = ImdbEpisode
-  { uuid        :: ~(UUID5 ImdbTitle)
-  , version     :: Id Transaction
-  , deleted     :: Bool
-  , imdbId      :: ImdbId
-  , parent      :: ImdbId
-  , season      :: Text
-  , episode     :: Text }
+  { rowid   :: Tid Imdb
+  , version :: Id Transaction
+  , deleted :: Bool
+  , parent  :: Tid Imdb
+  , season  :: Text
+  , episode :: Text }
   deriving stock (Show, Eq, Generic)
   deriving anyclass Flat
 
-deriveDbUUID ["imdbId"] ''ImdbEpisode
+deriveDb ''ImdbEpisode

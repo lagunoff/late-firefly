@@ -3,7 +3,6 @@
 module Main where
 
 import Control.Lens
-import Control.Error
 import Data.Generics.Product
 import Data.Text as T
 import Data.Text.IO as T
@@ -18,10 +17,10 @@ import qualified Database.SQLite.Simple as S
 
 #ifndef ghcjs_HOST_OS
 import Language.Javascript.JSaddle.WebSockets as Warp
-import LateFirefly.IMDB.Scrape as IMDB
+import qualified LateFirefly.IMDB.Scrape as IMDB
 import LateFirefly.RPC
 import LateFirefly.Router.Wai
-import LateFirefly.TheOffice.Scrape as TheOffice
+--import LateFirefly.TheOffice.Scrape as TheOffice
 import Network.Wai
 import Network.Wai.Application.Static
 import Network.Wai.Handler.Warp as Warp
@@ -32,32 +31,35 @@ import qualified Network.HTTP.Types as H
 
 -- | Command line options
 data Opts
-  = TheOffice {dbpath :: Maybe Text}
-  | IMDB {dbpath :: Maybe Text, continue :: Bool, percentile :: Maybe Double }
-  | Start {dbpath :: Maybe Text, port :: Maybe Int, docroot :: Maybe Text}
-  | Migrate {dbpath :: Maybe Text}
+  = TheOffice    {dbpath::Maybe Text}
+  | IMDB         {dbpath::Maybe Text, continue::Bool, percentile::Maybe Double}
+  | IMDBEpisodes {dbpath::Maybe Text, continue::Bool, ids::[Text]}
+  | Start        {dbpath::Maybe Text, port::Maybe Int, docroot::Maybe Text}
+  | Migrate      {dbpath::Maybe Text}
   | PrintSchema
   deriving (Show, Generic, ParseRecord)
 
 mainWith :: Opts -> IO ()
 mainWith = \case
-  TheOffice{dbpath=mayDb} -> do
-    let defDb = T.unpack $ getField @"dbPath" (def @WebOpts)
-    let dbpath = maybe defDb T.unpack mayDb
-    withConnection dbpath do
-      for_ $(mkDatabaseSetup) execute_
-      TheOffice.scrapeSite
+  TheOffice{dbpath=mayDb} -> error "TheOffice"
   IMDB{dbpath=mayDb,..} -> do
     let defDb = T.unpack $ getField @"dbPath" (def @WebOpts)
     let dbpath = maybe defDb T.unpack mayDb
     withConnection dbpath do
-      for_ $(mkDatabaseSetup) execute_
-      (IMDB.scrapeSite continue (percentile ?: 0.02))
+      for_ $mkDatabaseSetup execute
+      (IMDB.scrapeSearch continue (percentile ?: 0.02))
+  IMDBEpisodes{dbpath=mayDb,..} -> do
+    let defDb = T.unpack $ getField @"dbPath" (def @WebOpts)
+    let dbpath = maybe defDb T.unpack mayDb
+    let imdbIds = bool (fmap coerce ids) ["tt0386676"] $ ids == []
+    withConnection dbpath do
+      for_ $mkDatabaseSetup execute
+      (IMDB.scrapeEpisodes continue imdbIds)
   Start{dbpath=mayDb, docroot=mayDR, port=mayPort, ..} -> do
     let
       port = getField @"webPort" opts
       docroot = fromMaybe "./" mayDR
-      opts = (def :: WebOpts) & field @"webPort" %~ (maybe id const mayPort)
+      opts = (def::WebOpts) & field @"webPort" %~ (maybe id const mayPort)
         & field @"dbPath" %~ (maybe id const mayDb)
       dbpath = getField @"dbPath" opts
     S.withConnection (T.unpack dbpath) \conn -> let
@@ -77,9 +79,9 @@ mainWith = \case
     let
       defDb = T.unpack $ getField @"dbPath" (def @WebOpts)
       dbpath = maybe defDb T.unpack mayDb
-    withConnection dbpath do for_ $(mkDatabaseSetup) execute_
+    withConnection dbpath do for_ $mkDatabaseSetup execute
   PrintSchema -> do
-    let qSchema = T.intercalate ";\n\n" $ fmap fromQuery $(mkDatabaseSetup)
+    let qSchema = T.intercalate ";\n\n" $ fmap (\(Sql x _ _) -> x) $mkDatabaseSetup
     T.putStrLn qSchema
 
 update :: IO ()

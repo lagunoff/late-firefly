@@ -41,5 +41,5 @@ applyLinkRule _ _ = error "applyLinkRule: Unimplemented"
 
 applyLinkRule' :: (?conn :: Connection) => Text -> [Text] -> IO [Text]
 applyLinkRule' site xs = do
-  rules <- selectFrom_ @LinkRule [sql|where 1|]
+  rules <- selectFrom @LinkRule [sql|where 1|]
   pure $ L.foldl' (\xs rl -> applyLinkRule rl site xs) xs rules

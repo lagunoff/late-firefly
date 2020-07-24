@@ -15,27 +15,29 @@ executable late-firefly
   hs-source-dirs: src ../massaraksh/src
   
   build-depends:
+    attoparsec,
     base,
-    bytestring,
     base64-bytestring,
-    containers,
+    bytestring,
     constraints,
+    containers,
     data-default,
     direct-sqlite,
     errors,
     exceptions,
     flat,
     generic-lens,
+    haskell-src-meta,
+    http-types,
     inflections,
     jsaddle,
     lens,
     massaraksh,
-    natural-transformation,
     mtl,
+    natural-transformation,
     network-uri,
     optparse-generic,
     ordered-containers,
-    http-types,
     process,
     shakespeare,
     split,
@@ -55,6 +57,7 @@ executable late-firefly
     BlockArguments
     ConstraintKinds
     DataKinds
+    BangPatterns
     DeriveAnyClass
     DeriveFunctor
     DeriveGeneric

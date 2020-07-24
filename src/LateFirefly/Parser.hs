@@ -261,7 +261,7 @@ instance {-# OVERLAPPING #-} (GParser f, Constructor c) => GParser (C1 c f) wher
       ctr = constructorToSegment $ conName (undefined :: t c f a)
 
 instance {-# OVERLAPS #-} Constructor c => GParser (C1 c U1) where
-  gParser = dimap unM1 M1 pSegment -- $ if ctr == "index" then pSuccess U1 else gsegment ctr
+  gParser = dimap unM1 M1 pSegment --  if ctr == "index" then pSuccess U1 else gsegment ctr
     where
       pSegment = maybe (pSuccess U1) gsegment ctr
       ctr = constructorToSegment $ conName (undefined :: t c U1 a)

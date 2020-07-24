@@ -52,8 +52,8 @@ methodJSString (Method m) = m
 type Header = (JSString, JSString)
 
 data FormDataVal = StringVal JSString
-                 -- | BlobVal   Blob     (Maybe JSString)
-                 -- | FileVal   File     (Maybe JSString)
+                 -- BlobVal   Blob     (Maybe JSString)
+                 -- FileVal   File     (Maybe JSString)
   deriving (Typeable)
 
 data Request = Request { reqMethod          :: Method

@@ -5,24 +5,20 @@ module LateFirefly.DB.Base
   , TableInfo(..)
   , DbTable(..)
   , DbField(..)
-  , PKInfo(..)
   , createTableStmt
   , execute
-  , execute_
   , query
-  , query_
   , upsert
-  , upsert'
-  , upsertWith
+  , upsertVersion
+  , upsertVersionConflict
+  -- , upsert'
+  -- , upsertWith
   , selectFrom
-  , selectFrom_
-  , selectFromNamed
   , JsonField(..)
   , ReadShowField(..)
   , uuid5FromBS
   , DeriveUUID(..)
   , fixUUID
-  , esc
   , escText
   ) where
 
@@ -70,41 +66,36 @@ data ColumnInfo = ColumnInfo
 
 data TableInfo = TableInfo
   { name    :: Text
-  , primary :: [Text]
   , columns :: [(Text, ColumnInfo)]
   , prio    :: Int }
   deriving stock (Eq, Show, Generic)
-
-esc :: Text -> Text
-esc t = "`" <> t <> "`"
 
 escText :: Text -> Text
 escText t = "'" <> t <> "'"
 
 isVersioned :: forall t. DbTable t => Bool
-isVersioned = case pkInfo @t of
-  HasVersion -> True
-  _          -> False
+isVersioned = isJust $ L.lookup "version" $ getField @"columns" (tableInfo @t)
 
-createTableStmt :: forall t. DbTable t => [Query]
+createTableStmt :: forall t. DbTable t => [Sql]
 createTableStmt = let
   TableInfo{..} = tableInfo @t
   createColumns = columns <&> \(k, t) -> esc k <> " " <> ppColumnDesc t
   tableName = bool name (name <> "_versions") (isVersioned @t)
-  primaryContrains = ["primary key(" <> T.intercalate ", " (fmap esc primary) <> ")"]
-  createTable = [sql|CREATE TABLE IF NOT EXISTS #{esc tableName} (
+  pkeys = ["rowid"] <> bool [] ["version"] (isVersioned @t)
+  primaryContrains = ["primary key(" <> T.intercalate ", " (fmap esc pkeys) <> ")"]
+  createTable = [sql|create table if not exists {{tableName}} (
     #{T.intercalate ",\n  " (createColumns <> primaryContrains)}
   )|]
   selectColumns = T.intercalate ", " $ fmap (esc . fst) columns
-  createView = [sql|CREATE VIEW IF NOT EXISTS #{name} AS
-    SELECT #{selectColumns} from
-      (SELECT x.* FROM #{tableName} x
-        LEFT JOIN `transaction` t ON t.rowid = x.version
-        WHERE
-          t.rowid <= (SELECT MAX(rowid) FROM `transaction` WHERE active=1)
-          AND t.finished_at NOT NULL
-        ORDER BY version DESC)
-     GROUP BY uuid HAVING deleted=0|]
+  createView = [sql|create view if not exists {{name}} as
+    select #{selectColumns} from
+      (select x.* FROM #{tableName} x
+        left join `transaction` t on t.rowid = x.version
+        where
+          t.rowid <= (select max(rowid) from `transaction` where active=1)
+          and t.finished_at not null
+        order by version desc)
+     group by rowid having deleted=0|]
   in [createTable] <> bool mempty [createView] (isVersioned @t)
 
 ppColumnDesc :: ColumnInfo -> Text
@@ -123,96 +114,80 @@ ppColumnType = \case
 uuid5FromBS :: ByteString -> UUID5 a
 uuid5FromBS = UUID5 . generateNamed namespaceURL . BS.unpackBytes
 
-execute :: (?conn :: Connection, ToRow p) => Query -> p -> IO ()
-execute = S.execute ?conn
-
-execute_ :: (?conn :: Connection) => Query -> IO ()
-execute_ = S.execute_ ?conn
-
-query :: (FromRow r, ToRow p, ?conn :: Connection) => Query -> p -> IO [r]
-query = S.query ?conn
-
-query_ :: (FromRow r, ?conn :: Connection) => Query -> IO [r]
-query_ = S.query_ ?conn
-
-upsert :: forall t. (?conn::Connection, Eq t, DbTable t) => t -> IO t
-upsert = fmap fst . upsert'
+execute :: (?conn::Connection) => Sql -> IO ()
+execute (Sql q [] _) = S.execute_ ?conn (Query q)
+execute (Sql q p _) = S.execute ?conn (Query q) p
 
 data UpsertResult
   = New | Updated | Cached | Rewritten
   deriving (Eq, Show, Generic)
 
-upsert' :: forall t. (?conn::Connection, Eq t, DbTable t) => t -> IO (t, UpsertResult)
-upsert' = upsertWith (\_ -> id)
-
-upsertWith :: forall t. (?conn::Connection, Eq t, DbTable t) => (t -> t -> t) -> t -> IO (t, UpsertResult)
-upsertWith f t = do
+upsert :: forall t g. (?conn::Connection, DbTable t, HasField' "rowid" t (Id g)) => t -> IO t
+upsert t = do
   let
     TableInfo{..} = tableInfo @t
     tableName = bool name (name <> "_versions") (isVersioned @t)
     cols = T.intercalate ", " $ fmap (esc . fst) columns
     vals = T.intercalate ", " $ fmap (const "?") columns
     sets = T.intercalate ", " $ fmap (\(c, _) -> esc c <> " = ?") columns
-  case pkInfo @t of
-    NoVersion -> do
-      let q = "INSERT INTO " <> esc tableName <> " (" <> cols <> ") VALUES (" <> vals <> ") ON CONFLICT(rowid) DO UPDATE SET " <> sets
-      S.execute ?conn (Query q) (toRow t <> toRow t)
-      if getField @"rowid" t /= def then pure (t, Updated) else
-        fmap (,New) $ S.lastInsertRowId ?conn <&> \idInt -> setField @"rowid" (Id idInt) t
-    HasVersion -> do
-      -- FIXME: Implementation implies that HasVersion only supports uuid PKs
-      let row = toRow t
-      let versionIdx = L.findIndex ((=="version") . fst) columns
-      let kvs = L.zip (fmap fst columns) row
-      let uuidVersion = liftA2 (,) (L.lookup "uuid" kvs) (L.lookup "version" kvs)
-      let existingQ = "SELECT " <> cols <> " FROM " <> esc tableName <> " WHERE uuid=? AND version=?"
-      let lastQ = "SELECT " <> cols <> " FROM " <> esc tableName <> " WHERE uuid=? AND version = (SELECT MAX(version) FROM " <> esc tableName <> " WHERE version < ?)"
-      let q = "INSERT INTO " <> esc tableName <> " (" <> cols <> ") VALUES (" <> vals <> ") ON CONFLICT(uuid, version) DO UPDATE SET " <> sets
-      mayExist::Maybe t <- join <$> for uuidVersion \(u, v) -> do
-        fmap fst . L.uncons <$> S.query ?conn (Query existingQ) [u, v]
-      case mayExist of
-        Just x -> (t, Rewritten) <$ S.execute ?conn (Query q) (toRow (f x t) <> toRow (f x t))
-        Nothing -> do
-          mayLast::Maybe [SQLData] <- join <$> for uuidVersion \(u, v) -> do
-            fmap fst . L.uncons <$> S.query ?conn (Query lastQ) [u, v]
-          case (flip rowsEq row <$> versionIdx <*> mayLast) of
-            (Just True)  -> pure (t, Cached)
-            (Just False) -> (t, Updated) <$ S.execute ?conn (Query q) (row <> row)
-            Nothing      -> (t, New) <$ S.execute ?conn (Query q) (row <> row)
-          where
-            rowsEq :: Eq a => Int -> [a] -> [a] -> Bool
-            rowsEq _ [] [] = True
-            rowsEq _ _ []  = False
-            rowsEq _ [] _  = False
-            rowsEq 0 (_:xs) (_:ys) = rowsEq (-1) xs ys
-            rowsEq n (x:xs) (y:ys) = x == y && rowsEq (max (-1) (n - 1)) xs ys
+  let q = "INSERT INTO " <> esc tableName <> " (" <> cols <> ") VALUES (" <> vals <> ") ON CONFLICT(rowid) DO UPDATE SET " <> sets
+  S.execute ?conn (Query q) (toRow t <> toRow t)
+  if getField @"rowid" t /= def then pure t else
+     S.lastInsertRowId ?conn <&> \idInt -> setField @"rowid" (Id idInt) t
+
+upsertVersion
+  :: forall t. (?conn::Connection, Eq t, DbTable t) => t -> IO (t, UpsertResult)
+upsertVersion = upsertVersionOpts Nothing
+
+upsertVersionConflict
+  :: forall t. (?conn::Connection, Eq t, DbTable t)
+  => (t -> t -> t) -> t -> IO (t, UpsertResult)
+upsertVersionConflict f = upsertVersionOpts (Just f)
+
+upsertVersionOpts
+  :: forall t. (?conn::Connection, Eq t, DbTable t)
+  => Maybe (t -> t -> t) -> t -> IO (t, UpsertResult)
+upsertVersionOpts mf t = do
+  let
+    TableInfo{..} = tableInfo @t
+    tableName = bool name (name <> "_versions") (isVersioned @t)
+    cols = T.intercalate ", " $ fmap (esc . fst) columns
+    vals = T.intercalate ", " $ fmap (const "?") columns
+    sets = T.intercalate ", " $ fmap (\(c, _) -> esc c <> " = ?") columns
+    -- FIXME: Implementation implies that HasVersion only supports uuid PKs
+  let row = toRow t
+  let versionIdx = L.findIndex ((=="version") . fst) columns
+  let kvs = L.zip (fmap fst columns) row
+  let pkVersion = liftA2 (,) (L.lookup "rowid" kvs) (L.lookup "version" kvs)
+  let existingQ = liftA2 (curry fst) pkVersion mf <&> \(ri, vr) -> [sql|select #{cols} from {{tableName}} where rowid={ri} AND version={vr}|]
+  let lastQ = pkVersion <&> \(pk, _) -> [sql|select #{cols} from {{name}} where rowid={pk}|]
+  let Sql q _ _ = [sql|insert into {{tableName}} (#{cols}) values (#{vals}) on conflict(rowid, version) do update set #{sets}|]
+  mayExist::Maybe t <- join <$> for existingQ \q -> fmap fst . L.uncons <$> doQuery q
+  case liftA2 (,) mayExist mf of
+    Just (x, f) -> (t, Rewritten) <$ S.execute ?conn (Query q) (toRow (f x t) <> toRow (f x t))
+    Nothing -> do
+      mayLast::Maybe [SQLData] <- join <$> for lastQ \q -> fmap fst . L.uncons <$> doQuery q
+      case (flip rowsEq row <$> versionIdx <*> mayLast) of
+        (Just True)  -> pure (t, Cached)
+        (Just False) -> (t, Updated) <$ S.execute ?conn (Query q) (row <> row)
+        Nothing      -> (t, New) <$ S.execute ?conn (Query q) (row <> row)
+      where
+        rowsEq :: Eq a => Int -> [a] -> [a] -> Bool
+        rowsEq _ [] [] = True
+        rowsEq _ _ []  = False
+        rowsEq _ [] _  = False
+        rowsEq 0 (_:xs) (_:ys) = rowsEq (-1) xs ys
+        rowsEq n (x:xs) (y:ys) = x == y && rowsEq (max (-1) (n - 1)) xs ys
 
 selectFrom
   :: forall t p
-  . (?conn::Connection, DbTable t, ToRow p) => Query -> p -> IO [t]
-selectFrom qTail p = do
+  . (?conn::Connection, DbTable t) => Sql -> IO [t]
+selectFrom (Sql qTail p _) = do
   let
     TableInfo{..} = tableInfo @t
     cols = T.intercalate ", " $ fmap (esc . fst) columns
-    q = "SELECT " <> cols <> " FROM " <> esc name <> " " <> fromQuery qTail
+    q = "SELECT " <> cols <> " FROM " <> esc name <> " " <> qTail
   S.query ?conn (Query q) p
-
-selectFrom_ :: forall t. (?conn :: Connection, DbTable t) => Query -> IO [t]
-selectFrom_ qTail = do
-  let
-    TableInfo{..} = tableInfo @t
-    cols = T.intercalate ", " $ fmap (esc . fst) columns
-    q = "SELECT " <> cols <> " FROM " <> esc name <> " " <> fromQuery qTail
-  S.query_ ?conn (Query q)
-
-selectFromNamed
-  :: forall t. (?conn :: Connection, DbTable t) => Query -> [NamedParam] -> IO [t]
-selectFromNamed qTail p = do
-  let
-    TableInfo{..} = tableInfo @t
-    cols = T.intercalate ", " $ fmap (esc . fst) columns
-    q = "SELECT " <> cols <> " FROM " <> esc name <> " " <> fromQuery qTail
-  S.queryNamed ?conn (Query q) p
 
 newtype JsonField a = JsonField {unJsonField :: a}
 
@@ -250,13 +225,6 @@ textFieldParser f fld =
     Field _ _               ->
       Errors [SomeException (Incompatible sqlTy haskTy "")]
 
-data PKInfo t (v :: Bool) where
-  NoVersion :: HasField' "rowid" t (Id t) => PKInfo t 'False
-  HasVersion ::
-    ( HasField' "uuid" t (UUID5 t)
-    , HasField' "version" t (Id tr) )
-    => PKInfo t 'True
-
 class DeriveUUID a where
   uuidSalt :: a -> ByteString
 
@@ -264,8 +232,6 @@ fixUUID :: (DeriveUUID a, HasField' "uuid" a (UUID5 a)) => (UUID5 a -> a) -> a
 fixUUID f = fix (f . uuid5FromBS . uuidSalt)
 
 class (FromRow a, ToRow a) => DbTable a where
-  type HasVersion a :: Bool
-  pkInfo :: PKInfo a (HasVersion a)
   tableInfo :: TableInfo
 
 class (FromField a, ToField a) => DbField a where
@@ -298,16 +264,12 @@ instance DbField ByteString where
   columnInfo _ = ColumnInfo BlobColumn False False Nothing
 
 instance (DbTable t, Typeable (Id t)) => DbField (Id t) where
-  columnInfo _ = ColumnInfo IntegerColumn False False $ Just (tName, fName)
-    where
-      fName = getField @"primary" (tableInfo @t)
-      tName = getField @"name" (tableInfo @t)
+  columnInfo _ = let TableInfo{..} = tableInfo @t in
+    ColumnInfo IntegerColumn False False (Just (name, ["rowid"]))
 
 instance (DbTable t, Typeable t) => DbField (UUID5 t) where
-  columnInfo _ = ColumnInfo TextColumn False False $ Just (tName, fName)
-    where
-      fName = getField @"primary" (tableInfo @t)
-      tName = getField @"name" (tableInfo @t)
+  columnInfo _ = let TableInfo{..} = tableInfo @t in
+    ColumnInfo IntegerColumn False False (Just (name, ["rowid"]))
 
 instance DbField UTCTime where
   columnInfo _ = ColumnInfo TextColumn False False Nothing
@@ -331,11 +293,17 @@ instance Typeable (UUID5 t) => FromField (UUID5 t) where
 instance DbField Bool where
   columnInfo _ = ColumnInfo IntegerColumn False False Nothing
 
+deriving newtype instance DbField (Tid t)
+deriving newtype instance ToField (Tid t)
+deriving newtype instance FromField (Tid t)
+
 #ifndef __GHCJS__
 deriving via JsonField [a] instance (FromJSON a, Typeable a) => FromField [a]
 deriving via JsonField [a] instance ToJSON a => ToField [a]
 deriving via JsonField (M.Map k v) instance (FromJSON (M.Map k v), Typeable k, Typeable v) => FromField (M.Map k v)
 deriving via JsonField (M.Map k v) instance ToJSON (M.Map k v) => ToField (M.Map k v)
+deriving newtype instance FromJSON (Tid t)
+deriving newtype instance ToJSON (Tid t)
 #else
 deriving via JsonField [a] instance (Typeable a) => FromField [a]
 deriving via JsonField [a] instance ToField [a]

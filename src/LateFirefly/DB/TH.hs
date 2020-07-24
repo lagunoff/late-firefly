@@ -18,6 +18,7 @@ import Database.SQLite.Simple.ToField
 import Flat as FL
 import LateFirefly.DB.Base
 import LateFirefly.Prelude
+import LateFirefly.DB.QQ
 import GHC.Records
 import Language.Haskell.TH
 import Language.Haskell.TH.Syntax
@@ -26,7 +27,6 @@ import Text.Inflections
 
 data DeriveDbConfig = DeriveDbConfig
   { tableName :: Maybe Text
-  , primary   :: Maybe Text
   , prio      :: Int
   } deriving (Generic)
 
@@ -42,24 +42,18 @@ deriveDb' DeriveDbConfig{..} n = do
       patNames <- forM vars \_ -> newName "a"
       vName <- newName "v"
       let
-        priFld = flip L.find vars \case
-          (name, _, AppT (ConT idCon) (ConT conTy)) ->
-            (idCon == ''Id || idCon == ''UUID5) && conTy == n
-          _                                         -> False
         verFld = L.find ((=="version") . varName) vars
+        priFld = L.find ((=="rowid") . varName) vars
         tblName = textE $ T.unpack $ flip fromMaybe tableName
           $ fromRight (T.pack (occName name))
           $ underscore <$> parseCamelCase [] (T.pack (occName name))
         textE s = VarE 'T.pack `AppE` LitE (StringL s)
         infixMap l r = InfixE (Just l) (VarE '(<$>)) (Just r)
         infixAp l r = InfixE (Just l) (VarE '(<*>)) (Just r)
-        dbTableInst = InstanceD Nothing [] (ConT ''DbTable `AppT` ConT n) [hasVersionD, tableDescD, pkInfoD]
-        columns = vars <&> \v -> TupE [AppE (VarE 'recordFieldToDb) (textE (varName v)), (VarE 'columnInfo `AppE` AppTypeE (ConE 'Proxy) (varType v))]
-        tableDescE = ConE 'TableInfo `AppE` tblName `AppE` primaryListE `AppE` ListE columns `AppE` LitE (IntegerL (fromIntegral prio))
+        dbTableInst = InstanceD Nothing [] (ConT ''DbTable `AppT` ConT n) [tableDescD]
+        columns = vars <&> \v -> TupE [textE (varName v), (VarE 'columnInfo `AppE` AppTypeE (ConE 'Proxy) (varType v))]
+        tableDescE = ConE 'TableInfo `AppE` tblName `AppE` ListE columns `AppE` LitE (IntegerL (fromIntegral prio))
         tableDescD = FunD 'tableInfo [Clause [] (NormalB tableDescE) []]
-        hasVersionD = TySynInstD ''HasVersion (TySynEqn [(ConT n)] (PromotedT (bool 'False 'True (isJust verFld))))
-        pkInfoD = FunD 'pkInfo [Clause [] (NormalB pkInfoE) []]
-        pkInfoE = ConE $ bool 'NoVersion 'HasVersion (isJust verFld)
         fromRowInst = InstanceD Nothing [] (ConT ''FromRow `AppT` ConT n) [fromRowD]
         fromRowD = FunD 'fromRow [Clause [] (NormalB fromRowE) []]
         fields = fmap (const (VarE 'field)) vars
@@ -68,17 +62,15 @@ deriveDb' DeriveDbConfig{..} n = do
         toRowD = FunD 'toRow [Clause [ConP name (VarP <$> patNames)] (NormalB toRowE) []]
         toFields = fmap ((VarE 'toField `AppE`) . VarE) patNames
         toRowE = ListE toFields
-        primaryE = textE $ maybe "rowid" varName priFld
-        primaryListE = ListE $ [primaryE] <> maybe [] (pure . textE . varName) verFld
       pure [fromRowInst, toRowInst, dbTableInst]
     _ -> do
       [] <$ reportError "deriveDb: unsupported data declaration"
 
 deriveDb :: Name -> Q [Dec]
-deriveDb = deriveDb' (DeriveDbConfig Nothing Nothing 0)
+deriveDb = deriveDb' (DeriveDbConfig Nothing 0)
 
 deriveDbPrio :: Int -> Name -> Q [Dec]
-deriveDbPrio = deriveDb' . DeriveDbConfig Nothing Nothing
+deriveDbPrio = deriveDb' . DeriveDbConfig Nothing
 
 deriveUUID :: [String] -> Name -> Q [Dec]
 deriveUUID flds tcName = reify tcName >>= \case
@@ -100,9 +92,6 @@ deriveDbUUID :: [String] -> Name -> Q [Dec]
 deriveDbUUID flds tcName =
   liftA2 (<>) (deriveDb tcName) (deriveUUID flds tcName)
 
-recordFieldToDb :: Text -> Text
-recordFieldToDb n = fromRight n $ parseCamelCase [] n <&> underscore
-
 -- | Make expression of type [Query] applying 'createTableStmt' to all
 -- the instances of typeclass 'DbTable'
 mkDatabaseSetup :: Q Exp
@@ -114,9 +103,9 @@ mkDatabaseSetup = do
     _                              -> pure Nothing
   [|joinSetupPrio $(pure (ListE ins))|]
 
-mkSetupPrio :: forall t. DbTable t => (Int, [Query])
+mkSetupPrio :: forall t. DbTable t => (Int, [Sql])
 mkSetupPrio = (getField @"prio" ti, createTableStmt @t) where
   ti = tableInfo @t
 
-joinSetupPrio :: [(Int, [Query])] -> [Query]
+joinSetupPrio :: [(Int, [Sql])] -> [Sql]
 joinSetupPrio xs = L.foldl' (<>) [] (fmap snd (L.sortOn fst xs ))

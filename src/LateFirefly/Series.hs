@@ -16,9 +16,9 @@ import LateFirefly.Widget.Prelude
 
 apiGetSeasons :: (?conn::Connection) => Text -> Eio BackendError [(Season, [Episode])]
 apiGetSeasons txt = liftIO do
-  seasons <- selectFrom_ @Season [sql|where 1 order by `number`|]
+  seasons <- selectFrom @Season [sql|where 1 order by `number`|]
   let seasonIds = T.intercalate ", " $ escText . U.toText . unUUID5 . getField @"uuid" <$> seasons
-  episodes <- selectFrom_ @Episode [sql|where season_id in (#{seasonIds}) order by `code`|]
+  episodes <- selectFrom @Episode [sql|where season_id in (#{seasonIds}) order by `code`|]
   pure $ seasons <&> \s@Season{uuid} -> (s, L.filter ((==uuid) . getField @"seasonId") episodes)
 
 seriesWidget :: SeriesRoute -> Html (Html ())

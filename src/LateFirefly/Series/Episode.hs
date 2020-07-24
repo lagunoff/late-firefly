@@ -58,10 +58,10 @@ episodeWidget r@EpisodeRoute{..} = do
 
 getEpisode :: (?conn::Connection) => Text -> Eio BackendError Episode
 getEpisode epCode = liftIO do
-  episode <- L.head <$> flip query [epCode] [sql|
+  episode <- L.head <$> doQuery [sql|
     select e.* from `episode` e
       left join `season` s on e.season_id=s.uuid
-    where e.`code`=?
+    where e.`code`={epCode}
   |]
   links <- applyLinkRule' "iwatchtheoffice.com" $ getField @"links" episode
   pure episode {links=links}

@@ -1,10 +1,14 @@
-module LateFirefly.IMDB.Scrape (scrapeSite) where
+module LateFirefly.IMDB.Scrape
+  ( scrapeSearch
+  , scrapeEpisodes
+  ) where
 
 import Control.Lens as L hiding (children)
 import Control.Exception
 import Control.Error
 import Data.Text as T
 import Data.Char
+import Data.Coerce
 import Data.List as L
 import Data.Map as M
 import Prelude as P
@@ -14,14 +18,15 @@ import Text.Read hiding (lift)
 import LateFirefly.DB
 import LateFirefly.Prelude
 import LateFirefly.IMDB.Schema
-import Text.HTML.TagSoup.Lens as L
+import Text.HTML.TagSoup.Lens as L hiding (attr)
 import Text.HTML.TagSoup as L
 import qualified Network.Wreq as Wreq
 import Text.Regex.Lens
 import Text.Regex.Quote
 import Text.Regex.TDFA
-import Network.HTTP.Client
+import Network.HTTP.Client hiding (withConnection)
 import GHC.Stack
+import GHC.Records
 import Network.HTTP.Types
 import Text.Shakespeare.Text as X (st)
 
@@ -30,29 +35,30 @@ data ScrapeError
   | CallStackException CallStack
   deriving (Exception, Show)
 
-scrapeSite :: (?conn::Connection) => Bool -> Double -> IO ()
-scrapeSite continue percentile = void $ newVersionOrContinue continue $ unEio (scrapeEpisodes "tt0386676" 1)
--- unEio do
---   prog <- liftIO readProgress
---   for_ genres \g -> do
---     (\x -> foldM_ x Nothing (paginate 9951)) \total p -> do
---       let p' = fromIntegral p
---       let total' = fmap fromIntegral total
---       case (fmap ((p' <) . (*percentile)) total') of
---         Just False -> pure total
---         _          -> do
---           let progress = fromMaybe 0 $ M.lookup g prog
---           case (progress >= p + 49) of
---             True  -> Nothing <$ (traceM $ "Skipping: " <> ("https://www.imdb.com/search/title/?genres=" <> T.unpack g <> "&start=" <> show p))
---             False -> Just <$> (scrapeSearchItems g p)
-
 genres :: [Genre]
 genres = ["action", "adventure", "animation", "biography", "comedy", "crime", "documentary", "drama", "family", "fantasy", "film_noir", "game_show", "history", "horror", "music", "musical", "mystery", "news", "reality_tv", "romance", "sci_fi", "sport", "talk_show", "thriller", "war", "western"]
 
-scrapeSearchItems
+-- * Scrape ImdbEpisode
+
+scrapeSearch :: (?conn::Connection) => Bool -> Double -> IO ()
+scrapeSearch continue percentile = void $ newVersionOrContinue continue $ unEio do
+  prog <- liftIO readProgress
+  for_ genres \g -> do
+    (\x -> foldM_ x Nothing (paginate 9951)) \total p -> do
+      let p' = fromIntegral p
+      let total' = fmap fromIntegral total
+      case (fmap ((p' <) . (*percentile)) total') of
+        Just False -> pure total
+        _          -> do
+          let progress = fromMaybe 0 $ M.lookup g prog
+          case (progress >= p + 49) of
+            True  -> Nothing <$ (traceM $ "Skipping: " <> ("https://www.imdb.com/search/title/?genres=" <> T.unpack g <> "&start=" <> show p))
+            False -> Just <$> (scrapeImdbSearch1 g p)
+
+scrapeImdbSearch1
   :: (?conn::Connection, ?version::NewVersion)
   => Genre -> Int -> Eio ScrapeError Int
-scrapeSearchItems g start = do
+scrapeImdbSearch1 g start = do
   markup <- T.decodeUtf8 . BSL.toStrict . (^. Wreq.responseBody) <$> httpGet ("https://www.imdb.com/search/title/?genres=" <> T.unpack g <> "&start=" <> show start)
   let episodeOuters = markup^.._DOM.traverse.allElements.hasClass "lister-item"
   total <- mayThrow $ markup^.._DOM.traverse . allElements . attributed(ix "id" . traverse . only "main") . allClass "desc" . allElements . named (only "span") ^? ix 0 . allContents . to T.unpack . regex [r| of ([,.[:digit:]]+)|] . captures . ix 0 . to (readMaybe . L.filter isDigit) . traverse
@@ -66,54 +72,85 @@ scrapeSearchItems g start = do
     let starsEls       = el ^.. allElements . named(only "a") . allElements . attributed(ix "href" . traverse . nearly "" (T.isPrefixOf "/name/"))
     let stars = catMaybes $ starsEls <&> \e -> liftA2 (,) (e ^? attrOne "href" . to T.unpack . regex [r|/name/([[:alnum:]\-_]+)|] . captures . ix 0 . to T.pack) (Just (e ^. allContents))
     let thumbnail67x98 = el ^? allClass "lister-item-image". allElements . named(only "img").attrOne "loadlate"
-    let year =el ^? allClass "lister-item-year" . allContents . to (T.dropWhile (=='(') . T.dropWhileEnd (==')'))
-    headerEl <- mayThrow $ el ^? allClass "lister-item-header"
-    imdbId   <- mayThrow $ headerEl ^? allElements . named(only "a").attrOne "href" . to (T.unpack . T.strip) . regex [r|/title/([[:alnum:]\-_]+)|] . captures . ix 0 . to T.pack
-    header   <- mayThrow $ headerEl ^? allElements . named(only "a").allContents
+    let year = el ^? allClass "lister-item-year" . allContents . to (T.dropWhile (=='(') . T.dropWhileEnd (==')'))
+    headerEl   <- mayThrow $ el ^? allClass "lister-item-header"
+    rowid      <- fmap coerce $ mayThrow $ headerEl ^? allElements . named(only "a").attrOne "href" . to (T.unpack . T.strip) . regex [r|/title/([[:alnum:]\-_]+)|] . captures . ix 0 . to T.pack
+    header     <- mayThrow $ headerEl ^? allElements . named(only "a").allContents
     popularity <- fmap (M.singleton g) $ mayThrow $ headerEl ^? allClass "lister-item-index".allContents . to (T.unpack . T.strip) . regex [r|^([\s,[:digit:]]+)\.?$|] . captures . ix 0 . to (readMaybe @Int . L.filter isDigit) . traverse
-    text     <- mayThrow $ textMutedEls ^? ix 1 . allContents . to T.strip
-    (t, changed) <- liftIO $ upsertWith clush (fixUUID \uuid -> SearchItem{version=coerce ?version,..})
-    traceM $ T.unpack [st|#{imdbId} [#{show changed}]|]
+    text       <- mayThrow $ textMutedEls ^? ix 1 . allContents . to T.strip
+    (t, changed) <- liftIO $ upsertVersionConflict clush $ ImdbSearch{version=coerce ?version,..}
+    traceM $ T.unpack [st|#{unTid rowid} [#{show changed}]|]
   where
-    clush SearchItem{popularity=p1} SearchItem{popularity=p2,..} = SearchItem{popularity=p1 <> p2, ..}
+    clush ImdbSearch{popularity=p1} ImdbSearch{popularity=p2,..} = ImdbSearch{popularity=p1 <> p2, ..}
 
-scrapeEpisodes
+-- * Scrape ImdbEpisode
+
+scrapeEpisodes :: (?conn::Connection) => Bool -> [Tid Imdb] -> IO ()
+scrapeEpisodes continue imdbIds =
+  void $ newVersionOrContinue continue $ unEio do
+    for_ imdbIds scrapeEpisodes0
+
+scrapeEpisodes0
   :: (?conn::Connection, ?version::NewVersion)
-  => ImdbId -> Int -> Eio ScrapeError ()
-scrapeEpisodes imdbId seasonNum = do
-  traceM $ show imdbId <> " " <> show seasonNum
-  tags <- parseTags . T.decodeUtf8 . BSL.toStrict .  (^. Wreq.responseBody) <$> httpGet ("https://www.imdb.com/title/tt0386676/episodes?season=" <> show seasonNum)
+  => Tid Imdb -> Eio ScrapeError ()
+scrapeEpisodes0 imdbId = do
+  seasons <- scrapeEpisodes1 imdbId "1"
+  for_ (L.drop 1 seasons) (void . scrapeEpisodes1 imdbId)
+
+scrapeEpisodes1
+  :: (?conn::Connection, ?version::NewVersion)
+  => Tid Imdb -> Text -> Eio ScrapeError [Text]
+scrapeEpisodes1 imdbId seasonNum = do
+  tags <- parseTags . T.decodeUtf8 . BSL.toStrict .  (^. Wreq.responseBody) <$> httpGet ("https://www.imdb.com/title/" <> T.unpack (unTid imdbId) <> "/episodes?season=" <> T.unpack seasonNum)
   let
-    papers = fmap f
+    seasons = fmap (attr "value")
+      . partitions (~== ("<option>"::String))
+      . L.takeWhile (~/= ("</select>"::String))
+      . L.dropWhile (~/= ("<select id=\"bySeason\">"::String))
+      $ tags
+    episodes = fmap f
       . partitions ((~== ("<div class=\"list_item even\">"::String)) `tagOr` (~== ("<div class=\"list_item odd\">"::String)))
       . L.takeWhile (~/= ("<hr>"::String))
       . L.dropWhile (~/= ("<div class=\"list detail eplist\">"::String))
       $ tags
-  traceM $ show papers
-  traceM $ show (L.length papers)
+  for_ episodes \x -> do
+    (t, changed) <- liftIO $ upsertVersion x
+    let rid = unTid $ getField @"rowid" t
+    traceM $ T.unpack [st|#{rid} [#{show changed}]|]
+  pure seasons
+
   where
     tagOr :: (a -> Bool) -> (a -> Bool) -> a -> Bool
     tagOr f g a = f a || g a
 
-    f :: [Tag Text] -> Text
-    f = fromAttrib "src" . L.head . L.dropWhile (~/= ("<img>"::String))
+    f :: [Tag Text] -> ImdbEpisode
+    f tt = ImdbEpisode{version=coerce ?version, ..} where
+      href = attr "href" . L.dropWhile (~/= ("<a>"::String)) $ tt
+      episode = attr "content" . L.dropWhile (~/= ("<meta itemprop=\"episodeNumber\">"::String)) $ tt
+      rowid = Tid $ T.pack $ maybeTrace $ href ^? to T.unpack . regex [r|/title/([[:alnum:]\-_]+)|] . captures . ix 0
+      deleted = False
+      parent = imdbId
+      season = seasonNum
 
-    hasClass :: Text -> Tag Text -> Bool
-    hasClass cl = hasClasses [cl]
+-- * Scrape ImdbTitle
 
-    hasClasses :: [Text] -> Tag Text -> Bool
-    hasClasses cls = \case
-      TagOpen _ attrs -> case L.lookup "class" attrs of
-        Just x -> (\xs -> L.all (isJust .  flip L.find xs . (==)) cls) . T.splitOn " " $ x
-        Nothing -> False
-      _ -> False
+scrapeTitle :: (?conn::Connection) => Bool -> Tid Imdb -> IO ()
+scrapeTitle continue imdbId = void $ newVersionOrContinue continue $ unEio do
+  scrapeTitle0 imdbId
+
+scrapeTitle0 :: (?conn::Connection) => Tid Imdb -> Eio ScrapeError ()
+scrapeTitle0 imdbId = do
+  tt <- parseTags . T.decodeUtf8 . BSL.toStrict .  (^. Wreq.responseBody) <$> httpGet ("https://www.imdb.com/title/" <> T.unpack (unTid imdbId))
+  let ttDrop = L.dropWhile (~/= ("<div class=title_wrapper>"::String)) tt
+  let title = ttText . L.takeWhile (~/= ("<h1>"::String)) . L.dropWhile (~/= ("<h1>"::String)) $ ttDrop
+  undefined
 
 readProgress :: (?conn::Connection, ?version::NewVersion) => IO (M.Map Genre Int)
 readProgress = do
-  let TableInfo{..} = tableInfo @SearchItem
+  let TableInfo{..} = tableInfo @ImdbSearch
   let tableName::Text = name <> "_versions"
-  let q = [sql|select p.key, max(p.value) from #{tableName}, json_each(popularity) p where version=? group by p.key|]
-  kvs::[(Text, Int)] <- query q [?version]
+  let v = ?version
+  kvs::[(Text, Int)] <- [query|select p.key, max(p.value) from #{tableName}, json_each(popularity) p where version={v} group by p.key|]
   pure $ M.fromList kvs
 
 httpGet :: String -> Eio ScrapeError _
@@ -130,10 +167,6 @@ hasClass :: Text -> Traversal' (Element Text) (Element Text)
 hasClass cs = attributed(ix "class" . traverse . nearly "" cond) where
   cond = isJust . L.find (==cs) . T.splitOn " "
 
-hasClasses :: [Text] -> Traversal' (Element Text) (Element Text)
-hasClasses css = attributed(ix "class" . traverse . nearly "" cond) where
-  cond = (\xs -> L.all (isJust .  flip L.find xs . (==)) css) . T.splitOn " "
-
 mayThrow :: HasCallStack => Maybe a -> Eio ScrapeError a
 mayThrow = maybe (throwError (CallStackException callStack)) pure
 
@@ -141,3 +174,9 @@ paginate :: Int -> [Int]
 paginate total = L.takeWhile ((<=total') . fromIntegral) $ fmap (succ . (* 50)) [0..]
   where
     total'::Double = fromIntegral total
+
+attr :: HasCallStack => Text -> [Tag Text] -> Text
+attr k = withFrozenCallStack (nemptyTrace . fromAttrib k . headTrace)
+
+ttText :: HasCallStack => [Tag Text] -> Text
+ttText = withFrozenCallStack (nemptyTrace . innerText)

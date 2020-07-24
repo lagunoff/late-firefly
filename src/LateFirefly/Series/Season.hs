@@ -53,8 +53,8 @@ seasonWidget r@SeasonRoute{..} = do
 
 getEpisodes :: (?conn::Connection) => Int -> Eio BackendError [Episode]
 getEpisodes seasonNumber = liftIO do
-  query [sql|
+  doQuery [sql|
     select e.* from `episode` e
       left join `season` s on e.season_id=s.uuid
-    where s.`number`=? order by e.code
-  |] [seasonNumber]
+    where s.`number`={seasonNumber} order by e.code
+  |]

@@ -210,8 +210,7 @@ headerWidget = do
             border: solid 2px #{primary}
             box-shadow: none
             svg
-              opacity: 1
-        |]
+              opacity: 1 |]
 
 footerWidget :: Html ()
 footerWidget = do
@@ -263,8 +262,7 @@ footerWidget = do
         padding: 0
         margin: #{unit * 3} 0 0 0
         li
-          list-style: none
-  |]
+          list-style: none |]
 
 htmlRouter
   :: forall a . (HasParser U a, Show a)

@@ -4,6 +4,7 @@ module LateFirefly.Utils where
 import Control.Error
 import GHC.Stack
 import GHC.Generics
+import Data.List as L
 import Data.Typeable
 import Data.String
 import Flat
@@ -105,3 +106,6 @@ nemptyTrace x = if x == mempty then withFrozenCallStack (error "neTrace") else x
 
 nemptyNote :: (Eq a, Monoid a, HasCallStack) => String -> a -> a
 nemptyNote m x = if x == mempty then withFrozenCallStack (error m) else x
+
+stripPrefix1 :: String -> String -> String
+stripPrefix1 p x = fromMaybe x $ L.stripPrefix p x

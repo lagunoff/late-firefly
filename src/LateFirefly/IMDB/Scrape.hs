@@ -3,9 +3,11 @@ module LateFirefly.IMDB.Scrape
   , scrapeEpisodes
   ) where
 
-import Control.Lens as L hiding (children)
+import Control.Lens as L hiding (children, (.=))
 import Control.Exception
 import Control.Error
+import Data.Aeson as AE
+import Data.Aeson.TH as AE
 import Data.Text as T
 import Data.Char
 import Data.Coerce
@@ -21,6 +23,7 @@ import LateFirefly.IMDB.Schema
 import Text.HTML.TagSoup.Lens as L hiding (attr)
 import Text.HTML.TagSoup as L
 import qualified Network.Wreq as Wreq
+import qualified Network.Wreq.Types as Wreq hiding (headers)
 import Text.Regex.Lens
 import Text.Regex.Quote
 import Text.Regex.TDFA
@@ -33,6 +36,7 @@ import Text.Shakespeare.Text as X (st)
 data ScrapeError
   = HttpException HttpException
   | CallStackException CallStack
+  | GraphQLError String
   deriving (Exception, Show)
 
 genres :: [Genre]
@@ -43,7 +47,7 @@ genres = ["action", "adventure", "animation", "biography", "comedy", "crime", "d
 scrapeSearch :: (?conn::Connection) => Bool -> Double -> IO ()
 scrapeSearch continue percentile = void $ newVersionOrContinue continue $ unEio do
   prog <- liftIO readProgress
-  for_ genres \g -> do
+  for_ LateFirefly.IMDB.Scrape.genres \g -> do
     (\x -> foldM_ x Nothing (paginate 9951)) \total p -> do
       let p' = fromIntegral p
       let total' = fmap fromIntegral total
@@ -160,6 +164,19 @@ httpGet u = liftIOWith HttpException $ P.putStrLn (u <> "...") *> Wreq.getWith o
     ua = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.122 Safari/537.36"
     lang = "en-US;q=0.9,en;q=0.8"
 
+httpPost :: Wreq.Postable body => String -> body -> Eio ScrapeError _
+httpPost u b = liftIOWith HttpException $ P.putStrLn (u <> "...") *> Wreq.postWith opts u b
+  where
+    opts = Wreq.defaults & Wreq.headers .~ [(hUserAgent, ua), (hAcceptLanguage, lang), (hCookie, cook), (hContentType, ct)]
+    ua = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.122 Safari/537.36"
+    lang = "en-US;q=0.9,en;q=0.8"
+    cook = "ubid-main=130-8178991-3785115; session-id=140-1954702-4881012; session-id-time=2082787201l; uu=BCYo3Dldb2sxDTahtCC6PoSs8bIIl1GAE9w90XYwq-sY-fFUWbVkPcPcv4DpzdS9njrpdmwOkvZH%0D%0ABDVaHagXZl3WLo0Kv7EdP3pDy4nN0wYqlaOXXXwkC3MhQ0i7DC0KaDyxXidncOGttOsS-D6TP-R2%0D%0AOg%0D%0A; adblk=adblk_yes; session-token=xqXJZi+OwxzBPKbTCbcEwc4A9OnrIO5Fh47VdZLGvEjPoKHmXaH8+wMaBmuvfC/eAHAsqyHpfgAyZryzmBtG6b0xnV+p+Ous7+U6Apn1MH63BCKQWKwrucBDywsqd2LwDq1r7VLapR8EJaIHtoRVvBYKZClI2hyZsrJd1e7QNjAo4q/GDmw+V4NEtHvLOHTb"
+    ct = "application/json"
+
+sendGql :: (FromJSON a, Wreq.Postable body) => String -> body -> Eio ScrapeError a
+sendGql u b =
+  either error P.id . AE.eitherDecode' .  traceShowId . (^. Wreq.responseBody) <$> httpPost u b
+
 allClass cs = allElements . attributed(ix "class" . traverse . nearly "" cond) where
   cond = isJust . L.find (==cs) . T.splitOn " "
 
@@ -180,3 +197,94 @@ attr k = withFrozenCallStack (nemptyTrace . fromAttrib k . headTrace)
 
 ttText :: HasCallStack => [Tag Text] -> Text
 ttText = withFrozenCallStack (nemptyTrace . innerText)
+
+test0 :: IO Title
+test0 = do
+  let q = [st|
+{
+  title(id: "tt0664521") {
+    id
+    titleText {
+      text
+      isOriginalTitle
+      country {
+        id
+        text
+      }
+      language { id text }
+    }
+    plots(first: 999) {
+      edges {
+        node {
+          id
+          plotText {
+            markdown
+          }
+          plotType
+          language {
+            id
+            text
+          }
+          isSpoiler
+          author
+        }
+      }
+      pageInfo {
+        endCursor
+        hasNextPage
+      }
+    }
+    images(first: 999) {
+      edges {
+        node {
+          id
+          url
+          width
+          height
+          copyright
+          createdBy
+          source { id text attributionUrl banner { url height width attributionUrl } }
+          type
+        }
+        cursor
+      }
+
+      pageInfo {
+        endCursor
+        hasNextPage
+      }
+    }
+    quotes(first:999) {
+      edges {
+        node {
+          id
+          isSpoiler
+          lines { characters { character name { id }} text stageDirection }
+          interestScore { usersInterested usersVoted }
+          language { id text }
+        }
+        cursor
+      }
+
+      pageInfo {
+        endCursor
+        hasNextPage
+      }
+    }
+  }
+} |]
+  let body = object ["operationName" .= Null, "query" .= q, "variables" .= object []]
+  traceM (show $ AE.encode body)
+  x::GQLResponse Title <- unEio $ sendGql "https://graphql.imdb.com/index.html" (AE.encode body)
+  pure (coerce x)
+
+newtype GQLResponse a = GQLResponse
+  { _data :: GQLTitleResponse a }
+  deriving stock (Show, Eq, Generic)
+
+newtype GQLTitleResponse a = GQLTitleResponse
+  { title :: a }
+  deriving stock (Show, Eq, Generic)
+  deriving anyclass (FromJSON, ToJSON)
+
+deriveJSON defaultOptions {fieldLabelModifier = \x -> fromMaybe x $ L.stripPrefix "_" x } ''GQLResponse

@@ -23,6 +23,8 @@ module LateFirefly.DB.Base
   ) where
 
 import Control.Lens
+import Control.Monad.State.Strict
+import Control.Monad.Reader
 import Data.ByteString as BS
 import Data.ByteString.Builder as B
 import Data.ByteString.Internal as BS
@@ -45,6 +47,7 @@ import Database.SQLite.Simple.ToField
 import Database.SQLite3 (ColumnType(..))
 import Flat
 import GHC.Exception
+import GHC.Generics
 import GHC.Int
 import LateFirefly.Prelude
 import LateFirefly.DB.QQ
@@ -199,9 +202,15 @@ instance (FromJSON a, Typeable a) => FromField (JsonField a) where
   fromField  = textFieldParser $
     fmap JsonField . AE.eitherDecode @a . B.toLazyByteString .
     T.encodeUtf8Builder
+
+instance (ToJSON a, FromJSON a, Typeable a) => DbField (JsonField a) where
+  columnInfo _ = ColumnInfo TextColumn False False Nothing
+
 #else
 instance ToField (JsonField a) where toField = error "Unimplemented"
 instance (Typeable a) => FromField (JsonField a) where fromField = error "Unimplemented"
+instance (Typeable a) => DbField (JsonField a) where
+  columnInfo _ = ColumnInfo TextColumn False False Nothing
 #endif
 
 newtype ReadShowField a = ReadShowField {unReadShowField :: a}
@@ -310,3 +319,33 @@ deriving via JsonField [a] instance ToField [a]
 deriving via JsonField (M.Map k v) instance (Typeable k, Typeable v) => FromField (M.Map k v)
 deriving via JsonField (M.Map k v) instance ToField (M.Map k v)
 #endif
+
+-- | Count the number of fields in a record
+class GCountFields f where
+  countFields :: Proxy (f p) -> Int
+
+instance GCountFields f => GCountFields (D1 c f) where
+  countFields _ = countFields (Proxy::Proxy(f x))
+
+instance Constructor c => GCountFields (C1 c U1) where
+  countFields _ = 0
+
+instance (GCountFields f, Constructor c) => GCountFields (C1 c f) where
+  countFields _ = countFields (Proxy::Proxy(f x))
+
+instance Selector s => GCountFields (S1 s f) where
+  countFields _ = 1
+
+instance (GCountFields f, GCountFields g) => GCountFields ((:*:) f g) where
+  countFields _ = countFields (Proxy::Proxy(f x)) + countFields (Proxy::Proxy(g x))
+
+instance (ToRow a, GCountFields (Rep a)) => ToRow (Maybe a) where
+  toRow Nothing = L.take (countFields (Proxy::Proxy(Rep a _))) $ L.repeat S.SQLNull
+  toRow (Just x) = toRow x
+
+instance (FromRow a, GCountFields (Rep a)) => FromRow (Maybe a) where
+  fromRow = RP $ ReaderT \r -> StateT \s@(n, cols) ->
+    let flds = countFields (Proxy::Proxy(Rep a _)) in
+    case flip runStateT s $ flip runReaderT r $ unRP $ fromRow @a of
+      Errors _  -> Ok (Nothing, (n - flds, L.drop flds cols))
+      Ok (a, s) -> Ok (Just a, s)

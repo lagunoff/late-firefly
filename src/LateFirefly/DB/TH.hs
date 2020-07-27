@@ -1,13 +1,14 @@
 module LateFirefly.DB.TH
   ( DeriveDbConfig(..)
-  , deriveDb'
+  , deriveDbDef
   , deriveDb
   , deriveRow
-  , deriveRow'
+  , deriveRowDef
   , deriveDbPrio
   , mkDatabaseSetup
   , ColumnStrategy(..)
   , def
+  , underscore
   ) where
 
 import Control.Applicative
@@ -27,42 +28,49 @@ import GHC.Records
 import Language.Haskell.TH
 import Language.Haskell.TH.Syntax
 import Prelude as P
-import Text.Inflections
+import qualified Text.Inflections as Inf
 
 data DeriveDbConfig = DeriveDbConfig
   { tableName :: Maybe String
   , fields    :: [(String, ColumnStrategy)]
+  , renameField :: String -> String
+  , pkeys      :: [String]
   , prio      :: Int }
-  deriving stock (Eq, Show, Generic)
-  deriving anyclass (Default)
+  deriving stock (Generic)
 
 data ColumnStrategy
   = CstgDefault | CstgJson | CstgRow
   deriving stock (Eq, Show, Generic)
 
-deriveDb' :: Name -> DeriveDbConfig -> Q [Dec]
-deriveDb' n cfg@DeriveDbConfig{..} = reify n >>= \case
+deriveDb :: Name -> DeriveDbConfig -> Q [Dec]
+deriveDb n cfg@DeriveDbConfig{..} = reify n >>= \case
   TyConI (DataD _ _ _ _ [RecC name vars] _) -> do
     patNames <- forM vars \_ -> newName "a"
     vName <- newName "v"
-    let textE s = [|T.pack $(lift s)|]
-    let
-      tblName = textE $ flip fromMaybe tableName
-        $ fromRight (nameBase name)
-        $ fmap T.unpack
-        $ underscore
-        <$> parseCamelCase [] (T.pack (nameBase name))
-    let columns = deriveColumns cfg n
-    let tableDescE = [|TableInfo $(tblName) $(columns) $(lift prio)|]
+    let textE (s::String) = [|T.pack $(lift s)|]
+    let tblName = textE $ flip fromMaybe tableName $ underscore (nameBase name)
+    let colInfo = [|columnsInfo|] `appTypeE` conT n
+    let pks = bool (listE (fmap textE pkeys)) (listE [textE "rowid"]) (pkeys == [])
+    let tableDescE = [|TableInfo $(tblName) $(colInfo) $(pks) $(lift prio)|]
     tableDescD <- tableDescE <&> \x -> FunD 'tableInfo [Clause [] (NormalB x) []]
     let dbTableInst = InstanceD Nothing [] (ConT ''DbTable `AppT` ConT n) [tableDescD]
-    rowInsts <- deriveRow' n cfg
+    rowInsts <- deriveRow n cfg
     pure $ dbTableInst:rowInsts
   _ -> do
     [] <$ reportError "deriveDb: unsupported data declaration"
 
-deriveRow' :: Name -> DeriveDbConfig -> Q [Dec]
-deriveRow' n DeriveDbConfig{..} = reify n >>= \case
+deriveCols :: Name -> DeriveDbConfig -> Q [Dec]
+deriveCols n cfg@DeriveDbConfig{..} = reify n >>= \case
+  TyConI (DataD _ _ _ _ [RecC name vars] _) -> do
+    let columnsE = deriveColumns cfg n
+    let columnsD = funD 'columnsInfo [clause [] (normalB columnsE) []]
+    dbTableInst <- instanceD (pure []) (conT ''DbColumns `appT` conT n) [columnsD]
+    pure $ [dbTableInst]
+  _ -> do
+    [] <$ reportError "deriveDb: unsupported data declaration"
+
+deriveRow :: Name -> DeriveDbConfig -> Q [Dec]
+deriveRow n cfg@DeriveDbConfig{..} = reify n >>= \case
   TyConI (DataD _ _ _ _ [RecC name vars] _) -> do
     patNames <- forM vars \_ -> newName "a"
     let infixMap l r = InfixE (Just l) (VarE '(<$>)) (Just r)
@@ -90,7 +98,8 @@ deriveRow' n DeriveDbConfig{..} = reify n >>= \case
         _             -> ListE [VarE 'toField `AppE` VarE x]
     let toRowD = FunD 'toRow [Clause [ConP name (VarP <$> patNames)] (NormalB toRowE) []]
     let toRowInst = InstanceD Nothing [] (ConT ''ToRow `AppT` ConT n) [toRowD]
-    pure [fromRowInst, toRowInst]
+    colsInst <- deriveCols n cfg
+    pure $ [fromRowInst, toRowInst] <> colsInst
   _ -> do
     [] <$ reportError "deriveRow: unsupported data declaration"
 
@@ -102,24 +111,24 @@ deriveColumns DeriveDbConfig{..} x = reify x >>= \case
       columns = vars <&> \(n,_,ty) -> case L.lookup (nameBase n) fields of
         Just CstgRow  -> case ty of
           AppT (ConT ((==''Maybe) -> True)) (ConT tyName) -> do
-            let cols = deriveColumns def tyName
-            [|fmap (\(a, b) -> ($(lift (nameBase n)) <> "_" <> a, makeColumnNullable b)) $(cols)|]
+            let cols = [|columnsInfo|] `appTypeE` conT tyName
+            [|fmap (\(a, b) -> ($(lift (renameField (nameBase n))) <> "_" <> a, makeColumnNullable b)) $(cols)|]
           ConT tyName -> do
-            let cols = deriveColumns def tyName
-            [|fmap (\(a, b) -> ($(lift (nameBase n)) <> "_" <> a, b)) $(cols)|]
+            let cols = [|columnsInfo|] `appTypeE` conT tyName
+            [|fmap (\(a, b) -> ($(lift (renameField (nameBase n))) <> "_" <> a, b)) $(cols)|]
           _           -> error "unsupported field type"
         Just CstgJson -> error "CstgJson: unimplemented"
-        _             -> [|[($(textE (nameBase n)), columnInfo $(appTypeE (conE 'Proxy) (pure ty)))]|]
+        _             -> [|[($(textE (renameField (nameBase n))), columnInfo $(appTypeE (conE 'Proxy) (pure ty)))]|]
     [|join $(listE columns)|]
 
-deriveDb :: Name -> Q [Dec]
-deriveDb = flip deriveDb' def
+deriveDbDef :: Name -> Q [Dec]
+deriveDbDef = flip deriveDb def
 
-deriveRow :: Name -> Q [Dec]
-deriveRow = flip deriveRow' def
+deriveRowDef :: Name -> Q [Dec]
+deriveRowDef = flip deriveRow def
 
 deriveDbPrio :: Int -> Name -> Q [Dec]
-deriveDbPrio = flip deriveDb' . DeriveDbConfig Nothing []
+deriveDbPrio = flip deriveDb . DeriveDbConfig Nothing [] id def
 
 -- | Make expression of type [Query] applying 'createTableStmt' to all
 -- the instances of typeclass 'DbTable'
@@ -141,3 +150,11 @@ joinSetupPrio xs = L.foldl' (<>) [] (fmap snd (L.sortOn fst xs ))
 
 makeColumnNullable :: ColumnInfo -> ColumnInfo
 makeColumnNullable ci = ci {nullable = True}
+
+underscore :: String -> String
+underscore n = fromRight n
+  $ fmap (T.unpack . Inf.underscore)
+  $ Inf.parseCamelCase [] (T.pack n)
+
+instance Default DeriveDbConfig where
+  def = DeriveDbConfig def def id def def

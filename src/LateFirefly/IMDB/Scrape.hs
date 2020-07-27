@@ -1,6 +1,7 @@
 module LateFirefly.IMDB.Scrape
   ( scrapeSearch
   , scrapeEpisodes
+  , test0
   ) where
 
 import Control.Lens as L hiding (children, (.=))
@@ -20,6 +21,7 @@ import Text.Read hiding (lift)
 import LateFirefly.DB
 import LateFirefly.Prelude
 import LateFirefly.IMDB.Schema
+import LateFirefly.IMDB.GraphQL
 import Text.HTML.TagSoup.Lens as L hiding (attr)
 import Text.HTML.TagSoup as L
 import qualified Network.Wreq as Wreq
@@ -39,7 +41,7 @@ data ScrapeError
   | GraphQLError String
   deriving (Exception, Show)
 
-genres :: [Genre]
+genres :: [Genre1]
 genres = ["action", "adventure", "animation", "biography", "comedy", "crime", "documentary", "drama", "family", "fantasy", "film_noir", "game_show", "history", "horror", "music", "musical", "mystery", "news", "reality_tv", "romance", "sci_fi", "sport", "talk_show", "thriller", "war", "western"]
 
 -- * Scrape ImdbEpisode
@@ -61,7 +63,7 @@ scrapeSearch continue percentile = void $ newVersionOrContinue continue $ unEio 
 
 scrapeImdbSearch1
   :: (?conn::Connection, ?version::NewVersion)
-  => Genre -> Int -> Eio ScrapeError Int
+  => Genre1 -> Int -> Eio ScrapeError Int
 scrapeImdbSearch1 g start = do
   markup <- T.decodeUtf8 . BSL.toStrict . (^. Wreq.responseBody) <$> httpGet ("https://www.imdb.com/search/title/?genres=" <> T.unpack g <> "&start=" <> show start)
   let episodeOuters = markup^.._DOM.traverse.allElements.hasClass "lister-item"
@@ -92,49 +94,49 @@ scrapeImdbSearch1 g start = do
 scrapeEpisodes :: (?conn::Connection) => Bool -> [Tid Imdb] -> IO ()
 scrapeEpisodes continue imdbIds =
   void $ newVersionOrContinue continue $ unEio do
-    for_ imdbIds scrapeEpisodes0
+    for_ imdbIds undefined
 
-scrapeEpisodes0
-  :: (?conn::Connection, ?version::NewVersion)
-  => Tid Imdb -> Eio ScrapeError ()
-scrapeEpisodes0 imdbId = do
-  seasons <- scrapeEpisodes1 imdbId "1"
-  for_ (L.drop 1 seasons) (void . scrapeEpisodes1 imdbId)
+-- scrapeEpisodes0
+--   :: (?conn::Connection, ?version::NewVersion)
+--   => Tid Imdb -> Eio ScrapeError ()
+-- scrapeEpisodes0 imdbId = do
+--   seasons <- scrapeEpisodes1 imdbId "1"
+--   for_ (L.drop 1 seasons) (undefined imdbId)
 
-scrapeEpisodes1
-  :: (?conn::Connection, ?version::NewVersion)
-  => Tid Imdb -> Text -> Eio ScrapeError [Text]
-scrapeEpisodes1 imdbId seasonNum = do
-  tags <- parseTags . T.decodeUtf8 . BSL.toStrict .  (^. Wreq.responseBody) <$> httpGet ("https://www.imdb.com/title/" <> T.unpack (unTid imdbId) <> "/episodes?season=" <> T.unpack seasonNum)
-  let
-    seasons = fmap (attr "value")
-      . partitions (~== ("<option>"::String))
-      . L.takeWhile (~/= ("</select>"::String))
-      . L.dropWhile (~/= ("<select id=\"bySeason\">"::String))
-      $ tags
-    episodes = fmap f
-      . partitions ((~== ("<div class=\"list_item even\">"::String)) `tagOr` (~== ("<div class=\"list_item odd\">"::String)))
-      . L.takeWhile (~/= ("<hr>"::String))
-      . L.dropWhile (~/= ("<div class=\"list detail eplist\">"::String))
-      $ tags
-  for_ episodes \x -> do
-    (t, changed) <- liftIO $ upsertVersion x
-    let rid = unTid $ getField @"rowid" t
-    traceM $ T.unpack [st|#{rid} [#{show changed}]|]
-  pure seasons
+-- scrapeEpisodes1
+--   :: (?conn::Connection, ?version::NewVersion)
+--   => Tid Imdb -> Text -> Eio ScrapeError [Text]
+-- scrapeEpisodes1 imdbId seasonNum = do
+--   tags <- parseTags . T.decodeUtf8 . BSL.toStrict .  (^. Wreq.responseBody) <$> httpGet ("https://www.imdb.com/title/" <> T.unpack (unTid imdbId) <> "/episodes?season=" <> T.unpack seasonNum)
+--   let
+--     seasons = fmap (attr "value")
+--       . partitions (~== ("<option>"::String))
+--       . L.takeWhile (~/= ("</select>"::String))
+--       . L.dropWhile (~/= ("<select id=\"bySeason\">"::String))
+--       $ tags
+--     episodes = fmap f
+--       . partitions ((~== ("<div class=\"list_item even\">"::String)) `tagOr` (~== ("<div class=\"list_item odd\">"::String)))
+--       . L.takeWhile (~/= ("<hr>"::String))
+--       . L.dropWhile (~/= ("<div class=\"list detail eplist\">"::String))
+--       $ tags
+--   for_ episodes \x -> do
+--     (t, changed) <- liftIO $ upsertVersion x
+--     let rid = unTid $ getField @"rowid" t
+--     traceM $ T.unpack [st|#{rid} [#{show changed}]|]
+--   pure seasons
 
-  where
-    tagOr :: (a -> Bool) -> (a -> Bool) -> a -> Bool
-    tagOr f g a = f a || g a
+--   where
+--     tagOr :: (a -> Bool) -> (a -> Bool) -> a -> Bool
+--     tagOr f g a = f a || g a
 
-    f :: [Tag Text] -> ImdbEpisode
-    f tt = ImdbEpisode{version=coerce ?version, ..} where
-      href = attr "href" . L.dropWhile (~/= ("<a>"::String)) $ tt
-      episode = attr "content" . L.dropWhile (~/= ("<meta itemprop=\"episodeNumber\">"::String)) $ tt
-      rowid = Tid $ T.pack $ maybeTrace $ href ^? to T.unpack . regex [r|/title/([[:alnum:]\-_]+)|] . captures . ix 0
-      deleted = False
-      parent = imdbId
-      season = seasonNum
+--     f :: [Tag Text] -> ImdbEpisode
+--     f tt = ImdbEpisode{version=coerce ?version, ..} where
+--       href = attr "href" . L.dropWhile (~/= ("<a>"::String)) $ tt
+--       episode = attr "content" . L.dropWhile (~/= ("<meta itemprop=\"episodeNumber\">"::String)) $ tt
+--       rowid = Tid $ T.pack $ maybeTrace $ href ^? to T.unpack . regex [r|/title/([[:alnum:]\-_]+)|] . captures . ix 0
+--       deleted = False
+--       parent = imdbId
+--       season = seasonNum
 
 -- * Scrape ImdbTitle
 
@@ -149,7 +151,7 @@ scrapeTitle0 imdbId = do
   let title = ttText . L.takeWhile (~/= ("<h1>"::String)) . L.dropWhile (~/= ("<h1>"::String)) $ ttDrop
   undefined
 
-readProgress :: (?conn::Connection, ?version::NewVersion) => IO (M.Map Genre Int)
+readProgress :: (?conn::Connection, ?version::NewVersion) => IO (M.Map Genre1 Int)
 readProgress = do
   let TableInfo{..} = tableInfo @ImdbSearch
   let tableName::Text = name <> "_versions"
@@ -198,42 +200,24 @@ attr k = withFrozenCallStack (nemptyTrace . fromAttrib k . headTrace)
 ttText :: HasCallStack => [Tag Text] -> Text
 ttText = withFrozenCallStack (nemptyTrace . innerText)
 
-test0 :: IO Title
+test0 :: IO ()
 test0 = do
   let q = [st|
 {
-  title(id: "tt0664521") {
+  title(id: "tt0386676") {
     id
-    titleText {
-      text
-      isOriginalTitle
-      country {
-        id
-        text
-      }
-      language { id text }
-    }
-    plots(first: 999) {
+    plot { id }
+    plots(first:99) {
       edges {
         node {
-          id
-          plotText {
-            markdown
-          }
-          plotType
-          language {
-            id
-            text
-          }
-          isSpoiler
-          author
+          id plotText { markdown } plotType language { id text } isSpoiler author
         }
       }
-      pageInfo {
-        endCursor
-        hasNextPage
-      }
+      pageInfo { hasNextPage }
     }
+
+    primaryImage { id }
+
     images(first: 999) {
       edges {
         node {
@@ -241,10 +225,15 @@ test0 = do
           url
           width
           height
+          caption { markdown }
           copyright
           createdBy
           source { id text attributionUrl banner { url height width attributionUrl } }
           type
+          names { id }
+          titles { id }
+          countries { id text }
+          languages { id text }
         }
         cursor
       }
@@ -254,29 +243,133 @@ test0 = do
         hasNextPage
       }
     }
-    quotes(first:999) {
+
+    series {
+      series { id }
+      episodeNumber { episodeNumber seasonNumber }
+      nextEpisode { id }
+      previousEpisode { id }
+    }
+
+    quotes(first: 999) {
       edges {
         node {
           id
           isSpoiler
-          lines { characters { character name { id }} text stageDirection }
+          lines { characters { character name { id } } text stageDirection }
           interestScore { usersInterested usersVoted }
           language { id text }
         }
-        cursor
       }
-
       pageInfo {
         endCursor
         hasNextPage
       }
     }
+
+    countriesOfOrigin {
+      countries { id text }
+      language { id text }
+    }
+
+    releaseYear { year endYear }
+
+    trivia(first: 999) {
+      edges {
+        node {
+          id text {markdown}
+          isSpoiler triviaType interestScore { usersInterested usersVoted } trademark relatedNames { id }
+        }
+      }
+      pageInfo {
+        endCursor
+        hasNextPage
+      }
+    }
+
+    news(first: 1) {
+      edges {
+        node {
+          id
+          text {markdown}
+          articleTitle {markdown}
+          externalUrl
+          source {homepage {url label}}
+          date
+          text {markdown}
+          image {id}
+          byline
+          language {id text}
+        }
+      }
+      pageInfo {
+        endCursor
+        hasNextPage
+      }
+    }
+
+    alternateVersions(first: 999) {
+      edges {
+        node {
+          text {markdown}
+        }
+      }
+      pageInfo {
+        endCursor
+        hasNextPage
+      }
+    }
+
+    awardNominations(first: 999) {
+      edges {
+        node {
+          id
+          isWinner
+          award { id event { id text } text year }
+        }
+      }
+      pageInfo {
+        endCursor
+        hasNextPage
+      }
+    }
+
+    faqs(first: 999) {
+      edges {
+        node {
+          id
+          question {markdown}
+          answer {markdown}
+          language {id text}
+          isSpoiler
+        }
+      }
+      pageInfo {
+        endCursor
+        hasNextPage
+      }
+    }
+
+    titleType {id text}
+
+    titleText {text isOriginalTitle country{id text} language{id text}}
+
+    originalTitleText {text isOriginalTitle country{id text} language{id text}}
   }
 } |]
   let body = object ["operationName" .= Null, "query" .= q, "variables" .= object []]
-  traceM (show $ AE.encode body)
   x::GQLResponse Title <- unEio $ sendGql "https://graphql.imdb.com/index.html" (AE.encode body)
-  pure (coerce x)
+  let dbpath = "late-firefly.sqlite"
+  void $ withConnection dbpath do
+    for_ $mkDatabaseSetup execute
+    let TitleChunk{..} = fromTitle (coerce x)
+    upsert title
+    for_ images upsert
+    for_ titleToImage upsert
+    for_ plots upsert
+    for_ quotes upsert
+    for_ trivia upsert
+    for_ news upsert
 
 newtype GQLResponse a = GQLResponse
   { _data :: GQLTitleResponse a }

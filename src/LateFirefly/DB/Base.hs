@@ -4,11 +4,13 @@ module LateFirefly.DB.Base
   ( ColumnInfo(..)
   , TableInfo(..)
   , DbTable(..)
+  , DbColumns(..)
   , DbField(..)
   , createTableStmt
   , execute
   , query
   , upsert
+  , upsertInc
   , upsertVersion
   , upsertVersionConflict
   -- , upsert'
@@ -70,6 +72,7 @@ data ColumnInfo = ColumnInfo
 data TableInfo = TableInfo
   { name    :: Text
   , columns :: [(Text, ColumnInfo)]
+  , pkeys   :: [Text]
   , prio    :: Int }
   deriving stock (Eq, Show, Generic)
 
@@ -84,8 +87,8 @@ createTableStmt = let
   TableInfo{..} = tableInfo @t
   createColumns = columns <&> \(k, t) -> esc k <> " " <> ppColumnDesc t
   tableName = bool name (name <> "_versions") (isVersioned @t)
-  pkeys = ["rowid"] <> bool [] ["version"] (isVersioned @t)
-  primaryContrains = ["primary key(" <> T.intercalate ", " (fmap esc pkeys) <> ")"]
+  pks = bool pkeys ["rowid"] (pkeys == []) <> bool [] ["version"] (isVersioned @t)
+  primaryContrains = ["primary key(" <> T.intercalate ", " (fmap esc pks) <> ")"]
   createTable = [sql|create table if not exists {{tableName}} (
     #{T.intercalate ",\n  " (createColumns <> primaryContrains)}
   )|]
@@ -125,18 +128,31 @@ data UpsertResult
   = New | Updated | Cached | Rewritten
   deriving (Eq, Show, Generic)
 
-upsert :: forall t g. (?conn::Connection, DbTable t, HasField' "rowid" t (Id g)) => t -> IO t
+upsertInc :: forall t g. (?conn::Connection, DbTable t, HasField' "rowid" t (Id g)) => t -> IO t
+upsertInc t = do
+  let
+    TableInfo{..} = tableInfo @t
+    tableName = bool name (name <> "_versions") (isVersioned @t)
+    pks = T.intercalate ", " $ fmap esc pkeys
+    cols = T.intercalate ", " $ fmap (esc . fst) columns
+    vals = T.intercalate ", " $ fmap (const "?") columns
+    sets = T.intercalate ", " $ fmap (\(c, _) -> esc c <> " = ?") columns
+    Sql q _ _ = [sql|insert into {{tableName}} (#{cols}) values (#{vals}) on conflict(#{pks}) do update set #{sets}|]
+  S.execute ?conn (Query q) (toRow t <> toRow t)
+  if getField @"rowid" t /= def then pure t else
+     S.lastInsertRowId ?conn <&> \idInt -> setField @"rowid" (Id idInt) t
+
+upsert :: forall t. (?conn::Connection, DbTable t) => t -> IO ()
 upsert t = do
   let
     TableInfo{..} = tableInfo @t
     tableName = bool name (name <> "_versions") (isVersioned @t)
+    pks = T.intercalate ", " $ fmap esc pkeys
     cols = T.intercalate ", " $ fmap (esc . fst) columns
     vals = T.intercalate ", " $ fmap (const "?") columns
     sets = T.intercalate ", " $ fmap (\(c, _) -> esc c <> " = ?") columns
-  let q = "INSERT INTO " <> esc tableName <> " (" <> cols <> ") VALUES (" <> vals <> ") ON CONFLICT(rowid) DO UPDATE SET " <> sets
+    Sql q _ _ = [sql|insert into {{tableName}} (#{cols}) values (#{vals}) on conflict(#{pks}) do update set #{sets}|]
   S.execute ?conn (Query q) (toRow t <> toRow t)
-  if getField @"rowid" t /= def then pure t else
-     S.lastInsertRowId ?conn <&> \idInt -> setField @"rowid" (Id idInt) t
 
 upsertVersion
   :: forall t. (?conn::Connection, Eq t, DbTable t) => t -> IO (t, UpsertResult)
@@ -242,6 +258,9 @@ fixUUID f = fix (f . uuid5FromBS . uuidSalt)
 
 class (FromRow a, ToRow a) => DbTable a where
   tableInfo :: TableInfo
+
+class DbColumns a where
+  columnsInfo :: [(Text, ColumnInfo)]
 
 class (FromField a, ToField a) => DbField a where
   columnInfo :: Proxy a -> ColumnInfo

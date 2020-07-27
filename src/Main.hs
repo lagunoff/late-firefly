@@ -34,6 +34,7 @@ data Opts
   = TheOffice    {dbpath::Maybe Text}
   | IMDB         {dbpath::Maybe Text, continue::Bool, percentile::Maybe Double}
   | IMDBEpisodes {dbpath::Maybe Text, continue::Bool, ids::[Text]}
+  | IMDBTitle    {dbpath::Maybe Text, tt::Text}
   | Start        {dbpath::Maybe Text, port::Maybe Int, docroot::Maybe Text}
   | Migrate      {dbpath::Maybe Text}
   | PrintSchema
@@ -55,6 +56,13 @@ mainWith = \case
     withConnection dbpath do
       for_ $mkDatabaseSetup execute
       (IMDB.scrapeEpisodes continue imdbIds)
+  IMDBTitle{dbpath=mayDb,..} -> do
+    let defDb = T.unpack $ getField @"dbPath" (def @WebOpts)
+    let dbpath = maybe defDb T.unpack mayDb
+    let ttId = fromMaybe "tt0386676" tt
+    withConnection dbpath do
+      for_ $mkDatabaseSetup execute
+      (IMDB.scrapeTitle ttId)
   Start{dbpath=mayDb, docroot=mayDR, port=mayPort, ..} -> do
     let
       port = getField @"webPort" opts

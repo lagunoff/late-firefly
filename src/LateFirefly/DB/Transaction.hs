@@ -48,7 +48,7 @@ data Transaction = Transaction
   deriving stock (Eq, Show, Generic)
   deriving anyclass Flat
 
-deriveDb ''Transaction
+deriveDbDef ''Transaction
 
 newVersion :: (?conn::Connection) => ((?version::NewVersion) => IO a) -> IO a
 newVersion = newVersionOrContinue False
@@ -59,17 +59,17 @@ newVersionOrContinue continue act = do
     takeTransaction = \case
       False -> do
         startedAt <- getCurrentTime
-        upsert (Transaction def True startedAt Nothing Nothing)
+        upsertInc (Transaction def True startedAt Nothing Nothing)
       True -> selectFrom
         [sql|where rowid=(select max(rowid) from `transaction`) and finished_at is null|]
         >>= maybe (takeTransaction False) pure . fmap fst . L.uncons
   t <- takeTransaction continue
-  let newTr = NewVersion (getField @"rowid" t)
+  let newTr = getField @"rowid" t
   a <- let ?version = newTr in fmap Right act
     `catchSync` (pure . Left)
   currTime <- getCurrentTime
   let finished_at = bool Nothing (Just currTime) $ isRight a
-  upsert (t {finished_at, exception = either (Just . T.pack . displayException) (const Nothing) a})
+  upsertInc (t {finished_at, exception = either (Just . T.pack . displayException) (const Nothing) a})
   DB.execute
     [sql|update `transaction` set active=0 where active=1 and rowid <> {newTr}|]
   either throwIO pure a
@@ -79,5 +79,4 @@ withConnection path act = S.withConnection path \conn -> do
   mapM_ (S.execute_ conn) ["PRAGMA journal_mode=WAL"]
   let ?conn = conn in act
 
-newtype NewVersion = NewVersion {unNewVersion :: Id Transaction}
-  deriving newtype (ToField, FromField)
+type NewVersion = Id Transaction

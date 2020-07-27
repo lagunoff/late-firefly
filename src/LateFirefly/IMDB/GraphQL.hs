@@ -180,8 +180,14 @@ data Image = Image {
   deriving stock (Show, Eq, Generic)
 
 deriveJSON defaultOptions
-  {fieldLabelModifier = stripPrefix1 "_"}
+  {fieldLabelModifier = replaces [("_type", "type")]}
   ''Image
+
+data ImageId = ImageId {
+  -- Cache TTL in seconds: 900
+  id :: ID }
+  deriving stock (Show, Eq, Generic)
+  deriving anyclass (FromJSON, ToJSON)
 
 data Title = Title {
   -- Cache TTL in seconds: 900
@@ -195,13 +201,13 @@ data Title = Title {
   meta :: Maybe TitleMeta,
   -- The primary image for the title.
   -- Cache TTL in seconds: 900
-  primaryImage :: Maybe Image,
+  primaryImage :: Maybe ImageId,
   -- Quotes in this Title
   -- Cache TTL in seconds: 900
   quotes :: Many0 TitleQuote,
   -- The plot for the title.
   -- Cache TTL in seconds: 900
-  plot :: Maybe Plot,
+  plot :: Maybe PlotId,
   -- A list of the countries of origin for the title.
   -- Cache TTL in seconds: 900
   countriesOfOrigin :: Maybe CountriesOfOrigin,
@@ -440,6 +446,11 @@ data Plot = Plot {
   -- The name of the plot's author. This field is not required as it can be null for an anonymous author.
   -- Cache TTL in seconds: 900
   author :: Maybe Text }
+  deriving stock (Show, Eq, Generic)
+  deriving anyclass (FromJSON, ToJSON)
+
+data PlotId = PlotId {
+  id :: ID }
   deriving stock (Show, Eq, Generic)
   deriving anyclass (FromJSON, ToJSON)
 
@@ -1039,13 +1050,13 @@ data News = News {
   -- Affected by headers: x-imdb-user-country, x-imdb-user-language
   --
   -- Cache TTL in seconds: 900
-  articleTitle :: String,
+  articleTitle :: Markdown,
   -- A direct link to the article on an external news site
   --
   -- Affected by headers: x-imdb-user-country, x-imdb-user-language
   --
   -- Cache TTL in seconds: 900
-  externalUrl :: String,
+  externalUrl :: Text,
   -- Name and link to homepage for the source website of this news article
   --
   -- Affected by headers: x-imdb-user-country, x-imdb-user-language
@@ -1801,5 +1812,3 @@ data Genre = Genre {
   text :: Text }
   deriving stock (Show, Eq, Generic)
   deriving anyclass (FromJSON, ToJSON)
-
-deriveRow ''DisplayableLanguage

@@ -109,3 +109,6 @@ nemptyNote m x = if x == mempty then withFrozenCallStack (error m) else x
 
 stripPrefix1 :: String -> String -> String
 stripPrefix1 p x = fromMaybe x $ L.stripPrefix p x
+
+replaces :: Eq a => [(a, a)] -> a -> a
+replaces xs x = L.lookup x xs ?: x

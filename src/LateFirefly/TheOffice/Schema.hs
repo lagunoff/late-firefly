@@ -13,7 +13,7 @@ data Season = Season
   deriving stock (Show, Eq, Generic)
   deriving anyclass Flat
 
-deriveDbUUID ["number"] ''Season
+-- deriveDbUUID ["number"] ''Season
 
 data Episode = Episode
   { uuid        :: ~(UUID5 Episode)
@@ -30,4 +30,4 @@ data Episode = Episode
   deriving stock (Show, Eq, Generic)
   deriving anyclass Flat
 
-deriveDbUUID ["seasonId", "code"] ''Episode
+-- deriveDbUUID ["seasonId", "code"] ''Episode

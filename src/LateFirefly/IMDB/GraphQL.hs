@@ -6,6 +6,7 @@ import GHC.TypeLits
 import LateFirefly.Aeson
 import LateFirefly.DB
 import LateFirefly.Prelude
+import Text.Read
 
 data PageInfo = PageInfo
   { endCursor :: Maybe Text
@@ -21,6 +22,25 @@ data GQLConnection a = GQLConnection
 
 type Many0 a = Maybe (GQLConnection a)
 type Many a = GQLConnection a
+
+newtype ImdbId (t::Symbol) = ImdbId
+  {unImdbId :: Int64}
+  deriving stock (Show, Eq, Generic)
+
+instance KnownSymbol t => FromJSON (ImdbId t) where
+  parseJSON = withText "ImdbId" \t -> do
+    let pre = T.pack $ symbolVal (Proxy @t)
+    let woPreMay = T.stripPrefix pre t
+    woPre <- maybe (fail $ "prefix " <> show pre <> " not found") pure woPreMay
+    intId <- maybe (fail $ "cannot read Int") pure $ readMaybe @Int64 (T.unpack woPre)
+    pure (ImdbId intId)
+
+instance KnownSymbol t => ToJSON (ImdbId t) where
+  toJSON = toJSON . toText . showb
+
+instance KnownSymbol t => TextShow (ImdbId t) where
+  showb (ImdbId i) = fromString $ symbolVal (Proxy @t) <> lpad (show i) where
+    lpad x = Prelude.replicate (7 - Prelude.length x) '0' ++ x
 
 -- Scalar defining a date without a time info according to the ISO 8601 format, such as 2018-01-11
 type Date = Text
@@ -82,13 +102,13 @@ data Source = Source {
   deriving anyclass (FromJSON, ToJSON)
 
 data TitleId = TitleId
-  { id :: ID }
+  { id :: ImdbId "tt" }
   deriving stock (Show, Eq, Generic)
   deriving anyclass (FromJSON, ToJSON)
 
 data NameId = NameId {
   -- Cache TTL in seconds: 900
-  id :: ID }
+  id :: ImdbId "nm" }
   deriving stock (Show, Eq, Generic)
   deriving anyclass (FromJSON, ToJSON)
 
@@ -144,7 +164,7 @@ data PublicationStatus = NOT_PUBLISHED | PUBLISHED | REDIRECTED
 
 data Image = Image {
   -- Cache TTL in seconds: 900
-  id :: ID,
+  id :: ImdbId "rm",
   -- URL for the image resource
   -- Cache TTL in seconds: 900
   url :: Maybe Text,
@@ -189,13 +209,18 @@ deriveJSON defaultOptions
 
 data ImageId = ImageId {
   -- Cache TTL in seconds: 900
+  id :: ImdbId "rm" }
+  deriving stock (Show, Eq, Generic)
+  deriving anyclass (FromJSON, ToJSON)
+
+data AnyId = AnyId {
   id :: ID }
   deriving stock (Show, Eq, Generic)
   deriving anyclass (FromJSON, ToJSON)
 
 data Title = Title {
   -- Cache TTL in seconds: 900
-  id :: ID,
+  id :: ImdbId "tt",
   -- Cache TTL in seconds: 900
   images :: Many0 Image,
   -- For titles which are a series, provides information about the episodes of that series
@@ -205,7 +230,7 @@ data Title = Title {
   meta :: Maybe TitleMeta,
   -- The primary image for the title.
   -- Cache TTL in seconds: 900
-  primaryImage :: Maybe ImageId,
+  primaryImage :: Maybe Image,
   -- Quotes in this Title
   -- Cache TTL in seconds: 900
   quotes :: Many0 TitleQuote,
@@ -469,7 +494,7 @@ data PlotType = OUTLINE | SUMMARY | SYNOPSIS
 data TitleQuote = TitleQuote {
   -- Title Quote ID
   -- Cache TTL in seconds: 900
-  id :: ID,
+  id :: ImdbId "qt",
   -- Is this Title Quote a spoiler
   -- Cache TTL in seconds: 900
   isSpoiler :: Bool,
@@ -524,7 +549,7 @@ data TitleQuoteCharacter = TitleQuoteCharacter {
 
 data Name = Name {
   -- Cache TTL in seconds: 900
-  id :: ID,
+  id :: ImdbId "nm",
   -- Cache TTL in seconds: 900
   images :: Many Image,
   -- Cache TTL in seconds: 900
@@ -952,7 +977,7 @@ data Goof = Goof {
   -- Affected by headers: x-imdb-user-country, x-imdb-user-language
   --
   -- Cache TTL in seconds: 900
-  id :: ID,
+  id :: ImdbId "gf",
   -- The goof text
   --
   -- Affected by headers: x-imdb-user-country, x-imdb-user-language
@@ -998,7 +1023,7 @@ data Keyword = Keyword {
   -- Affected by headers: x-imdb-user-country, x-imdb-user-language
   --
   -- Cache TTL in seconds: 900
-  id :: ID,
+  id :: ImdbId "kw",
   -- The keyword text
   --
   -- Affected by headers: x-imdb-user-country, x-imdb-user-language
@@ -1048,7 +1073,7 @@ data News = News {
   -- Affected by headers: x-imdb-user-country, x-imdb-user-language
   --
   -- Cache TTL in seconds: 900
-  id :: ID,
+  id :: ImdbId "ni",
   -- The title text of this news article
   --
   -- Affected by headers: x-imdb-user-country, x-imdb-user-language
@@ -1084,7 +1109,7 @@ data News = News {
   -- Affected by headers: x-imdb-user-country, x-imdb-user-language
   --
   -- Cache TTL in seconds: 900
-  image :: Maybe Image,
+  image :: Maybe AnyId,
   -- The byline of this news article
   --
   -- Affected by headers: x-imdb-user-country, x-imdb-user-language
@@ -1414,7 +1439,7 @@ data Review = Review {
   -- x-imdb-user-country, x-imdb-user-language
   --
   -- Cache TTL in seconds: 0
-  id :: ID,
+  id :: ImdbId "rw",
   -- Affected by headers: x-amzn-transitive-authentication-token,
   -- x-imdb-customer-id, x-imdb-user-id, x-imdb-detected-country,
   -- x-imdb-user-country, x-imdb-user-language
@@ -1683,7 +1708,7 @@ data TitleTrivia = TitleTrivia {
   -- Affected by headers: x-imdb-user-country, x-imdb-user-language
   --
   -- Cache TTL in seconds: 900
-  id :: ID,
+  id :: ImdbId "tr",
   -- The trivia text
   --
   -- Affected by headers: x-imdb-user-country, x-imdb-user-language

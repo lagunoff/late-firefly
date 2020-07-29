@@ -89,8 +89,13 @@ createTableStmt = let
   tableName = bool name (name <> "_versions") (isVersioned @t)
   pks = bool pkeys ["rowid"] (pkeys == []) <> bool [] ["version"] (isVersioned @t)
   primaryContrains = ["primary key(" <> T.intercalate ", " (fmap esc pks) <> ")"]
+  fks = catMaybes $ columns <&> \case
+    (k, ColumnInfo {foreignKey=Just (t, tks)})
+      | k /= "rowid" -> Just $ "foreign key (" <> esc k <> ") references "
+        <> esc t <> " (" <> T.intercalate ", " (fmap esc tks) <> ")"
+    _ -> Nothing
   createTable = [sql|create table if not exists {{tableName}} (
-    #{T.intercalate ",\n  " (createColumns <> primaryContrains)}
+    #{T.intercalate ",\n  " (createColumns <> primaryContrains <> fks)}
   )|]
   selectColumns = T.intercalate ", " $ fmap (esc . fst) columns
   createView = [sql|create view if not exists {{name}} as
@@ -295,6 +300,10 @@ instance (DbTable t, Typeable (Id t)) => DbField (Id t) where
   columnInfo _ = let TableInfo{..} = tableInfo @t in
     ColumnInfo IntegerColumn False False (Just (name, ["rowid"]))
 
+instance (DbTable t, Typeable (Tid t)) => DbField (Tid t) where
+  columnInfo _ = let TableInfo{..} = tableInfo @t in
+    ColumnInfo TextColumn False False (Just (name, ["rowid"]))
+
 instance (DbTable t, Typeable t) => DbField (UUID5 t) where
   columnInfo _ = let TableInfo{..} = tableInfo @t in
     ColumnInfo IntegerColumn False False (Just (name, ["rowid"]))
@@ -321,7 +330,6 @@ instance Typeable (UUID5 t) => FromField (UUID5 t) where
 instance DbField Bool where
   columnInfo _ = ColumnInfo IntegerColumn False False Nothing
 
-deriving newtype instance DbField (Tid t)
 deriving newtype instance ToField (Tid t)
 deriving newtype instance FromField (Tid t)
 

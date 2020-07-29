@@ -166,7 +166,7 @@ sendGql
   => String -> q -> Eio ScrapeError a
 sendGql u q = do
   let b = AE.encode $ object ["operationName" .= Null, "query" .= q, "variables" .= object []]
-  either error imdb_response . AE.eitherDecode' @(ImdbResponse f a) .  (^. Wreq.responseBody) <$> httpPost u b
+  either error imdb_response . AE.eitherDecode' @(ImdbResponse f a) . (^. Wreq.responseBody) <$> httpPost u b
 
 allClass cs = allElements . attributed(ix "class" . traverse . nearly "" cond) where
   cond = isJust . L.find (==cs) . T.splitOn " "
@@ -191,7 +191,7 @@ ttText = withFrozenCallStack (nemptyTrace . innerText)
 
 test0 :: IO ()
 test0 = do
-  TitleChunk{..} <- scrapeTitle "tt0386676"
+  TitleChunk{..} <- scrapeTitle (ImdbId 386676)
   void $ withConnection "late-firefly.sqlite" do
     for_ $mkDatabaseSetup execute
     for_ title upsert
@@ -200,8 +200,15 @@ test0 = do
     for_ plots upsert
     for_ quotes upsert
     for_ trivia upsert
+    for_ news upsert
+    for_ goofs upsert
+    for_ genres upsert
+    for_ titleToGenre upsert
+    for_ keywords upsert
+    for_ titleToKeyword upsert
+    for_ reviews upsert
 
-scrapeTitle :: Text -> IO TitleChunk
+scrapeTitle :: ImdbId "tt" -> IO TitleChunk
 scrapeTitle tid = do
   let q = qTitle tid
   x::Title <- unEio $ sendGql @"title" "https://graphql.imdb.com/index.html" q
@@ -211,7 +218,7 @@ scrapeTitle tid = do
   titls <- mapM scrapeTitle eps
   pure $ F.fold (chunk:titls)
 
-scrapeEpisodes :: Text -> IO [Text]
+scrapeEpisodes :: ImdbId "tt" -> IO [ImdbId "tt"]
 scrapeEpisodes tid = go Nothing where
   go after = do
     let q = qEpisodes tid after
@@ -221,7 +228,7 @@ scrapeEpisodes tid = go Nothing where
     let cursor = episodes ^? _Just . field @"episodes" . _Just . field @"pageInfo" . field @"endCursor" . _Just
     maybe (pure episodes') (\x -> (episodes' <>) <$> go (Just x)) cursor
 
-scrapeNews :: Text -> IO [ImdbNews]
+scrapeNews :: ImdbId "tt" -> IO [ImdbNews]
 scrapeNews tid = go Nothing where
   go after = do
     let q = qNews tid after
@@ -231,12 +238,12 @@ scrapeNews tid = go Nothing where
     let cursor = news ^? _Just . field @"pageInfo" . field @"endCursor" . _Just
     maybe (pure news') (\x -> (news' <>) <$> go (Just x)) cursor
 
-qNews :: Text -> Maybe Text -> Text
+qNews :: ImdbId "tt" -> Maybe Text -> Text
 qNews tid after =
   let after' = maybe "" ((", after: "<>) . show) after
   in [st|
 {
-  title(id: "#{tid}") {
+  title(id: "#{showt tid}") {
     id
     news(first: 100#{after'}) {
       edges {
@@ -261,12 +268,12 @@ qNews tid after =
   }
 } |]
 
-qEpisodes :: Text -> Maybe Text -> Text
+qEpisodes :: ImdbId "tt" -> Maybe Text -> Text
 qEpisodes tid after =
   let after' = maybe "" ((", after: "<>) . show) after
   in [st|
 {
-  title(id: "#{tid}") {
+  title(id: "#{showt tid}") {
     id
     episodes {
       episodes(first: 100#{after'}) {
@@ -284,10 +291,10 @@ qEpisodes tid after =
   }
 } |]
 
-qTitle :: Text -> Text
+qTitle :: ImdbId "tt"-> Text
 qTitle tid = [st|
 {
-  title(id: "#{tid}") {
+  title(id: "#{showt tid}") {
     id
     plot { id }
     plots(first:99) {
@@ -299,7 +306,21 @@ qTitle tid = [st|
       pageInfo { hasNextPage }
     }
 
-    primaryImage { id }
+    primaryImage {
+      id
+      url
+      width
+      height
+      caption { markdown }
+      copyright
+      createdBy
+      source { id text attributionUrl banner { url height width attributionUrl } }
+      type
+      names { id }
+      titles { id }
+      countries { id text }
+      languages { id text }
+    }
 
     images(first: 999) {
       edges {
@@ -417,5 +438,69 @@ qTitle tid = [st|
     titleText {text isOriginalTitle country{id text} language{id text}}
 
     originalTitleText {text isOriginalTitle country{id text} language{id text}}
+
+    releaseDate{ day month year country {id text} }
+
+    runtime{ seconds country {id text} }
+
+    certificate{ rating country {id text} ratingsBody ratingReason }
+
+    userRating{ date value }
+
+    goofs(first: 999){
+      edges {
+        node {
+          id
+          text {markdown}
+          isSpoiler
+          interestScore { usersInterested usersVoted }
+          category {id text}
+        }
+      }
+      pageInfo {
+        endCursor
+        hasNextPage
+      }
+    }
+
+    genres{
+      genres {id text}
+      language {id text}
+    }
+
+    keywords(first: 999){
+      edges {
+        node {
+          id
+          text
+          interestScore { usersInterested usersVoted }
+        }
+      }
+      pageInfo {
+        endCursor
+        hasNextPage
+      }
+    }
+
+    reviews(first: 999){
+      edges {
+        node {
+          id
+          author{nickName userId}
+          authorRating
+          helpfulness{downVotes score upVotes}
+          language
+          spoiler
+          submissionDate
+          summary{originalText}
+          text{originalText{markdown}}
+          title {id}
+        }
+      }
+      pageInfo {
+        endCursor
+        hasNextPage
+      }
+    }
   }
 } |]

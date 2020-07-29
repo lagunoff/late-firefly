@@ -1,39 +1,40 @@
-module LateFirefly.IMDB.Scrape
-  ( scrapeSearch
-  , scrapeEpisodes
-  , test0
-  ) where
+module LateFirefly.IMDB.Scrape where
+  -- ( scrapeSearch
+  -- , scrapeEpisodes
+  -- , test0
+  -- ) where
 
-import Control.Lens as L hiding (children, (.=))
-import Control.Exception
 import Control.Error
+import Control.Exception
+import Control.Lens as L hiding (children, (.=))
 import Data.Aeson as AE
-import Data.Aeson.TH as AE
-import Data.Text as T
+import Data.ByteString.Lazy as BSL
 import Data.Char
 import Data.Coerce
+import Data.Foldable as F
+import Data.Generics.Product
 import Data.List as L
 import Data.Map as M
-import Prelude as P
-import Data.ByteString.Lazy as BSL
+import Data.Text as T
 import Data.Text.Encoding as T
-import Text.Read hiding (lift)
+import GHC.Stack
+import GHC.TypeLits
 import LateFirefly.DB
-import LateFirefly.Prelude
-import LateFirefly.IMDB.Schema
 import LateFirefly.IMDB.GraphQL
-import Text.HTML.TagSoup.Lens as L hiding (attr)
+import LateFirefly.IMDB.Schema
+import LateFirefly.Prelude
+import Network.HTTP.Client hiding (withConnection, Proxy)
+import Network.HTTP.Types
+import Prelude as P
 import Text.HTML.TagSoup as L
-import qualified Network.Wreq as Wreq
-import qualified Network.Wreq.Types as Wreq hiding (headers)
+import Text.HTML.TagSoup.Lens as L hiding (attr)
+import Text.Read hiding (lift)
 import Text.Regex.Lens
 import Text.Regex.Quote
 import Text.Regex.TDFA
-import Network.HTTP.Client hiding (withConnection)
-import GHC.Stack
-import GHC.Records
-import Network.HTTP.Types
 import Text.Shakespeare.Text as X (st)
+import qualified Network.Wreq as Wreq
+import qualified Network.Wreq.Types as Wreq hiding (headers)
 
 data ScrapeError
   = HttpException HttpException
@@ -91,11 +92,6 @@ scrapeImdbSearch1 g start = do
 
 -- * Scrape ImdbEpisode
 
-scrapeEpisodes :: (?conn::Connection) => Bool -> [Tid Imdb] -> IO ()
-scrapeEpisodes continue imdbIds =
-  void $ newVersionOrContinue continue $ unEio do
-    for_ imdbIds undefined
-
 -- scrapeEpisodes0
 --   :: (?conn::Connection, ?version::NewVersion)
 --   => Tid Imdb -> Eio ScrapeError ()
@@ -140,17 +136,6 @@ scrapeEpisodes continue imdbIds =
 
 -- * Scrape ImdbTitle
 
-scrapeTitle :: (?conn::Connection) => Bool -> Tid Imdb -> IO ()
-scrapeTitle continue imdbId = void $ newVersionOrContinue continue $ unEio do
-  scrapeTitle0 imdbId
-
-scrapeTitle0 :: (?conn::Connection) => Tid Imdb -> Eio ScrapeError ()
-scrapeTitle0 imdbId = do
-  tt <- parseTags . T.decodeUtf8 . BSL.toStrict .  (^. Wreq.responseBody) <$> httpGet ("https://www.imdb.com/title/" <> T.unpack (unTid imdbId))
-  let ttDrop = L.dropWhile (~/= ("<div class=title_wrapper>"::String)) tt
-  let title = ttText . L.takeWhile (~/= ("<h1>"::String)) . L.dropWhile (~/= ("<h1>"::String)) $ ttDrop
-  undefined
-
 readProgress :: (?conn::Connection, ?version::NewVersion) => IO (M.Map Genre1 Int)
 readProgress = do
   let TableInfo{..} = tableInfo @ImdbSearch
@@ -175,9 +160,13 @@ httpPost u b = liftIOWith HttpException $ P.putStrLn (u <> "...") *> Wreq.postWi
     cook = "ubid-main=130-8178991-3785115; session-id=140-1954702-4881012; session-id-time=2082787201l; uu=BCYo3Dldb2sxDTahtCC6PoSs8bIIl1GAE9w90XYwq-sY-fFUWbVkPcPcv4DpzdS9njrpdmwOkvZH%0D%0ABDVaHagXZl3WLo0Kv7EdP3pDy4nN0wYqlaOXXXwkC3MhQ0i7DC0KaDyxXidncOGttOsS-D6TP-R2%0D%0AOg%0D%0A; adblk=adblk_yes; session-token=xqXJZi+OwxzBPKbTCbcEwc4A9OnrIO5Fh47VdZLGvEjPoKHmXaH8+wMaBmuvfC/eAHAsqyHpfgAyZryzmBtG6b0xnV+p+Ous7+U6Apn1MH63BCKQWKwrucBDywsqd2LwDq1r7VLapR8EJaIHtoRVvBYKZClI2hyZsrJd1e7QNjAo4q/GDmw+V4NEtHvLOHTb"
     ct = "application/json"
 
-sendGql :: (FromJSON a, Wreq.Postable body) => String -> body -> Eio ScrapeError a
-sendGql u b =
-  either error P.id . AE.eitherDecode' .  traceShowId . (^. Wreq.responseBody) <$> httpPost u b
+sendGql
+  :: forall f a q.
+  (FromJSON a, ToJSON q, KnownSymbol f)
+  => String -> q -> Eio ScrapeError a
+sendGql u q = do
+  let b = AE.encode $ object ["operationName" .= Null, "query" .= q, "variables" .= object []]
+  either error imdb_response . AE.eitherDecode' @(ImdbResponse f a) .  (^. Wreq.responseBody) <$> httpPost u b
 
 allClass cs = allElements . attributed(ix "class" . traverse . nearly "" cond) where
   cond = isJust . L.find (==cs) . T.splitOn " "
@@ -202,9 +191,103 @@ ttText = withFrozenCallStack (nemptyTrace . innerText)
 
 test0 :: IO ()
 test0 = do
-  let q = [st|
+  TitleChunk{..} <- scrapeTitle "tt0386676"
+  void $ withConnection "late-firefly.sqlite" do
+    for_ $mkDatabaseSetup execute
+    for_ title upsert
+    for_ images upsert
+    for_ titleToImage upsert
+    for_ plots upsert
+    for_ quotes upsert
+    for_ trivia upsert
+
+scrapeTitle :: Text -> IO TitleChunk
+scrapeTitle tid = do
+  let q = qTitle tid
+  x::Title <- unEio $ sendGql @"title" "https://graphql.imdb.com/index.html" q
+  news <- scrapeNews tid
+  eps <- scrapeEpisodes tid
+  let chunk = (fromTitle x::TitleChunk){news=news}
+  titls <- mapM scrapeTitle eps
+  pure $ F.fold (chunk:titls)
+
+scrapeEpisodes :: Text -> IO [Text]
+scrapeEpisodes tid = go Nothing where
+  go after = do
+    let q = qEpisodes tid after
+    x::Pick Title '["id", "episodes"] <- unEio $ sendGql @"title" "https://graphql.imdb.com/index.html" q
+    let episodes = getField @"episodes" x
+    let episodes' = episodes ^.. _Just . field @"episodes" . _Just . field @"edges" . traverse . field @"node" . field @"id"
+    let cursor = episodes ^? _Just . field @"episodes" . _Just . field @"pageInfo" . field @"endCursor" . _Just
+    maybe (pure episodes') (\x -> (episodes' <>) <$> go (Just x)) cursor
+
+scrapeNews :: Text -> IO [ImdbNews]
+scrapeNews tid = go Nothing where
+  go after = do
+    let q = qNews tid after
+    x::Pick Title '["id", "news"] <- unEio $ sendGql @"title" "https://graphql.imdb.com/index.html" q
+    let news = getField @"news" x
+    let news' = news ^.. _Just . field @"edges" . traverse . field @"node" . to (toNews tid)
+    let cursor = news ^? _Just . field @"pageInfo" . field @"endCursor" . _Just
+    maybe (pure news') (\x -> (news' <>) <$> go (Just x)) cursor
+
+qNews :: Text -> Maybe Text -> Text
+qNews tid after =
+  let after' = maybe "" ((", after: "<>) . show) after
+  in [st|
 {
-  title(id: "tt0386676") {
+  title(id: "#{tid}") {
+    id
+    news(first: 100#{after'}) {
+      edges {
+        node {
+          id
+          text {markdown}
+          articleTitle {markdown}
+          externalUrl
+          source {homepage {url label}}
+          date
+          text {markdown}
+          image {id}
+          byline
+          language {id text}
+        }
+      }
+      pageInfo {
+        endCursor
+        hasNextPage
+      }
+    }
+  }
+} |]
+
+qEpisodes :: Text -> Maybe Text -> Text
+qEpisodes tid after =
+  let after' = maybe "" ((", after: "<>) . show) after
+  in [st|
+{
+  title(id: "#{tid}") {
+    id
+    episodes {
+      episodes(first: 100#{after'}) {
+        edges {
+          node {
+            id
+          }
+        }
+        pageInfo {
+          endCursor
+          hasNextPage
+        }
+      }
+    }
+  }
+} |]
+
+qTitle :: Text -> Text
+qTitle tid = [st|
+{
+  title(id: "#{tid}") {
     id
     plot { id }
     plots(first:99) {
@@ -287,27 +370,6 @@ test0 = do
       }
     }
 
-    news(first: 1) {
-      edges {
-        node {
-          id
-          text {markdown}
-          articleTitle {markdown}
-          externalUrl
-          source {homepage {url label}}
-          date
-          text {markdown}
-          image {id}
-          byline
-          language {id text}
-        }
-      }
-      pageInfo {
-        endCursor
-        hasNextPage
-      }
-    }
-
     alternateVersions(first: 999) {
       edges {
         node {
@@ -357,27 +419,3 @@ test0 = do
     originalTitleText {text isOriginalTitle country{id text} language{id text}}
   }
 } |]
-  let body = object ["operationName" .= Null, "query" .= q, "variables" .= object []]
-  x::GQLResponse Title <- unEio $ sendGql "https://graphql.imdb.com/index.html" (AE.encode body)
-  let dbpath = "late-firefly.sqlite"
-  void $ withConnection dbpath do
-    for_ $mkDatabaseSetup execute
-    let TitleChunk{..} = fromTitle (coerce x)
-    upsert title
-    for_ images upsert
-    for_ titleToImage upsert
-    for_ plots upsert
-    for_ quotes upsert
-    for_ trivia upsert
-    for_ news upsert
-
-newtype GQLResponse a = GQLResponse
-  { _data :: GQLTitleResponse a }
-  deriving stock (Show, Eq, Generic)
-
-newtype GQLTitleResponse a = GQLTitleResponse
-  { title :: a }
-  deriving stock (Show, Eq, Generic)
-  deriving anyclass (FromJSON, ToJSON)
-
-deriveJSON defaultOptions {fieldLabelModifier = \x -> fromMaybe x $ L.stripPrefix "_" x } ''GQLResponse

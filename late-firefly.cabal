@@ -11,7 +11,7 @@ executable late-firefly
   main-is: Main.hs
   ghc-options:
     -Wall -Wno-missing-signatures -Wno-name-shadowing -Wno-unused-matches
-    -Wno-unused-do-bind -Wno-partial-type-signatures
+    -Wno-unused-do-bind -Wno-partial-type-signatures -Wno-unticked-promoted-constructors
   hs-source-dirs: src ../massaraksh/src
   
   build-depends:
@@ -27,6 +27,7 @@ executable late-firefly
     exceptions,
     flat,
     generic-lens,
+    generic-monoid,
     haskell-src-meta,
     http-types,
     inflections,

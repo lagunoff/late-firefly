@@ -1,11 +1,15 @@
 module LateFirefly.IMDB.GraphQL where
 
+import Data.Aeson hiding (Series)
+import Data.Text as T
+import GHC.TypeLits
+import LateFirefly.Aeson
 import LateFirefly.DB
 import LateFirefly.Prelude
-import LateFirefly.Aeson
 
 data PageInfo = PageInfo
-  { hasNextPage :: Bool }
+  { endCursor :: Maybe Text
+  , hasNextPage :: Bool }
   deriving stock (Show, Eq, Generic)
   deriving anyclass (FromJSON, ToJSON)
 
@@ -371,8 +375,8 @@ data Title = Title {
 
 data Episodes = Episodes
   { episodes :: Many0 TitleId
-  , years    :: [EpisodesYear]
-  , seasons  :: [EpisodesSeason] }
+  , years    :: Maybe [EpisodesYear]
+  , seasons  :: Maybe [EpisodesSeason] }
   deriving stock (Show, Eq, Generic)
   deriving anyclass (FromJSON, ToJSON)
 
@@ -1812,3 +1816,12 @@ data Genre = Genre {
   text :: Text }
   deriving stock (Show, Eq, Generic)
   deriving anyclass (FromJSON, ToJSON)
+
+newtype ImdbResponse (f::Symbol) a = ImdbResponse
+  { imdb_response :: a }
+  deriving stock (Show, Eq, Generic)
+
+instance (FromJSON a, KnownSymbol f) => FromJSON (ImdbResponse f a) where
+  parseJSON = withObject "imdb-response" \o -> do
+    resp <- o .:: ["data", T.pack (symbolVal (Proxy @f))]
+    pure (ImdbResponse resp)

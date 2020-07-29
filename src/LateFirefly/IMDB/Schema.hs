@@ -10,6 +10,7 @@ import LateFirefly.DB
 import LateFirefly.Prelude
 import LateFirefly.Aeson
 import LateFirefly.IMDB.GraphQL
+import Data.Monoid.Generic
 --import Database.SQLite.Simple
 
 type Genre1 = Text
@@ -122,7 +123,7 @@ data ImdbTitleToImage = ImdbTitleToImage {
   deriving stock (Show, Eq, Generic)
 
 data TitleChunk = TitleChunk
-  { title :: ImdbTitle
+  { title :: [ImdbTitle]
   , images :: [ImdbImage]
   , titleToImage :: [ImdbTitleToImage]
   , plots :: [ImdbPlot]
@@ -130,9 +131,11 @@ data TitleChunk = TitleChunk
   , trivia :: [ImdbTitleTrivia]
   , news :: [ImdbNews] }
   deriving stock (Show, Eq, Generic)
+  deriving Semigroup via GenericSemigroup TitleChunk
+  deriving Monoid via GenericMonoid TitleChunk
 
 fromTitle :: Title -> TitleChunk
-fromTitle Title{images=imgs, plots=pls, quotes=quos, trivia=triv, news=ns,..} = TitleChunk ImdbTitle
+fromTitle Title{images=imgs, plots=pls, quotes=quos, trivia=triv, news=ns,..} = TitleChunk [ImdbTitle
   { rowid = Tid id
   , primaryImageId = fmap (Tid . getField @"id") primaryImage
   , plotId = fmap (Tid . getField @"id") plot
@@ -143,7 +146,7 @@ fromTitle Title{images=imgs, plots=pls, quotes=quos, trivia=triv, news=ns,..} = 
   , awardNominations = awardNominations ^.. _Just . field @"edges" . traverse . field @"node"
   , faqs = faqs ^.. _Just . field @"edges" . traverse . field @"node"
   , ..
-  } images titleToImage plots quotes trivia news
+  }] images titleToImage plots quotes trivia news
   where
     images = tims <> nims where
       tims = imgs ^.. _Just . field @"edges" . traverse . field @"node" . to toImage
@@ -179,11 +182,12 @@ fromTitle Title{images=imgs, plots=pls, quotes=quos, trivia=triv, news=ns,..} = 
     toTitleTrivia tid TitleTrivia{..} = ImdbTitleTrivia
       { rowid = Tid id, titleId = Tid tid, .. }
 
-    toNews tid News{..} = ImdbNews
-      { rowid = Tid id
-      , titleId = Tid tid
-      , imageId = fmap (Tid . getField @"id") image
-      , .. }
+toNews :: _
+toNews tid News{..} = ImdbNews
+  { rowid = Tid id
+  , titleId = Tid tid
+  , imageId = fmap (Tid . getField @"id") image
+  , .. }
 
 deriveRow ''ImdbSeries def
 deriveRow ''DisplayableLanguage def
@@ -197,10 +201,11 @@ deriveDb ''ImdbTitleTrivia def {renameField = underscore, fields = [("interestSc
 deriveDb ''ImdbNews def {renameField = underscore}
 deriveDb ''ImdbTitleToImage def {pkeys = ["imdb_image_id", "imdb_title_id"]}
 deriveDb ''ImdbTitleQuote def {renameField = underscore, fields = [("interestScore", CstgRow)]}
+
 deriveDb ''ImdbTitle def {renameField = underscore, fields = [
-  ("series", CstgRow), ("countriesOfOrigin", CstgRow),
-  ("releaseYear", CstgRow)
-  ]}
+  ("series", CstgRow),
+  ("countriesOfOrigin", CstgRow),
+  ("releaseYear", CstgRow) ]}
 
 deriving via JsonField Markdown instance FromField Markdown
 deriving via JsonField Markdown instance ToField Markdown

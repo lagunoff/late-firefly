@@ -35,6 +35,7 @@ data DeriveDbConfig = DeriveDbConfig
   , fields    :: [(String, ColumnStrategy)]
   , renameField :: String -> String
   , pkeys      :: [String]
+  , ukeys      :: [[String]]
   , prio      :: Int }
   deriving stock (Generic)
 
@@ -51,7 +52,8 @@ deriveDb n cfg@DeriveDbConfig{..} = reify n >>= \case
     let tblName = textE $ flip fromMaybe tableName $ underscore (nameBase name)
     let colInfo = [|columnsInfo|] `appTypeE` conT n
     let pks = bool (listE (fmap textE pkeys)) (listE [textE "rowid"]) (pkeys == [])
-    let tableDescE = [|TableInfo $(tblName) $(colInfo) $(pks) $(lift prio)|]
+    let uks = listE (fmap (listE . fmap textE) ukeys)
+    let tableDescE = [|TableInfo $(tblName) $(colInfo) $(pks) $(uks) $(lift prio)|]
     tableDescD <- tableDescE <&> \x -> FunD 'tableInfo [Clause [] (NormalB x) []]
     let dbTableInst = InstanceD Nothing [] (ConT ''DbTable `AppT` ConT n) [tableDescD]
     rowInsts <- deriveRow n cfg
@@ -128,7 +130,7 @@ deriveRowDef :: Name -> Q [Dec]
 deriveRowDef = flip deriveRow def
 
 deriveDbPrio :: Int -> Name -> Q [Dec]
-deriveDbPrio = flip deriveDb . DeriveDbConfig Nothing [] id def
+deriveDbPrio = flip deriveDb . DeriveDbConfig Nothing [] id def def
 
 -- | Make expression of type [Query] applying 'createTableStmt' to all
 -- the instances of typeclass 'DbTable'
@@ -157,4 +159,4 @@ underscore n = fromRight n
   $ Inf.parseCamelCase [] (T.pack n)
 
 instance Default DeriveDbConfig where
-  def = DeriveDbConfig def def id def def
+  def = DeriveDbConfig def def id def def def

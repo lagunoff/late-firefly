@@ -73,6 +73,7 @@ data TableInfo = TableInfo
   { name    :: Text
   , columns :: [(Text, ColumnInfo)]
   , pkeys   :: [Text]
+  , ukeys   :: [[Text]]
   , prio    :: Int }
   deriving stock (Eq, Show, Generic)
 
@@ -94,8 +95,9 @@ createTableStmt = let
       | k /= "rowid" -> Just $ "foreign key (" <> esc k <> ") references "
         <> esc t <> " (" <> T.intercalate ", " (fmap esc tks) <> ")"
     _ -> Nothing
+  uks = ukeys <&> \ks -> "unique (" <> T.intercalate ", " (fmap esc ks) <> ")"
   createTable = [sql|create table if not exists {{tableName}} (
-    #{T.intercalate ",\n  " (createColumns <> primaryContrains <> fks)}
+    #{T.intercalate ",\n  " (createColumns <> primaryContrains <> fks <> uks)}
   )|]
   selectColumns = T.intercalate ", " $ fmap (esc . fst) columns
   createView = [sql|create view if not exists {{name}} as
@@ -133,17 +135,15 @@ data UpsertResult
   = New | Updated | Cached | Rewritten
   deriving (Eq, Show, Generic)
 
-upsertInc :: forall t g. (?conn::Connection, DbTable t, HasField' "rowid" t (Id g)) => t -> IO t
+upsertInc :: forall t. (?conn::Connection, DbTable t, HasField' "rowid" t (Id t)) => t -> IO t
 upsertInc t = do
   let
     TableInfo{..} = tableInfo @t
     tableName = bool name (name <> "_versions") (isVersioned @t)
-    pks = T.intercalate ", " $ fmap esc pkeys
     cols = T.intercalate ", " $ fmap (esc . fst) columns
     vals = T.intercalate ", " $ fmap (const "?") columns
-    sets = T.intercalate ", " $ fmap (\(c, _) -> esc c <> " = ?") columns
-    Sql q _ _ = [sql|insert into {{tableName}} (#{cols}) values (#{vals}) on conflict(#{pks}) do update set #{sets}|]
-  S.execute ?conn (Query q) (toRow t <> toRow t)
+    Sql q _ _ = [sql|replace into {{tableName}} (#{cols}) values (#{vals})|]
+  S.execute ?conn (Query q) (toRow t)
   if getField @"rowid" t /= def then pure t else
      S.lastInsertRowId ?conn <&> \idInt -> setField @"rowid" (Id idInt) t
 
@@ -152,12 +152,10 @@ upsert t = do
   let
     TableInfo{..} = tableInfo @t
     tableName = bool name (name <> "_versions") (isVersioned @t)
-    pks = T.intercalate ", " $ fmap esc pkeys
     cols = T.intercalate ", " $ fmap (esc . fst) columns
     vals = T.intercalate ", " $ fmap (const "?") columns
-    sets = T.intercalate ", " $ fmap (\(c, _) -> esc c <> " = ?") columns
-    Sql q _ _ = [sql|insert into {{tableName}} (#{cols}) values (#{vals}) on conflict(#{pks}) do update set #{sets}|]
-  S.execute ?conn (Query q) (toRow t <> toRow t)
+    Sql q _ _ = [sql|replace into {{tableName}} (#{cols}) values (#{vals})|]
+  S.execute ?conn (Query q) (toRow t)
 
 upsertVersion
   :: forall t. (?conn::Connection, Eq t, DbTable t) => t -> IO (t, UpsertResult)

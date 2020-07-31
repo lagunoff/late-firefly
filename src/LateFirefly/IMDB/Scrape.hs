@@ -90,50 +90,6 @@ scrapeImdbSearch1 g start = do
   where
     clush ImdbSearch{popularity=p1} ImdbSearch{popularity=p2,..} = ImdbSearch{popularity=p1 <> p2, ..}
 
--- * Scrape ImdbEpisode
-
--- scrapeEpisodes0
---   :: (?conn::Connection, ?version::NewVersion)
---   => Tid Imdb -> Eio ScrapeError ()
--- scrapeEpisodes0 imdbId = do
---   seasons <- scrapeEpisodes1 imdbId "1"
---   for_ (L.drop 1 seasons) (undefined imdbId)
-
--- scrapeEpisodes1
---   :: (?conn::Connection, ?version::NewVersion)
---   => Tid Imdb -> Text -> Eio ScrapeError [Text]
--- scrapeEpisodes1 imdbId seasonNum = do
---   tags <- parseTags . T.decodeUtf8 . BSL.toStrict .  (^. Wreq.responseBody) <$> httpGet ("https://www.imdb.com/title/" <> T.unpack (unTid imdbId) <> "/episodes?season=" <> T.unpack seasonNum)
---   let
---     seasons = fmap (attr "value")
---       . partitions (~== ("<option>"::String))
---       . L.takeWhile (~/= ("</select>"::String))
---       . L.dropWhile (~/= ("<select id=\"bySeason\">"::String))
---       $ tags
---     episodes = fmap f
---       . partitions ((~== ("<div class=\"list_item even\">"::String)) `tagOr` (~== ("<div class=\"list_item odd\">"::String)))
---       . L.takeWhile (~/= ("<hr>"::String))
---       . L.dropWhile (~/= ("<div class=\"list detail eplist\">"::String))
---       $ tags
---   for_ episodes \x -> do
---     (t, changed) <- liftIO $ upsertVersion x
---     let rid = unTid $ getField @"rowid" t
---     traceM $ T.unpack [st|#{rid} [#{show changed}]|]
---   pure seasons
-
---   where
---     tagOr :: (a -> Bool) -> (a -> Bool) -> a -> Bool
---     tagOr f g a = f a || g a
-
---     f :: [Tag Text] -> ImdbEpisode
---     f tt = ImdbEpisode{version=coerce ?version, ..} where
---       href = attr "href" . L.dropWhile (~/= ("<a>"::String)) $ tt
---       episode = attr "content" . L.dropWhile (~/= ("<meta itemprop=\"episodeNumber\">"::String)) $ tt
---       rowid = Tid $ T.pack $ maybeTrace $ href ^? to T.unpack . regex [r|/title/([[:alnum:]\-_]+)|] . captures . ix 0
---       deleted = False
---       parent = imdbId
---       season = seasonNum
-
 -- * Scrape ImdbTitle
 
 readProgress :: (?conn::Connection, ?version::NewVersion) => IO (M.Map Genre1 Int)

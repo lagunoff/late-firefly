@@ -3,31 +3,16 @@ module LateFirefly.TheOffice.Schema where
 import Flat
 import LateFirefly.DB
 import LateFirefly.Prelude
+import LateFirefly.IMDB.Schema
 
-data Season = Season
-  { uuid      :: ~(UUID5 Season)
-  , version   :: Id Transaction
-  , deleted   :: Bool
-  , thumbnail :: Text
-  , number    :: Int }
+data VideoLink = VideoLink
+  { rowid      :: Id VideoLink
+  , titleId    :: Id ImdbTitle
+  , videoId    :: Maybe Text
+  , videoTitle :: Maybe Text
+  , url        :: Text
+  , origin     :: Maybe Text }
   deriving stock (Show, Eq, Generic)
   deriving anyclass Flat
 
--- deriveDbUUID ["number"] ''Season
-
-data Episode = Episode
-  { uuid        :: ~(UUID5 Episode)
-  , version     :: Id Transaction
-  , deleted     :: Bool
-  , seasonId    :: UUID5 Season
-  , code        :: Text
-  , name        :: Text
-  , href        :: Text
-  , shortDesc   :: Text
-  , thumbnail   :: Text
-  , description :: Text
-  , links       :: [Text] }
-  deriving stock (Show, Eq, Generic)
-  deriving anyclass Flat
-
--- deriveDbUUID ["seasonId", "code"] ''Episode
+deriveDb ''VideoLink def {renameField=underscore, ukeys=[["url"]]}

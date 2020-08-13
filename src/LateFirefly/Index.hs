@@ -1,7 +1,8 @@
 module LateFirefly.Index
-  ( IndexState(..)
-  , indexWidget
-  ) where
+  -- ( IndexState(..)
+  -- , indexWidget
+  -- )
+where
 
 import Control.Lens hiding ((#))
 import Control.Monad.Trans
@@ -15,7 +16,7 @@ import LateFirefly.Prelude
 import LateFirefly.Router
 import LateFirefly.Widget.Prelude
 import LateFirefly.Disqus
-import LateFirefly.Series
+-- import LateFirefly.Series
 import LateFirefly.Icons
 import Data.Constraint
 
@@ -57,16 +58,16 @@ htmlTemplate content = do
 indexWidget :: Html ()
 indexWidget = mdo
   route <- htmlRouter HomeR_ \r ->
-    liftIO $ sync $ modify (idx_route .~ r)
-  (model, modify) <- liftIO $ newDyn (IndexState route)
+    liftIO $ sync $ mod (idx_route .~ r)
+  (mdl, mod) <- liftIO $ newDyn (IndexState route)
   let
-    routeDyn = fmap _idx_route model
+    routeDyn = fmap _idx_route mdl
     withRestoreState f r = restoreState *> (htmlTemplate =<< f r)
     handleError e = void $ liftJSM do
       jsg ("console"::Text) # ("log"::Text) $ [show e]
   dynHtml2 handleError $ routeDyn <&> withRestoreState \case
     HomeR_      -> homeWidget
-    SeriesR_ r  -> seriesWidget r
+--    SeriesR_ r  -> seriesWidget r
     SeasonR_ r  -> seasonWidget r
     EpisodeR_ r -> episodeWidget r
 
@@ -265,17 +266,16 @@ footerWidget = do
           list-style: none |]
 
 htmlRouter
-  :: forall a . (HasParser U a, Show a)
-  => a -> (a -> Html ()) -> Html a
+  :: forall a . (HasParser U a) => a -> (a -> Html ()) -> Html a
 htmlRouter def hashChange = do
-  win <- Element <$> liftJSM (jsg ("window"::Text))
+  win <- liftJSM (jsg ("window"::Text))
   let
     parseRoute = do
       search <- fromJSValUnchecked =<< jsg ("location"::Text) ! ("search"::Text)
       pathname <- fromJSValUnchecked =<< jsg ("location"::Text) ! ("pathname"::Text)
       pure $ fromMaybe def $ listToMaybe $ parseUrl @a (pathname <> search)
   route <- liftJSM parseRoute
-  onEvent_ win "popstate" do
+  domEvent_ (JsNode win) "popstate" do
     liftJSM parseRoute >>= hashChange
   liftJSM parseRoute
 
@@ -285,3 +285,20 @@ dynHtml2
   -> Html ()
 dynHtml2 e dyn = dynHtml' dyn' where
   dyn' = dyn <&> \h commit revert -> either ((revert <*) . e) (\_ -> commit) =<< (fmap Right h `catchError` (pure . Left))
+
+data AboutRoute = AboutRoute
+  deriving stock (Eq, Ord, Generic)
+  deriving anyclass Flat
+
+instance HasParser U AboutRoute where
+  parser = dimap (const ()) (const AboutRoute) $ segment "about"
+
+instance IsPage AboutRoute where
+  type PageData AboutRoute = ()
+  page = Page (RemotePtr (static (SomeBackend (Backend initAbout))) 'initAbout) (const aboutWidget)
+
+initAbout :: AboutRoute -> BackendIO ()
+initAbout _ = pure ()
+
+aboutWidget :: Html ()
+aboutWidget = div_ "about"

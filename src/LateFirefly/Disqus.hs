@@ -1,13 +1,13 @@
 module LateFirefly.Disqus where
 
 import Language.Javascript.JSaddle
-import Massaraksh.Text
+import Massaraksh
 import LateFirefly.Widget.Prelude
 
 setupDisqus :: Html ()
 setupDisqus = if True then blank else liftJSM do
-  scriptEl <- createElement "script"
-  scriptEl2 <- createElement "script"
+  scriptEl <- createElement (JsNode undefined) "script"
+  scriptEl2 <- createElement (JsNode undefined)"script"
   scriptEl2 <# ("innerHTML" :: Text) $ [st|
     window.disqus_config = function() {
       this.page.url = window.location.href;

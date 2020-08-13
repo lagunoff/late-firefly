@@ -21,11 +21,11 @@ import qualified Data.Map as M
 mkApplication :: (?conn::Connection) => DynSPT -> Application
 mkApplication dynSpt req response = do
   RpcRequest{..} <- either (error . show) id <$> parseFlatRequest
-  staticEp :: Maybe Ep <- fmap deRefStaticPtr <$> unsafeLookupStaticPtr rr_key
+  staticEp :: Maybe SomeBackend <- fmap deRefStaticPtr <$> unsafeLookupStaticPtr rpcqKey
   let
-    dynEp = M.lookup rr_name dynSpt
-    ep = fromMaybe (error $ "unknown method: " ++ show rr_name) $ staticEp <|> dynEp
-  r <- unEp ep rr_arg
+    dynEp = M.lookup rpcqName dynSpt
+    ep = fromMaybe (error $ "unknown method: " ++ show rpcqName) $ staticEp <|> dynEp
+  r <- runBackend ep rpcqArg
   response $ responseLBS ok200 [] (LBS.fromStrict r)
   where
     parseFlatRequest = do

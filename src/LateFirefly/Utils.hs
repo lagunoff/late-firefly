@@ -10,7 +10,9 @@ import Data.List as L
 import Data.Proxy
 import Data.String
 import Data.Text as T
+import Data.Text.IO as T
 import Data.Typeable
+import Data.ByteString
 import Data.UUID (UUID)
 import Database.SQLite.Simple
 import Database.SQLite3 as SQLite3
@@ -18,6 +20,7 @@ import Flat
 import Data.Generics.Product
 import GHC.Generics
 import GHC.Int
+import Data.IORef
 import GHC.Stack
 import GHC.Stack.Types
 import GHC.TypeLits
@@ -28,6 +31,10 @@ import Massaraksh (Html)
 import Unsafe.Coerce
 import qualified Control.Exception as Exception
 import qualified Control.Exception as P
+import System.IO
+import TextShow
+import GHC.StaticPtr
+import Language.Haskell.TH as TH
 
 #ifndef __GHCJS__
 import Data.Aeson as AE
@@ -51,6 +58,7 @@ newtype UUID5 t = UUID5 {unUUID5 :: UUID}
 data BackendError
   = SQLError SQLError
   | BEFlatError String
+  | The404Error
   deriving stock (Show, Eq, Generic)
   deriving Exception
 #ifndef __GHCJS__
@@ -70,7 +78,23 @@ data FrontendError
   deriving stock (Show, Eq, Generic)
   deriving Exception
 
-type Backend a r = (?conn::Connection) => a -> Eio BackendError r
+type BackendIO = Eio BackendError
+
+data Backend a r = (Typeable a, Typeable r, Flat a, Flat r) =>
+  Backend ((?conn::Connection) => a -> Eio BackendError r)
+
+type UnBackend a r =
+  (?conn::Connection) => a -> Eio BackendError r
+
+data SomeBackend = forall a r. SomeBackend (Backend a r)
+
+data RemotePtr a r = RemotePtr
+  { rptrStaticPtr :: StaticPtr SomeBackend
+  , rptrName      :: Name }
+
+data Progress = Progress
+  { inc     :: IO ()
+  , display :: Text -> IO () }
 
 deriving stock instance Generic SQLError
 deriving stock instance Generic SQLite3.Error
@@ -206,3 +230,24 @@ instance (GNilRec f, GNilRec g) => GNilRec ((:*:) f g) where
 
 nilRec :: forall a. (GNilRec (Rep a), Generic a) => a
 nilRec = GHC.Generics.to $ gNilRec (Proxy @(Rep a _))
+
+progressInc :: Int -> ((?progress::Progress) => IO r) -> IO r
+progressInc todo act = do
+  pgRef <- newIORef (-1 :: Int)
+  lbRef <- newIORef "Starting"
+  let
+    inc = do
+      modifyIORef pgRef (+ 1) >> prin
+    display lb =
+      writeIORef lbRef lb >> prin
+    prin = do
+      done <- readIORef pgRef
+      lb <- readIORef lbRef
+      T.hPutStr stderr "\r\ESC[K"
+      T.hPutStr stderr (lb <> " [" <> showt done <> "/" <> showt todo <> "]")
+  prin *> (let ?progress=Progress inc display in act) <* T.hPutStr stderr "\n"
+
+prefixProgress :: (?progress::Progress) => Text -> ((?progress::Progress) => IO r) -> IO r
+prefixProgress pre act = do
+  let Progress{..} = ?progress
+  let ?progress=Progress inc (display . (pre <>)) in act

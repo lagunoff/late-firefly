@@ -24,9 +24,9 @@ data Sql = Sql Text [SQLData] (Map Text SQLData)
 
 sql :: QuasiQuoter
 sql = QuasiQuoter{..} where
-  quotePat = undefined
-  quoteType = undefined
-  quoteDec = undefined
+  quotePat = error "sql: patterns unsupported"
+  quoteType = error "sql: types unsupported"
+  quoteDec = error "sql: declarations unsupported"
   quoteExp e = do
     let Right chunks = parseOnly pSql (T.pack e)
     let
@@ -40,13 +40,9 @@ sql = QuasiQuoter{..} where
         _          -> Nothing
     [|Sql (T.intercalate "" $ $(listE sqlTxt)) $(listE sqlPar) M.empty|]
 
-query :: QuasiQuoter
-query = sql{quoteExp=qe} where
-  qe e = [|doQuery $(quoteExp sql e)|]
-
-doQuery :: (FromRow r, ?conn::Connection) => Sql -> IO [r]
-doQuery (Sql t [] _) = S.query_ ?conn (Query t)
-doQuery (Sql t p _)  = S.query ?conn (Query t) p
+query :: (FromRow r, ?conn::Connection) => Sql -> IO [r]
+query (Sql t [] _) = S.query_ ?conn (Query t)
+query (Sql t p _)  = S.query ?conn (Query t) p
 
 instance IsString Sql where
   fromString s = Sql (T.pack s) mempty mempty

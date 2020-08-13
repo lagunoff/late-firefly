@@ -10,7 +10,7 @@ import Language.Haskell.TH.Quote
 import Language.Javascript.JSaddle
 import LateFirefly.Prelude
 import Massaraksh.Internal as H
-import Massaraksh.Text as H
+import Massaraksh as H
 import Text.Cassius
 import Text.Shakespeare.Text as X (st)
 import qualified Data.Text.Lazy as LT
@@ -42,15 +42,15 @@ style :: QuasiQuoter
 style = cassius{quoteExp=qExp} where
   qExp = appE [|H.el "style" . (H.prop "type" ("text/css" :: T.Text) *>) . H.text . LT.toStrict . renderCss . ($ undefined)|] . quoteExp cassius
 
-elementSize' :: Element -> Modifier (Maybe (Int, Int)) -> Html ()
-elementSize' elm modSize = do
+elementSize' :: Node -> Modifier (Maybe (Int, Int)) -> Html ()
+elementSize' (JsNode elm) modSize = do
   win <- liftJSM $ jsg ("window"::Text)
   let
     handleResize = do
       w::Int <- fromJSValUnchecked =<< elm ! ("clientWidth"::Text)
       h::Int <- fromJSValUnchecked =<< elm ! ("scrollWidth"::Text)
       liftIO $ sync $ modSize $ const $ Just (w, h)
-  onEvent_ (coerce win) "resize" $ liftJSM handleResize
+  domEvent_ (JsNode win) "resize" $ liftJSM handleResize
   liftJSM $ setTimeout 0 $ handleResize
 
 elementSize :: Modifier (Maybe (Int, Int)) -> Html ()

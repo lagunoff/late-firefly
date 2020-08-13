@@ -17,6 +17,7 @@ import Data.Either
 import Data.IORef
 import Data.Maybe
 import Data.Text
+import Data.Typeable
 import Data.Text.Encoding (decodeUtf8)
 import Flat
 import GHC.Fingerprint.Type
@@ -43,18 +44,22 @@ import Unsafe.Coerce
 import GHCJS.Buffer as Buffer
 #endif
 
-newtype Ep = Ep {unEp:: (?conn::Connection) => ByteString -> IO ByteString}
-
-type DynSPT = M.Map Name Ep
+type DynSPT = M.Map Name SomeBackend
 
 data RpcRequest = RpcRequest
-  { rr_key  :: StaticKey
-  , rr_name :: Name
-  , rr_arg  :: ByteString }
+  { rpcqKey  :: StaticKey
+  , rpcqName :: Name
+  , rpcqArg  :: ByteString }
   deriving (Show, Eq, Generic, Flat)
 
-sendRpcXhr :: (Flat a, Flat r) => Name -> StaticKey -> (a `Backend` r) -> a -> JSM r
-sendRpcXhr n k _ a = do
+xhrRemoteTH
+  :: (Flat a, Flat r) => UnBackend a r -> RemotePtr a r -> a -> JSM r
+xhrRemoteTH _ = xhrRemote
+
+xhrRemote :: (Flat a, Flat r) => RemotePtr a r -> a -> JSM r
+xhrRemote r a = do
+  let k = staticKey $ rptrStaticPtr r
+  let n = rptrName r
   origin::JSString <- fromJSValUnchecked =<< jsg ("window"::JSString)
     ! ("location"::JSString) ! ("origin"::JSString)
   buffer <- byteStringToArrayBuffer $ flat $ RpcRequest k n (flat a)
@@ -74,22 +79,31 @@ dynSPT = unsafePerformIO (newIORef S.empty)
 remote :: Name -> Q Exp
 remote n = do
   liftIO $ modifyIORef dynSPT (S.insert n)
-  [| liftJSM . sendRpcXhr $(lift n) (staticKey $(staticE ([|toEp|] `appE` varE n))) $(varE n) |]
+  let keyE = [|RemotePtr (static (someBackend $(varE n))) $(lift n)|]
+  [|liftJSM . xhrRemoteTH $(varE n) $keyE |]
 
-toEp :: forall a b. (Flat a, Flat b, Show b) => a `Backend` b -> Ep
-toEp f = Ep \arg -> flat @(Either PublicBackendError b) <$> E.runExceptT do
-  a <- E.ExceptT $ ee (BEFlatError . show) (unflat @a arg)
-  E.ExceptT $ ee id =<< runEio (f a)
-  where
-    ee e = either (fmap Left . logError . e) (fmap Right . pure)
-    logError _ = pure $ ErrorCode (coerce (0::Int64))
+runBackend :: (?conn::Connection) => SomeBackend -> ByteString -> IO ByteString
+runBackend (SomeBackend b1) arg = rb b1 arg where
+  rb :: forall a b. Backend a b -> ByteString -> IO ByteString
+  rb (Backend f) arg = flat @(Either PublicBackendError b) <$> E.runExceptT do
+    a <- E.ExceptT $ ee (BEFlatError . show) (unflat @a arg)
+    E.ExceptT $ ee id =<< runEio (f a)
+    where
+      ee e = either (fmap Left . logError . e) (fmap Right . pure)
+      logError _ = pure $ ErrorCode (coerce (0::Int64))
+
+someBackend
+  :: forall a b
+  . (Typeable a, Typeable b, Flat a, Flat b)
+  => UnBackend a b -> SomeBackend
+someBackend f = SomeBackend (Backend f)
 
 readDynSPT :: Q Exp
 readDynSPT = do
   eps <- liftIO (readIORef dynSPT)
   epsExp <- forM (S.toAscList eps) \n ->
-    pure $ tupE [lift n, varE 'toEp `appE` varE n]
-  [| M.fromList $(listE epsExp) |]
+    pure $ tupE [lift n, varE 'someBackend `appE` varE n]
+  [|M.fromList $(listE epsExp)|]
 
 byteStringToArrayBuffer :: ByteString -> JSM Uint8Array
 #ifndef ghcjs_HOST_OS

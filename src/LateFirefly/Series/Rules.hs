@@ -16,7 +16,7 @@ data LinkRule = LinkRule
   , siteRe         :: Maybe Text }
   deriving stock (Eq, Show, Generic)
 
-deriveDb ''LinkRule
+deriveDb ''LinkRule def {renameField = underscore}
 
 applyLinkRule :: LinkRule -> Text -> [Text] -> [Text]
 #ifndef __GHCJS__

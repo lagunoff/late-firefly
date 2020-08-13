@@ -184,11 +184,11 @@ upsertVersionOpts mf t = do
   let existingQ = liftA2 (curry fst) pkVersion mf <&> \(ri, vr) -> [sql|select #{cols} from {{tableName}} where rowid={ri} AND version={vr}|]
   let lastQ = pkVersion <&> \(pk, _) -> [sql|select #{cols} from {{name}} where rowid={pk}|]
   let Sql q _ _ = [sql|insert into {{tableName}} (#{cols}) values (#{vals}) on conflict(rowid, version) do update set #{sets}|]
-  mayExist::Maybe t <- join <$> for existingQ \q -> fmap fst . L.uncons <$> doQuery q
+  mayExist::Maybe t <- join <$> for existingQ \q -> fmap fst . L.uncons <$> query q
   case liftA2 (,) mayExist mf of
     Just (x, f) -> (t, Rewritten) <$ S.execute ?conn (Query q) (toRow (f x t) <> toRow (f x t))
     Nothing -> do
-      mayLast::Maybe [SQLData] <- join <$> for lastQ \q -> fmap fst . L.uncons <$> doQuery q
+      mayLast::Maybe [SQLData] <- join <$> for lastQ \q -> fmap fst . L.uncons <$> query q
       case (flip rowsEq row <$> versionIdx <*> mayLast) of
         (Just True)  -> pure (t, Cached)
         (Just False) -> (t, Updated) <$ S.execute ?conn (Query q) (row <> row)

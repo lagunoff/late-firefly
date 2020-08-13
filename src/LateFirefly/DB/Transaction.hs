@@ -1,21 +1,22 @@
 {-# LANGUAGE CPP #-}
 module LateFirefly.DB.Transaction where
 
+import Control.Exception as E
 import Data.Generics.Product
-import Data.Time
-import Data.Text as T
 import Data.List as L
-import Database.SQLite.Simple
+import Data.Text as T
+import Data.Time
+import Database.SQLite.Simple (Connection)
 import Database.SQLite.Simple.FromField
 import Database.SQLite.Simple.ToField
+import Database.SQLite3 (ColumnType(..))
 import Flat
 import LateFirefly.DB.Base as DB
 import LateFirefly.DB.QQ
 import LateFirefly.DB.TH
 import LateFirefly.Prelude
+import System.Environment
 import qualified Database.SQLite.Simple as S
-import Database.SQLite3 (ColumnType(..))
-import Control.Exception as E
 #ifndef __GHCJS__
 import Data.Aeson
 #endif
@@ -79,4 +80,15 @@ withConnection path act = S.withConnection path \conn -> do
   mapM_ (S.execute_ conn) ["PRAGMA journal_mode=WAL"]
   let ?conn = conn in act
 
+withConnectionEnv :: ((?conn::Connection) => IO a) -> IO a
+withConnectionEnv f = do
+  e <- lookupEnv "DB"
+  withConnection (e ?: "late-firefly.sqlite") f
+
 type NewVersion = Id Transaction
+
+transaction :: (?conn::Connection) => IO a -> IO a
+transaction act = (begin *> act <* commit) `catch` rollback where
+  begin = execute [sql|begin transaction;|]
+  commit = execute [sql|commit;|]
+  rollback e = execute [sql|rollback;|] *> throwIO (e::SomeException)

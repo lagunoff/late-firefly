@@ -412,7 +412,7 @@ data EpisodesSeason = EpisodesSeason
 
 data Series = Series
   { series :: TitleId
-  , episodeNumber :: EpisodeNumber
+  , episodeNumber :: Maybe EpisodeNumber
   , nextEpisode :: Maybe TitleId
   , previousEpisode :: Maybe TitleId }
   deriving stock (Show, Eq, Generic)
@@ -551,18 +551,19 @@ data Name = Name {
   -- Cache TTL in seconds: 900
   id :: ImdbId "nm",
   -- Cache TTL in seconds: 900
-  images :: Many Image,
+  images :: Many0 Image,
   -- Cache TTL in seconds: 900
-  meta :: NameMeta,
+  -- meta :: NameMeta,
   -- The primary image for the name.
   -- Cache TTL in seconds: 900
-  primaryImage :: Image,
+  primaryImage :: Maybe Image,
   -- The person's name as it appears on IMDb.
   -- Cache TTL in seconds: 900
-  nameText :: NameText,
+  nameText :: NameText
   -- The person's knownForJobCategories as they appear on IMDb.
   -- Cache TTL in seconds: 900
-  knownForJobCategories :: KnownForJobCategories }
+  -- knownForJobCategories :: KnownForJobCategories
+  }
   deriving stock (Show, Eq, Generic)
   deriving anyclass (FromJSON, ToJSON)
 
@@ -807,7 +808,7 @@ data Credit = Credit {
   -- Affected by headers: x-imdb-user-country, x-imdb-user-language
   --
   -- Cache TTL in seconds: 900
-  name :: NameId,
+  name :: Name,
   -- The title on which this credit appears
   --
   -- Affected by headers: x-imdb-user-country, x-imdb-user-language

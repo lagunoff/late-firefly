@@ -1,23 +1,32 @@
-module LateFirefly.Series.Episode (episodeWidget) where
+{-# OPTIONS_GHC -fno-warn-orphans #-}
+module LateFirefly.Series.Episode where
 
-import LateFirefly.Widget.Prelude
-import LateFirefly.TheOffice.Schema
+import Data.Generics.Product
+import Data.Constraint
+import Data.List as L
+import Control.Monad.Catch
 import LateFirefly.DB
 import LateFirefly.RPC.TH
 import LateFirefly.Router
-import Data.List as L
 import LateFirefly.Series.Rules
-import Data.Generics.Product
+import LateFirefly.Series.Types
+import LateFirefly.Widget.Prelude
+import LateFirefly.IMDB.Schema
+import LateFirefly.IMDB.GraphQL
+import Text.Regex.Quote
+import Text.Regex.TDFA
 
 episodeWidget :: EpisodeRoute -> Html (Html ())
 episodeWidget r@EpisodeRoute{..} = do
-  Episode{..} <- $(remote 'getEpisode) (coerce episode)
+  let episodeTxt::Text = coerce episode
+  let seriesTxt::Text = coerce series
+  ed@EpisodeData{..} <- $(remote 'getEpisode) (seriesTxt, episodeTxt)
   pure do
     let Theme{..} = theme
     (holdUniqDyn -> linkIdx, modifyIdx) <- liftIO (newDyn 0)
     divClass "episode-root" do
-      h3_ [ht|Episode #{code}|]
-      breadcrumbsWidget (EpisodeR_ r)
+      h3_ [ht|Episode #{episodeTxt}|]
+      breadcrumbsWidget (crumbs r ed)
       ulClass "tabs" $ for_ (L.zip links [0..]) \(_, idx) -> do
         li_ do
           toggleClass "active" (fmap (==idx) linkIdx)
@@ -33,7 +42,7 @@ episodeWidget r@EpisodeRoute{..} = do
         "frameborder" `attr` "0"
         "style" =: [st|width: 900px; height: 600px|]
         "src" ~: ((links L.!!) <$> linkIdx)
-      p_ (text description)
+      -- p_ (text description)
     [style|
       .episode-root
         max-width: 900px
@@ -56,12 +65,63 @@ episodeWidget r@EpisodeRoute{..} = do
           color: #{primaryText}
     |]
 
-getEpisode :: (?conn::Connection) => Text -> Eio BackendError Episode
-getEpisode epCode = liftIO do
-  episode <- L.head <$> doQuery [sql|
-    select e.* from `episode` e
-      left join `season` s on e.season_id=s.uuid
-    where e.`code`={epCode}
+crumbs :: EpisodeRoute -> EpisodeData -> [Route]
+crumbs EpisodeRoute{..} EpisodeData{..} =
+  [SeriesR_ SeriesRoute{..}, SeasonR_ SeasonRoute{season=coerce season, ..}]
+
+data EpisodeData = EpisodeData
+  { title  :: Maybe Text
+  , links  :: [Text]
+  , season :: Int
+  , plot   :: Maybe ImdbPlot }
+  deriving stock (Show, Eq, Generic)
+  deriving anyclass Flat
+
+deriving anyclass instance Flat ImdbPlot
+deriving anyclass instance Flat Markdown
+deriving anyclass instance Flat PlotType
+deriving anyclass instance Flat DisplayableLanguage
+
+getEpisode :: (?conn::Connection) => (Text, Text) -> Eio BackendError EpisodeData
+getEpisode (seriesId, epCode) = liftIO do
+  ds::[EpisodeData] <- query [sql|
+    with vid as
+      (select
+        min(vl.video_title) as video_title,
+        json_group_array(vl.url) as url,
+        min(it.plot_id) as plot_id,
+        min(it.series_season_number) as series_season_number,
+        vl.title_id as title_id
+      from video_link vl
+      cross join series sr on sr.rowid={seriesId}
+      left join imdb_title it on it.rowid=vl.title_id
+      where vl.video_id={epCode} and it.series_title_id=sr.title_id
+      group by vl.title_id)
+    select vid.video_title, vid.url, vid.series_season_number, ip.*
+    from vid
+    left join imdb_plot ip where ip.rowid=vid.plot_id
   |]
-  links <- applyLinkRule' "iwatchtheoffice.com" $ getField @"links" episode
-  pure episode {links=links}
+  case fmap fst (L.uncons ds) of
+    Just ep -> pure ep
+    Nothing -> case parseEpCode epCode of
+      Just (sea, epi) -> do
+        ds::[EpisodeData] <- query [sql|
+          with vid as
+            (select
+              min(vl.video_title) as video_title,
+              json_group_array(vl.url) as url,
+              min(it.plot_id) as plot_id,
+              vl.title_id as title_id
+            from video_link vl
+            cross join series sr on sr.rowid={seriesId}
+            left join imdb_title it on it.rowid=vl.title_id
+            where it.series_title_id=sr.title_id and it.series_season_number={sea} and it.series_episode_number={epi}
+            group by vl.title_id)
+          select vid.video_title, vid.url, {sea} as series_season_number, ip.*
+          from vid
+          left join imdb_plot ip where ip.rowid=vid.plot_id
+          |]
+        maybe (throwM The404Error) pure $ fmap fst (L.uncons ds)
+      Nothing -> throwM The404Error
+
+deriveDb ''EpisodeData def {fields=[("plot", CstgRow)]}

@@ -81,12 +81,12 @@ scrapeImdbSearch1 g start = do
     let thumbnail67x98 = el ^? allClass "lister-item-image". allElements . named(only "img").attrOne "loadlate"
     let year = el ^? allClass "lister-item-year" . allContents . to (T.dropWhile (=='(') . T.dropWhileEnd (==')'))
     headerEl   <- mayThrow $ el ^? allClass "lister-item-header"
-    rowid      <- fmap coerce $ mayThrow $ headerEl ^? allElements . named(only "a").attrOne "href" . to (T.unpack . T.strip) . regex [r|/title/([[:alnum:]\-_]+)|] . captures . ix 0 . to T.pack
+    rowid      <- fmap coerce $ mayThrow $ headerEl ^? allElements . named(only "a").attrOne "href" . to (T.unpack . T.strip) . regex [r|/title/([[:alnum:]\-_]+)|] . captures . ix 0 . to (readMaybe @Int64 . stripPrefix1 "tt") . traverse
     header     <- mayThrow $ headerEl ^? allElements . named(only "a").allContents
     popularity <- fmap (M.singleton g) $ mayThrow $ headerEl ^? allClass "lister-item-index".allContents . to (T.unpack . T.strip) . regex [r|^([\s,[:digit:]]+)\.?$|] . captures . ix 0 . to (readMaybe @Int . L.filter isDigit) . traverse
     text       <- mayThrow $ textMutedEls ^? ix 1 . allContents . to T.strip
     (t, changed) <- liftIO $ upsertVersionConflict clush $ ImdbSearch{version=coerce ?version,..}
-    traceM $ T.unpack [st|#{unTid rowid} [#{show changed}]|]
+    traceM $ T.unpack [st|#{showt (unId rowid)} [#{show changed}]|]
   where
     clush ImdbSearch{popularity=p1} ImdbSearch{popularity=p2,..} = ImdbSearch{popularity=p1 <> p2, ..}
 
@@ -97,7 +97,7 @@ readProgress = do
   let TableInfo{..} = tableInfo @ImdbSearch
   let tableName::Text = name <> "_versions"
   let v = ?version
-  kvs::[(Text, Int)] <- [query|select p.key, max(p.value) from #{tableName}, json_each(popularity) p where version={v} group by p.key|]
+  kvs::[(Text, Int)] <- query [sql|select p.key, max(p.value) from #{tableName}, json_each(popularity) p where version={v} group by p.key|]
   pure $ M.fromList kvs
 
 httpGet :: String -> Eio ScrapeError _
@@ -108,7 +108,7 @@ httpGet u = liftIOWith HttpException $ P.putStrLn (u <> "...") *> Wreq.getWith o
     lang = "en-US;q=0.9,en;q=0.8"
 
 httpPost :: Wreq.Postable body => String -> body -> Eio ScrapeError _
-httpPost u b = liftIOWith HttpException $ P.putStrLn (u <> "...") *> Wreq.postWith opts u b
+httpPost u b = liftIOWith HttpException $ Wreq.postWith opts u b
   where
     opts = Wreq.defaults & Wreq.headers .~ [(hUserAgent, ua), (hAcceptLanguage, lang), (hCookie, cook), (hContentType, ct)]
     ua = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.122 Safari/537.36"
@@ -146,32 +146,45 @@ ttText :: HasCallStack => [Tag Text] -> Text
 ttText = withFrozenCallStack (nemptyTrace . innerText)
 
 test0 :: IO ()
-test0 = do
-  TitleChunk{..} <- scrapeTitle (ImdbId 386676)
-  void $ withConnection "late-firefly.sqlite" do
-    for_ $mkDatabaseSetup execute
+test0 = void $ withConnection "late-firefly.sqlite" do
+  for_ $mkDatabaseSetup execute
+  let
+    g x = "coalesce(json_extract(popularity, '$." <> x <> "'), 99999)"
+    po = T.intercalate "," (fmap g LateFirefly.IMDB.Scrape.genres)
+  tids::[Only (Id ImdbTitle)] <- query [sql|
+    with s as
+      (select rowid, min(#{po}) as pop from imdb_search group by rowid)
+      select rowid from s where rowid not in (select rowid from imdb_title) order by pop
+    |]
+  progressInc (L.length tids) do
+    for_ tids \(Only (Id x)) -> do
+      inc ?progress
+      let tid = ImdbId x
+      prefixProgress (showt tid <> "/") do
+        scrapeTitle tid
+
+scrapeTitle :: (?conn::Connection, ?progress::Progress) => ImdbId "tt" -> IO ()
+scrapeTitle tid = do
+  TitleChunk{..} <- scrapeTitle1 tid
+  transaction do
     for_ title upsert
     for_ images upsert
-    for_ titleToImage upsert
     for_ plots upsert
-    for_ quotes upsert
-    for_ trivia upsert
-    for_ news upsert
-    for_ goofs upsert
     for_ genres upsert
     for_ titleToGenre upsert
     for_ keywords upsert
     for_ titleToKeyword upsert
-    for_ reviews upsert
+    for_ names upsert
+    for_ credits upsert
 
-scrapeTitle :: ImdbId "tt" -> IO TitleChunk
-scrapeTitle tid = do
+scrapeTitle1 :: (?progress::Progress) => ImdbId "tt" -> IO TitleChunk
+scrapeTitle1 tid = do
   let q = qTitle tid
+  display ?progress (showt tid)
   x::Title <- unEio $ sendGql @"title" "https://graphql.imdb.com/index.html" q
-  news <- scrapeNews tid
   eps <- scrapeEpisodes tid
-  let chunk = (fromTitle x::TitleChunk){news=news}
-  titls <- mapM scrapeTitle eps
+  let chunk = fromTitle x::TitleChunk
+  titls <- mapM scrapeTitle1 eps
   pure $ F.fold (chunk:titls)
 
 scrapeEpisodes :: ImdbId "tt" -> IO [ImdbId "tt"]
@@ -183,46 +196,6 @@ scrapeEpisodes tid = go Nothing where
     let episodes' = episodes ^.. _Just . field @"episodes" . _Just . field @"edges" . traverse . field @"node" . field @"id"
     let cursor = episodes ^? _Just . field @"episodes" . _Just . field @"pageInfo" . field @"endCursor" . _Just
     maybe (pure episodes') (\x -> (episodes' <>) <$> go (Just x)) cursor
-
-scrapeNews :: ImdbId "tt" -> IO [ImdbNews]
-scrapeNews tid = go Nothing where
-  go after = do
-    let q = qNews tid after
-    x::Pick Title '["id", "news"] <- unEio $ sendGql @"title" "https://graphql.imdb.com/index.html" q
-    let news = getField @"news" x
-    let news' = news ^.. _Just . field @"edges" . traverse . field @"node" . to (toNews tid)
-    let cursor = news ^? _Just . field @"pageInfo" . field @"endCursor" . _Just
-    maybe (pure news') (\x -> (news' <>) <$> go (Just x)) cursor
-
-qNews :: ImdbId "tt" -> Maybe Text -> Text
-qNews tid after =
-  let after' = maybe "" ((", after: "<>) . show) after
-  in [st|
-{
-  title(id: "#{showt tid}") {
-    id
-    news(first: 100#{after'}) {
-      edges {
-        node {
-          id
-          text {markdown}
-          articleTitle {markdown}
-          externalUrl
-          source {homepage {url label}}
-          date
-          text {markdown}
-          image {id}
-          byline
-          language {id text}
-        }
-      }
-      pageInfo {
-        endCursor
-        hasNextPage
-      }
-    }
-  }
-} |]
 
 qEpisodes :: ImdbId "tt" -> Maybe Text -> Text
 qEpisodes tid after =
@@ -253,7 +226,7 @@ qTitle tid = [st|
   title(id: "#{showt tid}") {
     id
     plot { id }
-    plots(first:99) {
+    plots(first:999) {
       edges {
         node {
           id plotText { markdown } plotType language { id text } isSpoiler author
@@ -267,41 +240,6 @@ qTitle tid = [st|
       url
       width
       height
-      caption { markdown }
-      copyright
-      createdBy
-      source { id text attributionUrl banner { url height width attributionUrl } }
-      type
-      names { id }
-      titles { id }
-      countries { id text }
-      languages { id text }
-    }
-
-    images(first: 999) {
-      edges {
-        node {
-          id
-          url
-          width
-          height
-          caption { markdown }
-          copyright
-          createdBy
-          source { id text attributionUrl banner { url height width attributionUrl } }
-          type
-          names { id }
-          titles { id }
-          countries { id text }
-          languages { id text }
-        }
-        cursor
-      }
-
-      pageInfo {
-        endCursor
-        hasNextPage
-      }
     }
 
     series {
@@ -311,22 +249,6 @@ qTitle tid = [st|
       previousEpisode { id }
     }
 
-    quotes(first: 999) {
-      edges {
-        node {
-          id
-          isSpoiler
-          lines { characters { character name { id } } text stageDirection }
-          interestScore { usersInterested usersVoted }
-          language { id text }
-        }
-      }
-      pageInfo {
-        endCursor
-        hasNextPage
-      }
-    }
-
     countriesOfOrigin {
       countries { id text }
       language { id text }
@@ -334,64 +256,7 @@ qTitle tid = [st|
 
     releaseYear { year endYear }
 
-    trivia(first: 999) {
-      edges {
-        node {
-          id text {markdown}
-          isSpoiler triviaType interestScore { usersInterested usersVoted } trademark relatedNames { id }
-        }
-      }
-      pageInfo {
-        endCursor
-        hasNextPage
-      }
-    }
-
-    alternateVersions(first: 999) {
-      edges {
-        node {
-          text {markdown}
-        }
-      }
-      pageInfo {
-        endCursor
-        hasNextPage
-      }
-    }
-
-    awardNominations(first: 999) {
-      edges {
-        node {
-          id
-          isWinner
-          award { id event { id text } text year }
-        }
-      }
-      pageInfo {
-        endCursor
-        hasNextPage
-      }
-    }
-
-    faqs(first: 999) {
-      edges {
-        node {
-          id
-          question {markdown}
-          answer {markdown}
-          language {id text}
-          isSpoiler
-        }
-      }
-      pageInfo {
-        endCursor
-        hasNextPage
-      }
-    }
-
     titleType {id text}
-
-    titleText {text isOriginalTitle country{id text} language{id text}}
 
     originalTitleText {text isOriginalTitle country{id text} language{id text}}
 
@@ -402,22 +267,6 @@ qTitle tid = [st|
     certificate{ rating country {id text} ratingsBody ratingReason }
 
     userRating{ date value }
-
-    goofs(first: 999){
-      edges {
-        node {
-          id
-          text {markdown}
-          isSpoiler
-          interestScore { usersInterested usersVoted }
-          category {id text}
-        }
-      }
-      pageInfo {
-        endCursor
-        hasNextPage
-      }
-    }
 
     genres{
       genres {id text}
@@ -438,19 +287,20 @@ qTitle tid = [st|
       }
     }
 
-    reviews(first: 999){
+    credits(first: 999){
       edges {
         node {
-          id
-          author{nickName userId}
-          authorRating
-          helpfulness{downVotes score upVotes}
-          language
-          spoiler
-          submissionDate
-          summary{originalText}
-          text{originalText{markdown}}
+          name {
+            id nameText {text}
+            primaryImage {
+              id
+              url
+              width
+              height
+            }
+          }
           title {id}
+          category {id text}
         }
       }
       pageInfo {

@@ -1,4 +1,4 @@
-module LateFirefly.TheOffice.Scrape where
+module LateFirefly.Scrape.IWatchTheOffice where
 
 import Control.Lens as L hiding (children)
 import Data.ByteString.Lazy as BSL
@@ -11,7 +11,7 @@ import Data.Text.Encoding as T
 import GHC.Stack
 import LateFirefly.DB
 import LateFirefly.Prelude
-import LateFirefly.TheOffice.Schema
+import LateFirefly.Schema
 import Network.HTTP.Types
 import Prelude as P
 import Text.HTML.TagSoup
@@ -24,21 +24,20 @@ import qualified Network.Wreq as Wreq
 
 test0 :: IO ()
 test0 = do
-  void $ withConnection "late-firefly.sqlite" do
+  void $ withConnectionEnv do
     for_ $mkDatabaseSetup execute
     scrapeSeasons
 
 episodeNumberPresets = M.fromList
-  [("/s07e12/"::Text, 11), ("/s07e26/", 24)]
+  [("s07e12"::Text, 11), ("s07e26", 24)]
 
 videoTitlePresets = M.fromList
-  [ ("/s07e11/"::Text, "Classy Christmas, Part 1")
-  , ("/s07e12/"::Text, "Classy Christmas, Part 2")
-  , ("/s07e25/"::Text, "Search Committee, Part 1")
-  , ("/s07e26/"::Text, "Search Committee, Part 2") ]
+  [ ("s07e11"::Text, "Classy Christmas, Part 1")
+  , ("s07e12"::Text, "Classy Christmas, Part 2")
+  , ("s07e25"::Text, "Search Committee, Part 1")
+  , ("s07e26"::Text, "Search Committee, Part 2") ]
 
-scrapeSeasons
-  :: (?conn::Connection) => IO [Int]
+scrapeSeasons :: (?conn::Connection) => IO [Int]
 scrapeSeasons = do
   tags <- parseTags . T.decodeUtf8 . BSL.toStrict .  (^. Wreq.responseBody) <$> httpGet "https://iwatchtheoffice.com/season-list/"
   let
@@ -55,7 +54,7 @@ scrapeSeasons = do
         let ix = M.lookup e episodeNumberPresets ?: ix'
         let vtitl = M.lookup e videoTitlePresets
         links <- scrapeLinks e
-        Only titleId:_ <- doQuery [sql|select rowid from imdb_title where series_title_id={theOfficeId} and series_episode_number={ix} and series_season_number={snum}|]
+        Only titleId:_ <- query [sql|select rowid from imdb_title where series_title_id={theOfficeId} and series_episode_number={ix} and series_season_number={snum}|]
         for_ links \l -> do
           upsert $ VideoLink def titleId (Just e) vtitl l (Just "iwatchtheoffice.com")
         pure (ix + 1)
@@ -79,11 +78,11 @@ scrapeEpisodes season = do
       $ tags
   pure episodes
   where
-    takeSeason = attr "href" . L.dropWhile (~/= ("<a>"::String))
+    takeSeason = T.dropAround (=='/') . attr "href" . L.dropWhile (~/= ("<a>"::String))
 
 scrapeLinks :: (?conn::Connection) => Text -> IO [Text]
 scrapeLinks episodeHref = do
-  tags <- parseTags . T.decodeUtf8 . BSL.toStrict .  (^. Wreq.responseBody) <$> httpGet ("https://iwatchtheoffice.com" <> T.unpack episodeHref)
+  tags <- parseTags . T.decodeUtf8 . BSL.toStrict .  (^. Wreq.responseBody) <$> httpGet ("https://iwatchtheoffice.com/" <> T.unpack episodeHref)
   let
     links = fmap (attr "href")
       . partitions (~== ("<a>"::String))

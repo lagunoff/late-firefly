@@ -75,7 +75,7 @@ pUnit = pSuccess ()
     then parse pb s <&> (_1 %~ Right) else fmap (_1 %~ Left) r
   pri e s = either (flip (print pa) s) (flip (print pb) s) e
 
-(|*|) :: Parser' U (f p) -> Parser' U (g p) -> Parser' U ((:*:) f g p)
+(|*|) :: Parser' U (f x) -> Parser' U (g x) -> Parser' U ((:*:) f g x)
 (|*|) pf pg = dimap g1 f1 (pf </> pg) where
   g1 (a :*: b) = (a, b)
   f1 (a, b) = (a :*: b)
@@ -103,8 +103,8 @@ param n = Parser par pri where
   par u@(UrlChunks _ ps) = parse parser (M.lookup n ps) <&> _2 .~ u
   pri a (UrlChunks ss ps) = UrlChunks ss (alterOMap (print parser a) n ps)
 
-pSegment :: HasParser Text a => Text -> Parser' U a
-pSegment n = Parser par pri where
+pSegment :: HasParser Text a => Parser' U a
+pSegment = Parser par pri where
   par u@(UrlChunks [] _)      = []
   par u@(UrlChunks (s:ss) ps) = parse parser s <&> _2 .~ UrlChunks ss ps
   pri a (UrlChunks ss ps) = UrlChunks (print parser a "":ss) ps
@@ -144,13 +144,17 @@ printChunks (UrlChunks ss ps) =
       <&> bimap enURI enURI <&> \(k, v) -> k <> "=" <> v
 
 parseUrl :: HasParser U a => Text -> [a]
-parseUrl = fmap fst . L.filter pp . parse parser . prepareUrl
+parseUrl = parseWith parser
+{-# INLINE parseUrl #-}
+
+parseWith :: Parser U i o -> Text -> [o]
+parseWith p = fmap fst . L.filter pp . parse p . prepareUrl
   where
     pp (_, UrlChunks [] _) = True
     pp (_, UrlChunks _ _)  = False
-{-# INLINE parseUrl #-}
+{-# INLINE parseWith #-}
 
-printUrl :: HasParser U a =>  a -> Text
+printUrl :: HasParser U a => a -> Text
 printUrl a = printChunks (print parser a emptyUrl)
 {-# INLINE printUrl #-}
 
@@ -165,6 +169,10 @@ grec
   => Parser' s (f x) -> Parser' s a
 grec = dimap (unM1 . from) (to . M1)
 {-# INLINE grec #-}
+
+gsel :: Selector m => Parser' s a -> Parser' s (S1 m (Rec0 a) a)
+gsel = dimap (unK1 . unM1) (M1 . K1)
+{-# INLINE gsel #-}
 
 gcon :: forall s c f x. Parser' s (f x) -> Parser' s (C1 c f x)
 gcon = dimap unM1 M1
@@ -280,7 +288,7 @@ instance {-# OVERLAPS #-} GParser f => GParser (D1 d (C1 c f)) where
 
 instance {-# OVERLAPS #-} (HasParser Text a, Selector s) => GParser (S1 s (Rec0 (Seg a))) where
   gParser = dimap (unSeg . unK1 . unM1) (M1 . K1 . Seg)
-    $ pSegment @a $ T.pack $ selName (undefined :: t s (Rec0 (Seg a)) a)
+    $ pSegment @a
 
 instance (HasParser P a, Selector s) => GParser (S1 s (Rec0 a)) where
   gParser = dimap (unK1 . unM1) (M1 . K1)

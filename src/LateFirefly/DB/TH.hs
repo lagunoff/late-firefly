@@ -141,7 +141,7 @@ mkDatabaseSetup = do
     InstanceD _ _ (AppT _ insTy) _ -> do
       pure $ Just $ AppTypeE (VarE 'mkSetupPrio) insTy
     _                              -> pure Nothing
-  [|joinSetupPrio $(pure (ListE ins))|]
+  [|joinSetupPrio $(pure (ListE ins)) <> staticSchema|]
 
 mkSetupPrio :: forall t. DbTable t => (Int, [Sql])
 mkSetupPrio = (getField @"prio" ti, createTableStmt @t) where
@@ -160,3 +160,8 @@ underscore n = fromRight n
 
 instance Default DeriveDbConfig where
   def = DeriveDbConfig def def id def def def
+
+staticSchema = [imdbTitleSearch]
+imdbTitleSearch = [sql|
+  create virtual table if not exists imdb_title_fts using fts5(header, year, content='imdb_search');
+|]

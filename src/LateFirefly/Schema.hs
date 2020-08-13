@@ -1,4 +1,4 @@
-module LateFirefly.TheOffice.Schema where
+module LateFirefly.Schema where
 
 import Flat
 import LateFirefly.DB
@@ -16,3 +16,10 @@ data VideoLink = VideoLink
   deriving anyclass Flat
 
 deriveDb ''VideoLink def {renameField=underscore, ukeys=[["url"]]}
+
+data Series = Series
+  { rowid    :: Tid Series
+  , title_id :: Id ImdbTitle }
+  deriving stock (Show, Eq, Generic)
+
+deriveDb ''Series def

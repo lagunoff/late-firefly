@@ -1,36 +1,75 @@
-module LateFirefly.Series
-  ( seriesWidget
-  , SeriesR(..)
-  ) where
+module LateFirefly.Series where
 
+import Control.Monad.Identity
 import Control.Lens hiding ((#))
 import Data.List as L
 import Data.Text as T
 import Data.UUID.Types as U
 import Data.Generics.Sum
 import GHC.Records
-import Massaraksh as H
 import LateFirefly.Router
-import LateFirefly.DB
+import LateFirefly.Parser
+import LateFirefly.DB hiding ((:=))
 import LateFirefly.RPC.TH
 import LateFirefly.IMDB.Schema
 import LateFirefly.Widget.Prelude
+import LateFirefly.Widget (Theme(..), theme)
+import Lucid as H hiding (for_)
+import LateFirefly.Series2
 
 data SeriesR = SeriesR {series :: Text}
   deriving stock (Eq, Ord, Generic)
-  deriving anyclass Flat
 
-data EpisodeData = EpisodeData
-  { title     :: Maybe Text
-  , code      :: Maybe Text
-  , thumbnail :: Maybe Text
-  , plot      :: Maybe Text
-  , season    :: Maybe Int
-  , episode   :: Maybe Int }
-  deriving stock (Show, Eq, Generic)
-  deriving anyclass Flat
+-- data SeriesData = SeriesData {episodes :: [EpisodeData]}
+--   deriving stock (Eq, Show, Generic)
 
-initSeasons :: (?conn::Connection) => SeriesR -> BackendIO [EpisodeData]
+-- data EpisodeData = EpisodeData
+--   { title     :: Maybe Text
+--   , code      :: Maybe Text
+--   , thumbnail :: Maybe Text
+--   , plot      :: Maybe Text
+--   , season    :: Maybe Int
+--   , episode   :: Maybe Int }
+--   deriving stock (Show, Eq, Generic)
+
+instance IsPage SeriesR where
+  type PageData SeriesR = SeriesData
+  pageInit = const $ pure sampleData -- initSeasons
+  pageWidget SeriesData{..} = do
+    let Theme{..} = theme
+    div_ "Hello"
+    header2Widget
+    div_ [class_ "seasons"] do
+      button_ "emit error"
+      for_ episodes \EpisodeData{..} -> do
+        h2_ $ toHtml @_ @Identity  $ ((title <|> (("Episode " <>) . showt <$> episode)) ?: "")
+        img_ [src_ (thumbnail ?: "https://teddytennis.com/usa/wp-content/uploads/sites/88/2017/11/placeholder.png")]
+        p_ $ toHtml $ plot ?: ""
+    p_ $ toHtml $ [st|
+        .header-2
+          width: 100%
+          box-sizing: border-box
+          padding: #{showt $ unit * 3}
+          p
+            margin-top: 0
+          & > *
+            max-width: #{showt $ pageWidth}
+            margin: 0 auto
+          .poster
+            object-fit: contain
+            height: 350px
+            float: left
+            padding-right: #{showt $ unit * 3}
+        |]
+    where
+      header2Widget = do
+        div_ [class_ "header-2"] do
+          div_ do
+            img_ [class_ "poster", src_ "https://m.media-amazon.com/images/M/MV5BMDNkOTE4NDQtMTNmYi00MWE0LWE4ZTktYTc0NzhhNWIzNzJiXkEyXkFqcGdeQXVyMzQ2MDI5NjU@._V1_SY999_CR0,0,665,999_AL_.jpg"]
+            p_ $ "The Office is an American mockumentary sitcom television series that depicts the everyday lives of office employees in the Scranton, Pennsylvania, branch of the fictional Dunder Mifflin Paper Company. It aired on NBC from March 24, 2005, to May 16, 2013, lasting a total of nine seasons.[1] It is an adaptation of the 2001-2003 BBC series of the same name, being adapted for American television by Greg Daniels, a veteran writer for Saturday Night Live, King of the Hill, and The Simpsons. It was co-produced by Daniels's Deedle-Dee Productions, and Reveille Productions (later Shine America), in association with Universal Television. The original executive producers were Daniels, Howard Klein, Ben Silverman, Ricky Gervais, and Stephen Merchant, with numerous others being promoted in later seasons."
+            div_ [style_ "clear: both"] do ""
+
+initSeasons :: (?conn::Connection) => SeriesR -> BackendIO SeriesData
 initSeasons (SeriesR s) = do
   xs::[EpisodeData] <- query [sql|
     with c as (
@@ -50,61 +89,10 @@ initSeasons (SeriesR s) = do
       )
       order by it.series_season_number, it.series_episode_number
   |]
-  pure xs
+  traceShowM $ SeriesData xs
+  pure $ SeriesData xs
 
-seriesWidget :: Dynamic [EpisodeData] -> Html ()
-seriesWidget d = do
-  let Theme{..} = theme
-  header2Widget
-  xs <- liftIO (dnRead d)
-  divClass "seasons" do
-    button_ do
-      "emit error"
-      on_ "click" do throwError (FlatError "")
-    for_ xs \EpisodeData{..} -> do
-      h2_ $ H.text (title <|> (("Episode " <>) . showt <$> episode) ?: "")
-      img_ ("src"=: (thumbnail ?: "https://teddytennis.com/usa/wp-content/uploads/sites/88/2017/11/placeholder.png"))
-      p_ (H.text (plot ?: ""))
-  [style|
-    .seasons
-      margin: 0 #{unit * 3}
-    .seasons > *
-      max-width: #{pageWidth}
-      margin: 0 auto
-    |]
-  where
-    header2Widget :: Html ()
-    header2Widget = do
-      let Theme{..} = theme
-      divClass  "header-2" do
-        div_ do
-          img_ do
-            "className" =: "poster"
-            "src" =: "https://m.media-amazon.com/images/M/MV5BMDNkOTE4NDQtMTNmYi00MWE0LWE4ZTktYTc0NzhhNWIzNzJiXkEyXkFqcGdeQXVyMzQ2MDI5NjU@._V1_SY999_CR0,0,665,999_AL_.jpg"
-          p_ [ht|The Office is an American mockumentary sitcom television series that depicts the everyday lives of office employees in the Scranton, Pennsylvania, branch of the fictional Dunder Mifflin Paper Company. It aired on NBC from March 24, 2005, to May 16, 2013, lasting a total of nine seasons.[1] It is an adaptation of the 2001-2003 BBC series of the same name, being adapted for American television by Greg Daniels, a veteran writer for Saturday Night Live, King of the Hill, and The Simpsons. It was co-produced by Daniels's Deedle-Dee Productions, and Reveille Productions (later Shine America), in association with Universal Television. The original executive producers were Daniels, Howard Klein, Ben Silverman, Ricky Gervais, and Stephen Merchant, with numerous others being promoted in later seasons.|]
-          div_ ("style" =: "clear: both")
-      [style|
-        .header-2
-          width: 100%
-          box-sizing: border-box
-          padding: #{unit * 3}
-          p
-            margin-top: 0
-          & > *
-            max-width: #{pageWidth}
-            margin: 0 auto
-          .poster
-            object-fit: contain
-            height: 350px
-            float: left
-            padding-right: #{unit * 3}
-        |]
-
-instance HasParser U SeriesR where
+instance HasParser Url SeriesR where
   parser = dimap LateFirefly.Series.series SeriesR $ segment "series" /> pSegment
-
-instance IsPage SeriesR where
-  type PageData SeriesR = [EpisodeData]
-  page = Page (RemotePtr (static (SomeBackend (Backend initSeasons))) 'initSeasons) seriesWidget
 
 deriveRowDef ''EpisodeData

@@ -24,6 +24,8 @@ let
   packages = {
     late-firefly = gitignoreSourcePure filterOutSourceFiles ./.;
 
+    nice-html = ./packages/nice-html;
+
     massaraksh = builtins.fetchTarball {
       url = "https://github.com/lagunoff/massaraksh/archive/5a4877eb0d632325c4eacc3fe20c5bcd8ebdbebe.tar.gz";
     };

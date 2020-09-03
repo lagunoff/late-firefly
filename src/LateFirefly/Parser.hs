@@ -26,6 +26,7 @@ type UrlParser a = Parser UrlChunks a a
 type ParamParser a = Parser ParamState a a
 type ParamState = Maybe Text
 type Parser' s a = Parser s a a
+type HasUrl = HasParser Url
 
 data Parser s i o = Parser
   { parse :: s -> [(o, s)]

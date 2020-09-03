@@ -6,8 +6,6 @@ module LateFirefly.RPC (
 
 import Control.Applicative
 import Data.ByteString as BS
-import Data.Text as T
-import Data.Bifunctor
 import Flat
 import GHC.StaticPtr
 import LateFirefly.DB

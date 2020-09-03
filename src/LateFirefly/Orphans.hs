@@ -11,9 +11,7 @@ import GHC.Generics (Generic)
 import GHC.Stack.Types
 import Language.Haskell.TH as TH
 import Language.Haskell.TH.Syntax
-#ifndef __GHCJS__
 import Data.Aeson
-#endif
 
 deriving anyclass instance Flat a => Flat (Only a)
 
@@ -47,9 +45,7 @@ deriving anyclass instance Flat CallStack
 deriving stock instance Generic SrcLoc
 deriving anyclass instance Flat SrcLoc
 
-#ifndef __GHCJS__
 deriving anyclass instance FromJSON CallStack
 deriving anyclass instance FromJSON SrcLoc
 deriving anyclass instance ToJSON CallStack
 deriving anyclass instance ToJSON SrcLoc
-#endif

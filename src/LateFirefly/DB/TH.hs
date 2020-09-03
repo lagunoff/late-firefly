@@ -36,7 +36,7 @@ data DeriveDbConfig = DeriveDbConfig
   , renameField :: String -> String
   , pkeys      :: [String]
   , ukeys      :: [[String]]
-  , prio      :: Int }
+  , prio       :: Int }
   deriving stock (Generic)
 
 data ColumnStrategy
@@ -58,8 +58,7 @@ deriveDb n cfg@DeriveDbConfig{..} = reify n >>= \case
     let dbTableInst = InstanceD Nothing [] (ConT ''DbTable `AppT` ConT n) [tableDescD]
     rowInsts <- deriveRow n cfg
     pure $ dbTableInst:rowInsts
-  _ -> do
-    [] <$ reportError "deriveDb: unsupported data declaration"
+  _ -> error "deriveDb: unsupported data declaration"
 
 deriveCols :: Name -> DeriveDbConfig -> Q [Dec]
 deriveCols n cfg@DeriveDbConfig{..} = reify n >>= \case
@@ -68,8 +67,7 @@ deriveCols n cfg@DeriveDbConfig{..} = reify n >>= \case
     let columnsD = funD 'columnsInfo [clause [] (normalB columnsE) []]
     dbTableInst <- instanceD (pure []) (conT ''DbColumns `appT` conT n) [columnsD]
     pure $ [dbTableInst]
-  _ -> do
-    [] <$ reportError "deriveDb: unsupported data declaration"
+  _ -> error "deriveDb: unsupported data declaration"
 
 deriveRow :: Name -> DeriveDbConfig -> Q [Dec]
 deriveRow n cfg@DeriveDbConfig{..} = reify n >>= \case
@@ -102,8 +100,7 @@ deriveRow n cfg@DeriveDbConfig{..} = reify n >>= \case
     let toRowInst = InstanceD Nothing [] (ConT ''ToRow `AppT` ConT n) [toRowD]
     colsInst <- deriveCols n cfg
     pure $ [fromRowInst, toRowInst] <> colsInst
-  _ -> do
-    [] <$ reportError "deriveRow: unsupported data declaration"
+  _ -> error "deriveRow: unsupported data declaration"
 
 deriveColumns :: DeriveDbConfig -> Name -> Q Exp
 deriveColumns DeriveDbConfig{..} x = reify x >>= \case
@@ -122,6 +119,7 @@ deriveColumns DeriveDbConfig{..} x = reify x >>= \case
         Just CstgJson -> error "CstgJson: unimplemented"
         _             -> [|[($(textE (renameField (nameBase n))), columnInfo $(appTypeE (conE 'Proxy) (pure ty)))]|]
     [|join $(listE columns)|]
+  _ -> error "deriveColumns: unsupported data declaration"
 
 deriveDbDef :: Name -> Q [Dec]
 deriveDbDef = flip deriveDb def
@@ -135,13 +133,14 @@ deriveDbPrio = flip deriveDb . DeriveDbConfig Nothing [] id def def
 -- | Make expression of type [Query] applying 'createTableStmt' to all
 -- the instances of typeclass 'DbTable'
 mkDatabaseSetup :: Q Exp
-mkDatabaseSetup = do
-  ClassI _ instances <- reify ''DbTable
-  ins <- catMaybes <$> forM instances \case
-    InstanceD _ _ (AppT _ insTy) _ -> do
-      pure $ Just $ AppTypeE (VarE 'mkSetupPrio) insTy
-    _                              -> pure Nothing
-  [|joinSetupPrio $(pure (ListE ins)) <> staticSchema|]
+mkDatabaseSetup = reify ''DbTable >>= \case
+  ClassI _ instances -> do
+    ins <- catMaybes <$> forM instances \case
+      InstanceD _ _ (AppT _ insTy) _ -> do
+        pure $ Just $ AppTypeE (VarE 'mkSetupPrio) insTy
+      _                              -> pure Nothing
+    [|joinSetupPrio $(pure (ListE ins)) <> staticSchema|]
+  _ -> error "impossible"
 
 mkSetupPrio :: forall t. DbTable t => (Int, [Sql])
 mkSetupPrio = (getField @"prio" ti, createTableStmt @t) where

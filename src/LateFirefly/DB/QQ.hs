@@ -1,23 +1,21 @@
 module LateFirefly.DB.QQ where
 
-import Language.Haskell.TH
-import Language.Haskell.TH.Syntax
-import Language.Haskell.TH.Quote
-import Language.Haskell.Meta.Parse
-import Database.SQLite3
+import Control.Applicative
 import Control.Lens
+import Data.Attoparsec.Combinator as AP
+import Data.Attoparsec.Text as AP
 import Data.Functor
-import Data.Text as T
 import Data.Map as M
-import Data.List as L
 import Data.Maybe
 import Data.String
-import Control.Applicative
-import Database.SQLite.Simple.Types as S
-import Database.SQLite.Simple.ToField as S
+import Data.Text as T
 import Database.SQLite.Simple as S
-import Data.Attoparsec.Text as AP
-import Data.Attoparsec.Combinator as AP
+import Database.SQLite.Simple.ToField as S
+import Database.SQLite.Simple.Types as S
+import Database.SQLite3
+import Language.Haskell.Meta.Parse
+import Language.Haskell.TH
+import Language.Haskell.TH.Quote
 
 data Sql = Sql Text [SQLData] (Map Text SQLData)
   deriving (Show, Eq)
@@ -39,10 +37,6 @@ sql = QuasiQuoter{..} where
         SqlParam t -> Just [|S.toField $(pure $ either error id $ parseExp $ T.unpack t)|]
         _          -> Nothing
     [|Sql (T.intercalate "" $ $(listE sqlTxt)) $(listE sqlPar) M.empty|]
-
-query :: (FromRow r, ?conn::Connection) => Sql -> IO [r]
-query (Sql t [] _) = S.query_ ?conn (Query t)
-query (Sql t p _)  = S.query ?conn (Query t) p
 
 instance IsString Sql where
   fromString s = Sql (T.pack s) mempty mempty

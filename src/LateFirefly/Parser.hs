@@ -50,11 +50,14 @@ gsegment :: Text -> Parser' U (U1 p)
 gsegment s = U1 <@ segments [s]
 {-# INLINE gsegment #-}
 
-pSuccess :: a -> Parser' s a
-pSuccess a = Parser ((:[]) . (a,)) (const id)
+pPure :: a -> Parser' s a
+pPure  a = Parser ((:[]) . (a,)) (const id)
+
+pSuccess :: a -> Parser' U a
+pSuccess a = Parser (const [(a, emptyUrl)]) (const id)
 
 pUnit :: Parser' s ()
-pUnit = pSuccess ()
+pUnit = pPure ()
 
 (</>) :: Parser' U a -> Parser' U b -> Parser' U (a, b)
 (</>) pa pb = Parser par pri where

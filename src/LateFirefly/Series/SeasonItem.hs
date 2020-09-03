@@ -5,12 +5,11 @@
 module LateFirefly.Series.SeasonItem where
 
 import LateFirefly.Widget.Prelude
-import LateFirefly.TheOffice.Schema
+import LateFirefly.IMDB.Schema
 import LateFirefly.Router
 import LateFirefly.Icons
 import Data.Text as T
 import Data.Char
-
 
 seasonItemWidget :: SeriesRoute -> [(Season, [Episode])] -> Html ()
 seasonItemWidget SeriesRoute{..} seasons = do

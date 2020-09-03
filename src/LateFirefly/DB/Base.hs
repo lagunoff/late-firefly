@@ -9,57 +9,55 @@ module LateFirefly.DB.Base
   , createTableStmt
   , execute
   , query
+  , select
   , upsert
   , upsertInc
   , upsertVersion
   , upsertVersionConflict
-  -- , upsert'
-  -- , upsertWith
-  , selectFrom
   , JsonField(..)
   , ReadShowField(..)
   , uuid5FromBS
   , DeriveUUID(..)
   , fixUUID
   , escText
+  , SqlIO
+  , S.SQLError
   ) where
 
-import Control.Lens
-import Control.Monad.State.Strict
+import Control.Lens hiding (As)
 import Control.Monad.Reader
+import Control.Monad.State.Strict
+import Data.Aeson as AE
+import Data.Aeson.Text as AE
 import Data.ByteString as BS
 import Data.ByteString.Builder as B
 import Data.ByteString.Internal as BS
-import Data.Function
-import Data.List as L
 import Data.Generics.Product
+import Data.List as L
 import Data.Text as T
-import qualified Data.Map as M
 import Data.Text.Encoding as T
 import Data.Text.Lazy as T (toStrict)
 import Data.Time.Clock
-import Data.UUID (UUID)
 import Data.UUID.Types as U
 import Data.UUID.V5
-import Database.SQLite.Simple (Connection, Query(..), FromRow(..), ToRow(..), NamedParam, Only(..), SQLData)
-import Database.SQLite.Simple.FromField
-import Database.SQLite.Simple.Internal
-import Database.SQLite.Simple.Ok
-import Database.SQLite.Simple.ToField
+import Database.SQLite.Simple (Connection, Query(..), FromRow(..), ToRow(..), SQLData(..))
+import Database.SQLite.Simple.FromField (FromField(..), FieldParser)
+import Database.SQLite.Simple.Internal (Field(..), RowParser(..))
+import Database.SQLite.Simple.Ok (Ok(..))
+import Database.SQLite.Simple.ToField (ToField(..))
 import Database.SQLite3 (ColumnType(..))
 import Flat
 import GHC.Exception
-import GHC.Generics
-import GHC.Int
-import LateFirefly.Prelude
 import LateFirefly.DB.QQ
+import LateFirefly.Prelude
 import Text.Read
+import qualified Data.Map as M
 import qualified Database.SQLite.Simple as S
+import qualified Database.SQLite.Simple.FromField as S
+import qualified Database.SQLite.Simple.Internal as S
 import qualified GHC.Records as G
-#ifndef __GHCJS__
-import Data.Aeson as AE
-import Data.Aeson.Text as AE
-#endif
+
+type SqlIO = Eio S.SQLError
 
 data ColumnInfo = ColumnInfo
   { colType    :: ColumnType
@@ -127,15 +125,30 @@ ppColumnType = \case
 uuid5FromBS :: ByteString -> UUID5 a
 uuid5FromBS = UUID5 . generateNamed namespaceURL . BS.unpackBytes
 
-execute :: (?conn::Connection) => Sql -> IO ()
-execute (Sql q [] _) = S.execute_ ?conn (Query q)
-execute (Sql q p _) = S.execute ?conn (Query q) p
+execute :: (?conn::Connection, As S.SQLError e) => Sql -> Eio e ()
+execute (Sql q [] _) = liftEio $ Eio @S.SQLError $ S.execute_ ?conn (Query q)
+execute (Sql q p _) = liftEio $ Eio @S.SQLError $ S.execute ?conn (Query q) p
+
+query :: (?conn::Connection, As S.SQLError e, FromRow r) => Sql -> Eio e [r]
+query (Sql t [] _) = liftEio $ Eio @S.SQLError $ S.query_ ?conn (Query t)
+query (Sql t p _)  = liftEio $ Eio @S.SQLError $ S.query ?conn (Query t) p
+
+select :: forall t e.
+  (?conn::Connection, As S.SQLError e, DbTable t) => Sql -> Eio e [t]
+select (Sql qTail p _) = do
+  let
+    TableInfo{..} = tableInfo @t
+    cols = T.intercalate ", " $ fmap (esc . fst) columns
+    q = "SELECT " <> cols <> " FROM " <> esc name <> " " <> qTail
+  liftEio $ Eio @S.SQLError $ S.query ?conn (Query q) p
 
 data UpsertResult
   = New | Updated | Cached | Rewritten
   deriving (Eq, Show, Generic)
 
-upsertInc :: forall t. (?conn::Connection, DbTable t, HasField' "rowid" t (Id t)) => t -> IO t
+upsertInc :: forall t e.
+  (?conn::Connection, As S.SQLError e, DbTable t, HasField' "rowid" t (Id t))
+  => t -> Eio e t
 upsertInc t = do
   let
     TableInfo{..} = tableInfo @t
@@ -143,11 +156,12 @@ upsertInc t = do
     cols = T.intercalate ", " $ fmap (esc . fst) columns
     vals = T.intercalate ", " $ fmap (const "?") columns
     Sql q _ _ = [sql|replace into {{tableName}} (#{cols}) values (#{vals})|]
-  S.execute ?conn (Query q) (toRow t)
+  liftEio $ Eio @S.SQLError $ S.execute ?conn (Query q) (toRow t)
   if getField @"rowid" t /= def then pure t else
-     S.lastInsertRowId ?conn <&> \idInt -> setField @"rowid" (Id idInt) t
+     liftEio $ Eio @S.SQLError $ S.lastInsertRowId ?conn <&> \idInt -> setField @"rowid" (Id idInt) t
 
-upsert :: forall t. (?conn::Connection, DbTable t) => t -> IO ()
+upsert :: forall t e.
+  (?conn::Connection, As S.SQLError e, DbTable t) => t -> Eio e ()
 upsert t = do
   let
     TableInfo{..} = tableInfo @t
@@ -155,20 +169,21 @@ upsert t = do
     cols = T.intercalate ", " $ fmap (esc . fst) columns
     vals = T.intercalate ", " $ fmap (const "?") columns
     Sql q _ _ = [sql|replace into {{tableName}} (#{cols}) values (#{vals})|]
-  S.execute ?conn (Query q) (toRow t)
+  liftEio $ Eio @S.SQLError $ S.execute ?conn (Query q) (toRow t)
 
-upsertVersion
-  :: forall t. (?conn::Connection, Eq t, DbTable t) => t -> IO (t, UpsertResult)
+upsertVersion :: forall t e.
+  (?conn::Connection, Eq t, DbTable t, As S.SQLError e)
+  => t -> Eio e (t, UpsertResult)
 upsertVersion = upsertVersionOpts Nothing
 
 upsertVersionConflict
-  :: forall t. (?conn::Connection, Eq t, DbTable t)
-  => (t -> t -> t) -> t -> IO (t, UpsertResult)
+  :: forall t e. (?conn::Connection, Eq t, DbTable t, As S.SQLError e)
+  => (t -> t -> t) -> t -> Eio e (t, UpsertResult)
 upsertVersionConflict f = upsertVersionOpts (Just f)
 
 upsertVersionOpts
-  :: forall t. (?conn::Connection, Eq t, DbTable t)
-  => Maybe (t -> t -> t) -> t -> IO (t, UpsertResult)
+  :: forall t e. (?conn::Connection, Eq t, DbTable t, As S.SQLError e)
+  => Maybe (t -> t -> t) -> t -> Eio e (t, UpsertResult)
 upsertVersionOpts mf t = do
   let
     TableInfo{..} = tableInfo @t
@@ -186,10 +201,10 @@ upsertVersionOpts mf t = do
   let Sql q _ _ = [sql|insert into {{tableName}} (#{cols}) values (#{vals}) on conflict(rowid, version) do update set #{sets}|]
   mayExist::Maybe t <- join <$> for existingQ \q -> fmap fst . L.uncons <$> query q
   case liftA2 (,) mayExist mf of
-    Just (x, f) -> (t, Rewritten) <$ S.execute ?conn (Query q) (toRow (f x t) <> toRow (f x t))
+    Just (x, f) -> Eio $ (t, Rewritten) <$ S.execute ?conn (Query q) (toRow (f x t) <> toRow (f x t))
     Nothing -> do
       mayLast::Maybe [SQLData] <- join <$> for lastQ \q -> fmap fst . L.uncons <$> query q
-      case (flip rowsEq row <$> versionIdx <*> mayLast) of
+      Eio $ case (flip rowsEq row <$> versionIdx <*> mayLast) of
         (Just True)  -> pure (t, Cached)
         (Just False) -> (t, Updated) <$ S.execute ?conn (Query q) (row <> row)
         Nothing      -> (t, New) <$ S.execute ?conn (Query q) (row <> row)
@@ -201,19 +216,8 @@ upsertVersionOpts mf t = do
         rowsEq 0 (_:xs) (_:ys) = rowsEq (-1) xs ys
         rowsEq n (x:xs) (y:ys) = x == y && rowsEq (max (-1) (n - 1)) xs ys
 
-selectFrom
-  :: forall t p
-  . (?conn::Connection, DbTable t) => Sql -> IO [t]
-selectFrom (Sql qTail p _) = do
-  let
-    TableInfo{..} = tableInfo @t
-    cols = T.intercalate ", " $ fmap (esc . fst) columns
-    q = "SELECT " <> cols <> " FROM " <> esc name <> " " <> qTail
-  S.query ?conn (Query q) p
-
 newtype JsonField a = JsonField {unJsonField :: a}
 
-#ifndef __GHCJS__
 instance ToJSON a => ToField (JsonField a) where
   toField = S.SQLText . T.toStrict . AE.encodeToLazyText . unJsonField
 
@@ -224,13 +228,6 @@ instance (FromJSON a, Typeable a) => FromField (JsonField a) where
 
 instance (ToJSON a, FromJSON a, Typeable a) => DbField (JsonField a) where
   columnInfo _ = ColumnInfo TextColumn False False Nothing
-
-#else
-instance ToField (JsonField a) where toField = error "Unimplemented"
-instance (Typeable a) => FromField (JsonField a) where fromField = error "Unimplemented"
-instance (Typeable a) => DbField (JsonField a) where
-  columnInfo _ = ColumnInfo TextColumn False False Nothing
-#endif
 
 newtype ReadShowField a = ReadShowField {unReadShowField :: a}
 
@@ -245,13 +242,13 @@ textFieldParser
   :: forall a. Typeable a => (Text -> Either String a) -> FieldParser a
 textFieldParser f fld =
   let
-    sqlTy = T.unpack (decodeUtf8 (gettypename (G.getField @"result" fld)))
+    sqlTy = T.unpack (decodeUtf8 (S.gettypename (G.getField @"result" fld)))
     haskTy = tyConName (typeRepTyCon (typeRep (Proxy @a)))
   in case fld of
     Field (S.SQLText txt) _ -> either
-      (Errors . pure . SomeException . ConversionFailed sqlTy haskTy) Ok $ f txt
+      (Errors . pure . SomeException . S.ConversionFailed sqlTy haskTy) Ok $ f txt
     Field _ _               ->
-      Errors [SomeException (Incompatible sqlTy haskTy "")]
+      Errors [SomeException (S.Incompatible sqlTy haskTy "")]
 
 class DeriveUUID a where
   uuidSalt :: a -> ByteString
@@ -275,7 +272,7 @@ instance Typeable (Id t) => FromField (Id t) where
   fromField = \case
     Field (S.SQLInteger i) _ -> Ok $ Id i
     Field S.SQLNull _        -> Ok $ Id (-1)
-    f                        -> returnError ConversionFailed f "need an int"
+    f                        -> S.returnError S.ConversionFailed f "need an int"
 
 instance ToField (Id t) where
   toField = \case
@@ -309,15 +306,10 @@ instance (DbTable t, Typeable t) => DbField (UUID5 t) where
 instance DbField UTCTime where
   columnInfo _ = ColumnInfo TextColumn False False Nothing
 
-#ifndef __GHCJS__
 instance (Typeable a, FromJSON a, ToJSON a) => DbField [a] where
   columnInfo _ = ColumnInfo TextColumn False False Nothing
 instance (FromJSON (M.Map k v), ToJSON (M.Map k v), Typeable k, Typeable v) => DbField (M.Map k v) where
   columnInfo _ = ColumnInfo TextColumn False False Nothing
-#else
-instance (Typeable a) => DbField [a] where columnInfo _ = error "Unimplemented"
-instance (Typeable k, Typeable v) => DbField (M.Map k v) where columnInfo _ = error "Unimplemented"
-#endif
 
 instance ToField (UUID5 t) where
   toField = S.SQLText . U.toText . unUUID5
@@ -331,19 +323,12 @@ instance DbField Bool where
 deriving newtype instance ToField (Tid t)
 deriving newtype instance FromField (Tid t)
 
-#ifndef __GHCJS__
 deriving via JsonField [a] instance (FromJSON a, Typeable a) => FromField [a]
 deriving via JsonField [a] instance ToJSON a => ToField [a]
 deriving via JsonField (M.Map k v) instance (FromJSON (M.Map k v), Typeable k, Typeable v) => FromField (M.Map k v)
 deriving via JsonField (M.Map k v) instance ToJSON (M.Map k v) => ToField (M.Map k v)
 deriving newtype instance FromJSON (Tid t)
 deriving newtype instance ToJSON (Tid t)
-#else
-deriving via JsonField [a] instance (Typeable a) => FromField [a]
-deriving via JsonField [a] instance ToField [a]
-deriving via JsonField (M.Map k v) instance (Typeable k, Typeable v) => FromField (M.Map k v)
-deriving via JsonField (M.Map k v) instance ToField (M.Map k v)
-#endif
 
 -- | Count the number of fields in a record
 class GCountFields f where

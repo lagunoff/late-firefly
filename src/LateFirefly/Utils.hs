@@ -1,47 +1,38 @@
 {-# LANGUAGE CPP #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 module LateFirefly.Utils where
 
 import Control.Error
-import Control.Lens
+import Control.Lens-- hiding (Prism')
 import Control.Monad.Catch as C
 import Control.Monad.Catch as Catch
-import Control.Monad.Error
+import Control.Monad.Except
+import Data.Generics.Product
+import Data.Generics.Sum
+import Data.IORef
 import Data.List as L
 import Data.Proxy
 import Data.String
 import Data.Text as T
 import Data.Text.IO as T
-import Data.Typeable
-import Data.ByteString
 import Data.UUID (UUID)
-import Database.SQLite.Simple
-import Database.SQLite3 as SQLite3
 import Flat
-import Data.Generics.Product
 import GHC.Generics
 import GHC.Int
-import Data.IORef
 import GHC.Stack
-import GHC.Stack.Types
 import GHC.TypeLits
-import JavaScript.Web.XMLHttpRequest as XHR
-import LateFirefly.Eio
+import LateFirefly.Backend
 import LateFirefly.Orphans ()
 import Massaraksh (Html)
-import Unsafe.Coerce
-import qualified Control.Exception as Exception
-import qualified Control.Exception as P
 import System.IO
 import TextShow
-import GHC.StaticPtr
-import Language.Haskell.TH as TH
+import Unsafe.Coerce
+import qualified Control.Exception as Exception
 
-#ifndef __GHCJS__
 import Data.Aeson as AE
 import Data.HashMap.Strict as H
 import Data.Aeson.Internal as AE
 import Data.Aeson.Types as AE
-#endif
 
 newtype Id t = Id {unId :: Int64}
   deriving stock (Eq, Ord, Show, Generic)
@@ -54,56 +45,6 @@ newtype Tid t = Tid {unTid :: Text}
 newtype UUID5 t = UUID5 {unUUID5 :: UUID}
   deriving stock (Show, Read, Eq, Generic)
   deriving newtype Flat
-
-data BackendError
-  = SQLError SQLError
-  | BEFlatError String
-  | The404Error
-  deriving stock (Show, Eq, Generic)
-  deriving Exception
-#ifndef __GHCJS__
-  deriving anyclass (FromJSON, ToJSON)
-#endif
-
-data PublicBackendError
-  = ErrorCode (Id BackendError)
-  deriving stock (Show, Eq, Generic)
-  deriving anyclass Flat
-
-data FrontendError
-  = XHRError XHR.XHRError
-  | FlatError String
-  | BadResponse Text
-  | BackendError PublicBackendError
-  deriving stock (Show, Eq, Generic)
-  deriving Exception
-
-type BackendIO = Eio BackendError
-
-data Backend a r = (Typeable a, Typeable r, Flat a, Flat r) =>
-  Backend ((?conn::Connection) => a -> Eio BackendError r)
-
-type UnBackend a r =
-  (?conn::Connection) => a -> Eio BackendError r
-
-data SomeBackend = forall a r. SomeBackend (Backend a r)
-
-data RemotePtr a r = RemotePtr
-  { rptrStaticPtr :: StaticPtr SomeBackend
-  , rptrName      :: Name }
-
-data Progress = Progress
-  { inc     :: IO ()
-  , display :: Text -> IO () }
-
-deriving stock instance Generic SQLError
-deriving stock instance Generic SQLite3.Error
-#ifndef __GHCJS__
-deriving anyclass instance FromJSON SQLError
-deriving anyclass instance ToJSON SQLError
-deriving anyclass instance FromJSON SQLite3.Error
-deriving anyclass instance ToJSON SQLite3.Error
-#endif
 
 instance MonadError FrontendError Html where
   throwError = Catch.throwM
@@ -146,7 +87,6 @@ stripPrefix1 p x = fromMaybe x $ L.stripPrefix p x
 replaces :: Eq a => [(a, a)] -> a -> a
 replaces xs x = L.lookup x xs ?: x
 
-#ifndef __GHCJS__
 -- | Helper for convenient nested field parsing
 (.::) :: FromJSON a => AE.Object -> [Text] -> AE.Parser a
 (.::) = go where
@@ -156,7 +96,6 @@ replaces xs x = L.lookup x xs ?: x
     (Just v          , []) -> parseJSON v <?> AE.Key k
     (Just (Object o'), _)  -> go o' ks
     (Just _          , _)  -> fail "accessing property of non-object"
-#endif
 
 type family Demote' (kparam :: KProxy k) :: *
 type Demote (a :: k) = Demote' ('KProxy :: KProxy k)

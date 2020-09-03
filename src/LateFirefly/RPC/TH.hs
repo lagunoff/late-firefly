@@ -11,12 +11,8 @@ import Control.Monad.IO.Class
 import Control.Monad.Catch as Catch
 import qualified Control.Monad.Except as E
 import Data.ByteString
-import Data.Bifunctor
 import Data.Coerce
-import Data.Either
 import Data.IORef
-import Data.Maybe
-import Data.Text
 import Data.Typeable
 import Data.Text.Encoding (decodeUtf8)
 import Flat
@@ -30,7 +26,7 @@ import Language.Javascript.JSaddle
 import LateFirefly.DB
 import System.IO.Unsafe
 import Unsafe.Coerce
-import LateFirefly.Utils as Utils
+import LateFirefly.Backend as This
 import qualified Data.ByteString.Base64 as B64
 import qualified Data.Map as M
 import qualified Data.Set as S
@@ -58,6 +54,7 @@ xhrRemoteTH _ = xhrRemote
 
 xhrRemote :: (Flat a, Flat r) => RemotePtr a r -> a -> JSM r
 xhrRemote r a = do
+  syncPoint
   let k = staticKey $ rptrStaticPtr r
   let n = rptrName r
   origin::JSString <- fromJSValUnchecked =<< jsg ("window"::JSString)
@@ -71,7 +68,7 @@ xhrRemote r a = do
     . unflat
     . fromMaybe (throw (BadResponse "responce body empty"))
     . contents
-    <$> (xhrByteString req `Catch.catch` (throwM . Utils.XHRError))
+    <$> (xhrByteString req `Catch.catch` (throwM . This.XHRError))
 
 dynSPT :: IORef (S.Set Name)
 dynSPT = unsafePerformIO (newIORef S.empty)

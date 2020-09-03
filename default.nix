@@ -13,6 +13,14 @@ let
     "*~" "result" ".ghc.*" "dist" "out" "dist-newstyle" ".cabal-sandbox" "tmp" "packages" "*.sqlite" "TAGS" "default.nix"
   ];
 
+  genericLensSrc = builtins.fetchTarball {
+    url = "https://github.com/kcsongor/generic-lens/archive/c08a67033777f0fef08aab8820a5a753a30ed961.tar.gz";
+  };
+
+  opticsSrc = builtins.fetchTarball {
+    url = "https://github.com/well-typed/optics/archive/691f15ff92a71ad227163530f4861acbdce35c6c.tar.gz";
+  };
+
   packages = {
     late-firefly = gitignoreSourcePure filterOutSourceFiles ./.;
 
@@ -36,6 +44,10 @@ let
     tagsoup = builtins.fetchTarball {
       url = "https://github.com/lagunoff/tagsoup/archive/c61f55d615350cc2368484baf4608bb39e0b34e8.tar.gz";
     };
+
+    generic-lens = genericLensSrc + "/generic-lens";
+    generic-lens-core = genericLensSrc + "/generic-lens-core";
+    indexed-profunctors = opticsSrc + "/indexed-profunctors";
   } // lib.optionalAttrs (builtins.pathExists ./locals.nix) (import ./locals.nix);
 
   overrides = pkgs: with pkgs.haskell.lib; let

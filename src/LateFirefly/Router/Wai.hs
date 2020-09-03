@@ -8,6 +8,7 @@ import LateFirefly.DB
 import LateFirefly.Parser
 import LateFirefly.Prelude
 import LateFirefly.Router
+import LateFirefly.Template
 import Massaraksh.Main
 import Network.HTTP.Types
 import Network.Wai
@@ -35,7 +36,9 @@ html5Router ps next req resp = maybe nothin just mp where
       (dyn, m) <- H.newDyn pdata
       b <- htmlBuilder <$> buildHtml (pgWidget (pag dict) dyn)
       resp (responseBuilder ok200 [] b)
-  nothin = next req resp
+  nothin = do
+    b <- htmlBuilder <$> buildHtml page404
+    resp (responseBuilder ok200 [] b)
 
 htmlBuilder :: BS.Builder -> BS.Builder
 htmlBuilder h =

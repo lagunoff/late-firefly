@@ -5,13 +5,27 @@ import Flat hiding (to)
 import Control.Lens
 import Data.Generics.Product
 import Data.Map as M
-import Data.List as L
 import LateFirefly.DB
 import LateFirefly.Prelude
-import LateFirefly.Aeson
 import LateFirefly.IMDB.GraphQL
 import Data.Monoid.Generic
---import Database.SQLite.Simple
+
+deriving instance Flat CountryOfOrigin
+deriving instance Flat DisplayableCountry
+deriving instance Flat Markdown
+deriving instance Flat DisplayableLanguage
+deriving instance Flat TitleType
+deriving instance Flat TitleText
+deriving instance Flat ReleaseDate
+deriving instance Flat Runtime
+deriving instance Flat Certificate
+deriving instance Flat Rating
+deriving instance Flat InterestScore
+deriving instance Flat CreditCategory
+deriving instance Flat AnyId
+deriving instance Flat CountriesOfOrigin
+deriving instance Flat YearRange
+deriving instance Flat PlotType
 
 type Genre1 = Text
 
@@ -38,6 +52,7 @@ data ImdbImage = ImdbImage {
   height :: Maybe Int,
   width :: Maybe Int }
   deriving stock (Show, Eq, Generic)
+  deriving anyclass Flat
 
 data ImdbPlot = ImdbPlot {
   rowid :: Tid ImdbPlot,
@@ -48,6 +63,7 @@ data ImdbPlot = ImdbPlot {
   isSpoiler :: Bool,
   author :: Maybe Text }
   deriving stock (Show, Eq, Generic)
+  deriving anyclass Flat
 
 data ImdbSeries = ImdbSeries
   { title_id :: Id ImdbTitle
@@ -56,38 +72,45 @@ data ImdbSeries = ImdbSeries
   , next_episode :: Maybe (Id ImdbTitle)
   , previous_episode :: Maybe (Id ImdbTitle) }
   deriving stock (Show, Eq, Generic)
+  deriving anyclass Flat
 
 data ImdbGenre = ImdbGenre {
   rowid :: Tid ImdbGenre,
   text :: Text }
   deriving stock (Show, Eq, Generic)
+  deriving anyclass Flat
 
 data ImdbTitleToGenre = ImdbTitleToGenre {
   imdb_title_id :: Id ImdbTitle,
   imdb_genre_id :: Tid ImdbGenre }
   deriving stock (Show, Eq, Generic)
+  deriving anyclass Flat
 
 data ImdbKeyword = ImdbKeyword {
   rowid :: Id ImdbKeyword,
   text :: Text }
   deriving stock (Show, Eq, Generic)
+  deriving anyclass Flat
 
 data ImdbTitleToKeyword = ImdbTitleToKeyword {
   imdb_title_id :: Id ImdbTitle,
   imdb_keyword_id :: Id ImdbKeyword }
   deriving stock (Show, Eq, Generic)
+  deriving anyclass Flat
 
 data ImdbName = ImdbName {
   rowid :: Id ImdbName,
   primaryImage :: Maybe (Id ImdbImage),
   nameText :: Text }
   deriving stock (Show, Eq, Generic)
+  deriving anyclass Flat
 
 data ImdbCredit = ImdbCredit {
   name_id :: Id ImdbName,
   title_id :: Id ImdbTitle,
   category :: CreditCategory }
   deriving stock (Show, Eq, Generic)
+  deriving anyclass Flat
 
 data ImdbTitle = ImdbTitle
   { rowid :: Id ImdbTitle
@@ -104,6 +127,7 @@ data ImdbTitle = ImdbTitle
   , userRating :: Maybe Rating
   }
   deriving stock (Show, Eq, Generic)
+  deriving anyclass Flat
 
 data TitleChunk = TitleChunk
   { title :: [ImdbTitle]

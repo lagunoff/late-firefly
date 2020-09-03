@@ -2,7 +2,6 @@ module LateFirefly.Series.Season where
 
 import Data.List as L
 import LateFirefly.DB
-import LateFirefly.IMDB.Schema
 import LateFirefly.RPC.TH
 import LateFirefly.Router
 import LateFirefly.Series.Types
@@ -66,7 +65,7 @@ data EpisodeData = EpisodeData
   deriving stock (Show, Eq, Generic)
   deriving anyclass Flat
 
-getEpisodes :: (?conn::Connection) => (Text, Int) -> Eio BackendError [EpisodeData]
+getEpisodes :: (?conn::Connection) => (Text, Int) -> BackendIO [EpisodeData]
 getEpisodes (series, season) = liftIO do
   query [sql|
     with

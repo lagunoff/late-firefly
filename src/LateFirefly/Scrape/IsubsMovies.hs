@@ -37,8 +37,6 @@ scrapeSeasons = do
       . L.takeWhile (~/= ("<div class=\"container m-t-lg m-b-lg\">"::String))
       . L.dropWhile (~/= ("<div class=\"container seasons m-t-lg\">"::String))
       $ tags
-  traceShowM $ L.length seasons
-  traceShowM seasons
   where
     takeSeason :: [Tag Text] -> Text
     takeSeason = innerText . L.dropWhile (~/= ("<th>"::String))

@@ -15,6 +15,7 @@ executable late-firefly
   hs-source-dirs: src
   
   build-depends:
+    aeson,
     attoparsec,
     base,
     base64-bytestring,
@@ -27,6 +28,7 @@ executable late-firefly
     exceptions,
     flat,
     generic-lens,
+    generic-lens-core,
     generic-monoid,
     haskell-src-meta,
     http-types,
@@ -50,15 +52,16 @@ executable late-firefly
     transformers,
     unliftio-core,
     utf8-string,
+    unordered-containers,
     uuid,
     uuid-types
 
   default-extensions:
     AllowAmbiguousTypes
+    BangPatterns
     BlockArguments
     ConstraintKinds
     DataKinds
-    BangPatterns
     DeriveAnyClass
     DeriveFunctor
     DeriveGeneric
@@ -81,8 +84,10 @@ executable late-firefly
     QuasiQuotes
     RankNTypes
     RecordWildCards
+    RecursiveDo
     ScopedTypeVariables
     StandaloneDeriving
+    StaticPointers
     StrictData
     TemplateHaskell
     TupleSections
@@ -91,12 +96,10 @@ executable late-firefly
     TypeOperators
     UndecidableInstances
     ViewPatterns
-    RecursiveDo
-    StaticPointers
+    EmptyDataDecls
 
   if !impl(ghcjs)
     build-depends:
-      aeson,
       tagsoup,
       lens-regex,
       regex-tdfa,
@@ -107,14 +110,11 @@ executable late-firefly
       wai-extra,
       jsaddle-warp,
       wreq
-    other-modules:
-      LateFirefly.TheOffice.Scrape
     hs-source-dirs: src-ghc
     if flag(production)
       ghc-options: -O2
   else
     if flag(production)
-      -- FIXME: Enabling optimizations in GHCJS breaks flat-rpc
       ghc-options: -dedupe -O2
     hs-source-dirs: src-ghcjs
     build-depends: ghcjs-base, ghcjs-prim

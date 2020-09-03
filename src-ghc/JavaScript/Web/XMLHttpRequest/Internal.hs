@@ -1,16 +1,16 @@
 {-# LANGUAGE NoOverloadedStrings #-}
 module JavaScript.Web.XMLHttpRequest.Internal where
 
+import Control.Concurrent.MVar
 import Control.Monad
 import Control.Monad.IO.Class
-import GHCJS.Types
-import GHCJS.Prim
-import GHCJS.Marshal
+import Data.Coerce
 import Data.JSString.Internal.Type ( JSString(..) )
+import GHCJS.Marshal
+import GHCJS.Prim
+import GHCJS.Types
 import Language.Javascript.JSaddle hiding (textFromJSString)
 import {-# SOURCE #-} JavaScript.Web.XMLHttpRequest (XHR(..))
-import Data.Coerce
-import Control.Concurrent.MVar
 
 js_setWithCredentials :: XHR -> JSM ()
 js_setWithCredentials (coerce @_ @JSVal -> xhr) = do
@@ -89,12 +89,11 @@ js_send body (coerce @_ @JSVal -> xhr) = do
   xhr # "addEventListener" $ ("load", loadCb)
   xhr # "addEventListener" $ ("abort", abortCb)
   case body of
-    Nothing -> xhr # "send" $ ()
-    Just b  -> xhr # "send" $ b
+    Nothing -> void $ xhr # "send" $ ()
+    Just b  -> void $ xhr # "send" $ b
   syncPoint
   r <- liftIO (takeMVar mvar)
-  syncPoint
   freeFunction errorCb
   freeFunction loadCb
   freeFunction abortCb
-  pure r
+  r <$ syncPoint

@@ -133,7 +133,7 @@ xhr req =
           StringData str                    -> do
             s <- toJSVal str
             js_send (Just s) x
-          TypedArrayData (SomeTypedArray t) ->
+          TypedArrayData (SomeTypedArray t) -> do
             js_send (Just t) x
           FormData xs                       ->
             fail "FormData is not yet supported"

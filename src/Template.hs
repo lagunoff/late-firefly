@@ -7,16 +7,18 @@ import Data.Maybe
 import Data.Constraint
 import Data.Text as T
 import Language.Javascript.JSaddle
+
 import "this" Intro
 import "this" Router
 import "this" Widget.Prelude
+import "this" Widget
 import "this" Icons
 
 htmlTemplate :: Html () -> Html ()
 htmlTemplate content = do
   let Theme{..} = theme
   headerWidget
-  divClass "root" do
+  div_ [class_ "root"] do
     div_ content
   footerWidget
   [style|
@@ -42,25 +44,25 @@ htmlTemplate content = do
 headerWidget :: Html ()
 headerWidget = do
   let Theme{..} = theme
-  divClass "header" do
-    divClass "header-wrapper" do
-      divClass "header-left" do
-        linkTo HomeR_ do
-          "className" =:"home-link"
-          span_ "Telikov."
-          span_ do
-            "Net"
-            "style" =: [st|color: #{showt primary}|]
-        ulClass "menu" do
-          li_ do linkTo (SeriesR_ (SeriesRoute "theoffice")) do div_ "Series"
-          li_ do linkTo (SeriesR_ (SeriesRoute "theoffice")) do div_ "Movies"
-          li_ do linkTo (SeriesR_ (SeriesRoute "theoffice")) do div_ "Genre"
-          li_ do linkTo (SeriesR_ (SeriesRoute "theoffice")) do div_ "Top IMDB"
-          li_ do linkTo (SeriesR_ (SeriesRoute "theoffice")) do div_ "A-Z List"
-      divClass "search" do
-        input_ do
-          "placeholder" =: "Search"
-        searchIcon ("className" =: "search")
+  div_ [class_ "header"] do
+    div_ [class_ "header-wrapper"] do
+      div_ [class_ "header-left"] do
+        -- linkTo HomeR_ do
+        --   "className" =:"home-link"
+        --   span_ "Telikov."
+        --   span_ do
+        --     "Net"
+        --     "style" =: [st|color: #{showt primary}|]
+        ul_ [class_ "menu"] do ""
+          -- li_ do linkTo (SeriesR_ (SeriesRoute "theoffice")) do div_ "Series"
+          -- li_ do linkTo (SeriesR_ (SeriesRoute "theoffice")) do div_ "Movies"
+          -- li_ do linkTo (SeriesR_ (SeriesRoute "theoffice")) do div_ "Genre"
+          -- li_ do linkTo (SeriesR_ (SeriesRoute "theoffice")) do div_ "Top IMDB"
+          -- li_ do linkTo (SeriesR_ (SeriesRoute "theoffice")) do div_ "A-Z List"
+      div_ [class_ "search"] do
+        input_
+          [placeholder_ "Search"]
+        searchIcon_
     [style|
       body
         background: rgba(0,0,0,0.04)
@@ -147,22 +149,22 @@ headerWidget = do
 footerWidget :: Html ()
 footerWidget = do
   let Theme{..} = theme
-  divClass "footer" do
-    divClass "footer-wrapper" do
+  div_ [class_ "footer"] do
+    div_ [class_ "footer-wrapper"] do
       div_ do
-        ulClass "menu" do
-          li_ do linkTo (SeriesR_ (SeriesRoute "theoffice")) do div_ "Series"
-          li_ do linkTo (SeriesR_ (SeriesRoute "theoffice")) do div_ "Movies"
-          li_ do linkTo (SeriesR_ (SeriesRoute "theoffice")) do div_ "Genre"
-          li_ do linkTo (SeriesR_ (SeriesRoute "theoffice")) do div_ "Top IMDB"
-          li_ do linkTo (SeriesR_ (SeriesRoute "theoffice")) do div_ "A-Z List"
-      div_ do
-        linkTo HomeR_ do
-          "className" =:"home-link"
-          span_ "Telikov."
-          span_ do
-            "Net"
-            "style" =: [st|color: #{showt primary}|]
+        ul_ [class_ "menu"] do ""
+          -- li_ do linkTo (SeriesR_ (SeriesRoute "theoffice")) do div_ "Series"
+          -- li_ do linkTo (SeriesR_ (SeriesRoute "theoffice")) do div_ "Movies"
+          -- li_ do linkTo (SeriesR_ (SeriesRoute "theoffice")) do div_ "Genre"
+          -- li_ do linkTo (SeriesR_ (SeriesRoute "theoffice")) do div_ "Top IMDB"
+          -- li_ do linkTo (SeriesR_ (SeriesRoute "theoffice")) do div_ "A-Z List"
+      div_ do ""
+        -- linkTo HomeR_ do
+        --   "className" =:"home-link"
+        --   span_ "Telikov."
+        --   span_ do
+        --     "Net"
+        --     "style" =: [st|color: #{showt primary}|]
   [style|
     .footer
       margin-top: #{unit * 8}

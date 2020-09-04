@@ -13,6 +13,7 @@ import "this" DB
 import "this" Parser
 import "this" Intro
 import "this" Router
+import "this" Template
 
 html5Router :: (?conn::Connection) => [PageDict] -> Application -> Application
 html5Router ps next req resp = maybe nothin just mp where
@@ -28,15 +29,11 @@ html5Router ps next req resp = maybe nothin just mp where
   dynBk Dict d f = f (fromDyn d (error "html5Router: fromDyn error"))
   just (dn, PageDict dict) = do
     pdata <- unEio (dynBk dict dn (ini dict))
-    let b = htmlBuilder . BS.lazyByteString $ renderBS (wid dict pdata)
+    let b = htmlBuilder . BS.lazyByteString . renderBS . htmlTemplate $ wid dict pdata
     resp (responseBuilder ok200 [(hContentType, "text/html")] b)
   nothin = do
-    let b = htmlBuilder . BS.lazyByteString $ renderBS page404
+    let b = htmlBuilder . BS.lazyByteString . renderBS $ page404
     resp (responseBuilder ok200 [(hContentType, "text/html")] b)
-
-page404 :: Html ()
-page404 = div_ do
-  h1_ "Not found"
 
 htmlBuilder :: BS.Builder -> BS.Builder
 htmlBuilder h =

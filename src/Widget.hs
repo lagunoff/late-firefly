@@ -7,6 +7,7 @@ import Language.Haskell.TH.Quote
 import Text.Cassius
 import Text.Shakespeare.Text as X (st)
 import qualified Data.Text.Lazy as LT
+import Lucid.Base
 
 import "this" Intro
 
@@ -35,7 +36,7 @@ unPixelSize (PixelSize x) = x
 
 style :: QuasiQuoter
 style = cassius{quoteExp=qExp} where
-  qExp = appE [|style_ [type_ "text/css"] . toHtml . LT.toStrict . renderCss . ($ undefined)|] . quoteExp cassius
+  qExp = appE [|termRaw "style" [type_ "text/css"] . toHtmlRaw . LT.toStrict . renderCss . ($ undefined)|] . quoteExp cassius
 
 ht :: QuasiQuoter
 ht = st{quoteExp=qExp} where

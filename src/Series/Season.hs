@@ -1,6 +1,7 @@
 module Series.Season where
 
 import Data.List as L
+
 import "this" DB
 import "this" RPC.TH
 import "this" Router
@@ -65,7 +66,7 @@ data EpisodeData = EpisodeData
   deriving stock (Show, Eq, Generic)
   deriving anyclass Flat
 
-getEpisodes :: (?conn::Connection) => (Text, Int) -> BackendIO [EpisodeData]
+getEpisodes :: (?conn::Connection) => (Text, Int) -> ServerIO [EpisodeData]
 getEpisodes (series, season) = liftIO do
   query [sql|
     with

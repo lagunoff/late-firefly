@@ -7,26 +7,23 @@ import Data.Generics.Product
 import Data.Text as T
 import Data.Text.IO as T
 import Flat
-import "this" DB
-import "this" Index
-import "this" Series
-import "this" Intro
-import "this" Router
--- import "this" Series
--- import "this" Series.Episode
-import Options.Generic
-import qualified Database.SQLite.Simple as S
 import Language.Javascript.JSaddle.WebSockets as Warp
--- import "this" JSaddle
--- import "this" RPC
-import "this" Router.Wai
 import Network.Wai
 import Network.Wai.Application.Static
 import Network.Wai.Handler.Warp as Warp
 import Network.Wai.Middleware.Gzip
+import Options.Generic
 import System.Environment
 import System.IO
+import qualified Database.SQLite.Simple as S
 import qualified Network.HTTP.Types as H
+
+import "this" DB
+import "this" Index
+import "this" Intro
+import "this" Router
+import "this" Router.Wai
+import "this" Series
 
 pages =
   [ PageDict (Dict @(IsPage HomeR)), PageDict (Dict @(IsPage SeriesR)), PageDict (Dict @(IsPage ())) ]

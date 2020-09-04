@@ -1,21 +1,13 @@
 module Series where
 
-import Control.Monad.Identity
 import Control.Lens hiding ((#))
-import Data.List as L
 import Data.Text as T
-import Data.UUID.Types as U
-import Data.Generics.Sum
-import GHC.Records
-import Lucid as H hiding (for_)
 
+import "this" Intro
 import "this" Router
 import "this" Parser
 import "this" DB hiding ((:=))
-import "this" RPC.TH
-import "this" IMDB.Schema
-import "this" Widget.Prelude
-import "this" Widget (Theme(..), theme)
+import "this" Widget
 
 data SeriesR = SeriesR {series :: Text}
   deriving stock (Eq, Ord, Generic)
@@ -36,30 +28,29 @@ instance IsPage SeriesR where
   type PageData SeriesR = SeriesData
   pageWidget SeriesData{..} = do
     let Theme{..} = theme
-    div_ "Hello"
     header2Widget
     div_ [class_ "seasons"] do
       button_ "emit error"
       for_ episodes \EpisodeData{..} -> do
-        h2_ $ toHtml @_ @Identity  $ ((title <|> (("Episode " <>) . showt <$> episode)) ?: "")
+        h2_ $ toHtml $ ((title <|> (("Episode " <>) . showt <$> episode)) ?: "")
         img_ [src_ (thumbnail ?: "https://teddytennis.com/usa/wp-content/uploads/sites/88/2017/11/placeholder.png")]
         p_ $ toHtml $ plot ?: ""
-    p_ $ toHtml $ [st|
-        .header-2
-          width: 100%
-          box-sizing: border-box
-          padding: #{showt $ unit * 3}
-          p
-            margin-top: 0
-          & > *
-            max-width: #{showt $ pageWidth}
-            margin: 0 auto
-          .poster
-            object-fit: contain
-            height: 350px
-            float: left
-            padding-right: #{showt $ unit * 3}
-        |]
+    [style|
+      .header-2
+        width: 100%
+        box-sizing: border-box
+        padding: #{showt $ unit * 3}
+        p
+          margin-top: 0
+        & > *
+          max-width: #{showt $ pageWidth}
+          margin: 0 auto
+        .poster
+          object-fit: contain
+          height: 350px
+          float: left
+          padding-right: #{showt $ unit * 3}
+    |]
     where
       header2Widget = do
         div_ [class_ "header-2"] do

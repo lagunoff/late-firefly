@@ -1,20 +1,10 @@
-module Index
-  -- ( IndexState(..)
-  -- , indexWidget
-  -- )
-where
+module Index where
 
 import Control.Lens hiding ((#))
-import Control.Monad.Trans
-import Control.Monad.Reader
-import Data.Maybe
-import Data.Constraint
-import Data.Text as T
+
 import "this" Intro
 import "this" Router
 import "this" Parser
--- import "this" Series
-import Lucid as H
 
 data HomeR = HomeR
   deriving stock (Eq, Ord, Generic)

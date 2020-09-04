@@ -4,19 +4,18 @@ module Router where
 import Control.Lens (dimap)
 import Data.Constraint
 import Data.String as S
+import Database.SQLite.Simple
 import Flat
 import GHC.Fingerprint
-import Database.SQLite.Simple
-import "this" Parser as X
-import "this" Intro
-import Lucid
 import qualified Data.Dynamic as D
 import qualified Data.Map as M
--- import {-# SOURCE #-} LateFirefly.Template
+
+import "this" Parser as X
+import "this" Intro
 
 class (HasUrl r, Typeable r, Typeable (PageData r)) => IsPage r where
   type PageData r
-  pageInit :: (?conn::Connection) => r -> BackendIO (PageData r)
+  pageInit :: (?conn::Connection) => r -> ServerIO (PageData r)
   pageWidget :: PageData r -> Html ()
 
 data PageDict = forall a. PageDict (Dict (IsPage a))

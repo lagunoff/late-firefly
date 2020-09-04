@@ -7,8 +7,12 @@ import Control.Lens-- hiding (Prism')
 import Control.Monad.Catch as C
 import Control.Monad.Catch as Catch
 import Control.Monad.Except
+import Data.Aeson as AE
+import Data.Aeson.Internal as AE
+import Data.Aeson.Types as AE
 import Data.Generics.Product
 import Data.Generics.Sum
+import Data.HashMap.Strict as H
 import Data.IORef
 import Data.List as L
 import Data.Proxy
@@ -16,39 +20,27 @@ import Data.String
 import Data.Text as T
 import Data.Text.IO as T
 import Data.UUID (UUID)
-import Flat
 import GHC.Generics
 import GHC.Int
 import GHC.Stack
 import GHC.TypeLits
-import "this" Backend
-import "this" Orphans ()
-import Massaraksh (Html)
 import System.IO
 import TextShow
 import Unsafe.Coerce
 import qualified Control.Exception as Exception
 
-import Data.Aeson as AE
-import Data.HashMap.Strict as H
-import Data.Aeson.Internal as AE
-import Data.Aeson.Types as AE
+import "this" Server
+import "this" Orphans ()
 
 newtype Id t = Id {unId :: Int64}
   deriving stock (Eq, Ord, Show, Generic)
-  deriving newtype Flat
 
 newtype Tid t = Tid {unTid :: Text}
   deriving stock (Eq, Ord, Generic)
-  deriving newtype (Show, Flat, IsString)
+  deriving newtype (Show, IsString)
 
 newtype UUID5 t = UUID5 {unUUID5 :: UUID}
   deriving stock (Show, Read, Eq, Generic)
-  deriving newtype Flat
-
-instance MonadError FrontendError Html where
-  throwError = Catch.throwM
-  catchError = Catch.catch
 
 catchSync :: IO a -> (SomeException -> IO a) -> IO a
 catchSync io f = io `Exception.catch` \e ->

@@ -1,7 +1,6 @@
 {-# LANGUAGE CPP, IncoherentInstances #-}
 module DB.Transaction where
 
---import Control.Exception as E
 import Control.Lens hiding (As)
 import Control.Monad.Catch
 import Data.Aeson
@@ -13,19 +12,18 @@ import Database.SQLite.Simple (Connection)
 import Database.SQLite.Simple.FromField
 import Database.SQLite.Simple.ToField
 import Database.SQLite3 (ColumnType(..))
-import Flat
+import System.Environment
+import qualified Database.SQLite.Simple as S
+
 import "this" DB.Base as DB
 import "this" DB.QQ
 import "this" DB.TH
 import "this" Intro
-import System.Environment
-import qualified Database.SQLite.Simple as S
 
 data CaughtException e
   = KnownException e
   | UnknownException String
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (Flat)
   deriving (FromField, ToField) via JsonField (CaughtException e)
   deriving anyclass (FromJSON, ToJSON)
 
@@ -43,7 +41,6 @@ data Transaction = Transaction
   , finished_at :: Maybe UTCTime
   , exception   :: Maybe Text }
   deriving stock (Eq, Show, Generic)
-  deriving anyclass Flat
 
 deriveDbDef ''Transaction
 

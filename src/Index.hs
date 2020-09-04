@@ -9,15 +9,12 @@ import "this" Parser
 data HomeR = HomeR
   deriving stock (Eq, Ord, Generic)
 
-data HomeData = HomeData
+data HomeD = HomeD
   deriving stock (Eq, Ord, Generic)
 
-instance HasParser Url HomeR where
-  parser = dimap (const ()) (const HomeR) $ segments ["home"]
-
-instance IsPage HomeR where
-  type PageData HomeR = HomeData
-  pageInit _ = pure HomeData
+instance IsPage HomeR HomeD where
+  pageRoute = dimap (const ()) (const HomeR) $ segments ["home"]
+  pageInit _ = pure HomeD
   pageWidget _ = do
     div_ do -- ! "class":="home" do
       div_ do -- ! "class":="home-wrapper" do

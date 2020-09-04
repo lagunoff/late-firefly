@@ -13,24 +13,21 @@ import qualified Data.Map as M
 import "this" Parser as X
 import "this" Intro
 
-class (HasUrl r, Typeable r, Typeable (PageData r)) => IsPage r where
-  type PageData r
-  pageInit :: (?conn::Connection) => r -> ServerIO (PageData r)
-  pageWidget :: PageData r -> Html ()
+class (Typeable i, Typeable o) => IsPage i o | i -> o where
+  pageRoute :: UrlParser i
+  pageInit :: (?conn::Connection) => i -> ServerIO o
+  pageWidget :: o -> Html ()
 
-data PageDict = forall a. PageDict (Dict (IsPage a))
+data PageDict = forall i o. PageDict (Dict (IsPage i o))
 
 data Page404Data = Page404Data
   deriving stock (Show, Eq, Generic)
   deriving anyclass Flat
 
-instance IsPage () where
-  type PageData () = Page404Data
-  pageInit _ = pure Page404Data
-  pageWidget = undefined
-
-instance HasParser Url () where
-  parser = pUnit
+instance IsPage () () where
+  pageRoute = pUnit
+  pageInit _ = pure ()
+  pageWidget _ = h1_ "Not Found"
 
 pageParser :: [PageDict] -> Parser UrlChunks D.Dynamic (D.Dynamic, PageDict)
 pageParser p = Parser (par p) pri where
@@ -43,12 +40,12 @@ pageParser p = Parser (par p) pri where
     maybe x (\y -> X.print (pd y) d x) $ M.lookup (typeRepFingerprint z) mm
   pd :: PageDict -> UrlParser D.Dynamic
   pd (PageDict d@Dict) = dPar (pp d) where
-    pp :: forall a. Dict (IsPage a) -> UrlParser a
-    pp Dict = parser @_ @a
+    pp :: forall i o. Dict (IsPage i o) -> UrlParser i
+    pp Dict = pageRoute @i
   mfng :: [PageDict] -> M.Map Fingerprint PageDict
   mfng = M.fromList . fmap \x@(PageDict d) -> (pp d, x) where
-    pp :: forall a. Dict (IsPage a) -> Fingerprint
-    pp Dict = typeRepFingerprint (typeRep (Proxy::Proxy a))
+    pp :: forall i o. Dict (IsPage i o) -> Fingerprint
+    pp Dict = typeRepFingerprint (typeRep (Proxy::Proxy i))
   dPar :: Typeable a => Parser' s a -> Parser' s D.Dynamic
   dPar = dimap g f where
     f = D.toDyn
@@ -56,9 +53,6 @@ pageParser p = Parser (par p) pri where
 
 printRoute :: HasUrl r => r -> Text
 printRoute = ("/" <>) . printUrl
-
--- linkTo :: HasUrl r => r -> Html x -> Html x
--- linkTo = mayLinkTo . Just
 
 instance S.IsString s => S.IsString (Seg s) where
   fromString = Seg . S.fromString

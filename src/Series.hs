@@ -12,10 +12,10 @@ import "this" Widget
 data SeriesR = SeriesR {series :: Text}
   deriving stock (Eq, Ord, Generic)
 
-data SeriesData = SeriesData {episodes :: [EpisodeData]}
+data SeriesD = SeriesD {episodes :: [Episode]}
   deriving stock (Eq, Show, Generic)
 
-data EpisodeData = EpisodeData
+data Episode = Episode
   { title     :: Maybe Text
   , code      :: Maybe Text
   , thumbnail :: Maybe Text
@@ -24,14 +24,15 @@ data EpisodeData = EpisodeData
   , episode   :: Maybe Int }
   deriving stock (Show, Eq, Generic)
 
-instance IsPage SeriesR where
-  type PageData SeriesR = SeriesData
-  pageWidget SeriesData{..} = do
+instance IsPage SeriesR SeriesD where
+  pageRoute =
+    dimap Series.series SeriesR $ segment "series" /> pSegment
+  pageWidget SeriesD{..} = do
     let Theme{..} = theme
     header2Widget
     div_ [class_ "seasons"] do
       button_ "emit error"
-      for_ episodes \EpisodeData{..} -> do
+      for_ episodes \Episode{..} -> do
         h2_ $ toHtml $ ((title <|> (("Episode " <>) . showt <$> episode)) ?: "")
         img_ [src_ (thumbnail ?: "https://teddytennis.com/usa/wp-content/uploads/sites/88/2017/11/placeholder.png")]
         p_ $ toHtml $ plot ?: ""
@@ -60,7 +61,7 @@ instance IsPage SeriesR where
             div_ [style_ "clear: both"] do ""
 
   pageInit (SeriesR s) = do
-    xs::[EpisodeData] <- query [sql|
+    xs::[Episode] <- query [sql|
       with c as (
         select title_id as title_id, min(video_id) as video_id
           from video_link group by title_id
@@ -78,9 +79,6 @@ instance IsPage SeriesR where
         )
         order by it.series_season_number, it.series_episode_number
     |]
-    pure $ SeriesData xs
+    pure $ SeriesD xs
 
-instance HasParser Url SeriesR where
-  parser = dimap Series.series SeriesR $ segment "series" /> pSegment
-
-deriveRowDef ''EpisodeData
+deriveRowDef ''Episode

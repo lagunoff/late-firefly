@@ -20,3 +20,4 @@ out
 locals.nix
 .envrc
 .ghcjs.envrc
+screenlog.*

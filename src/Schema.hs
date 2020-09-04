@@ -1,6 +1,5 @@
 module Schema where
 
-import Flat
 import "this" DB
 import "this" Intro
 import "this" IMDB.Schema
@@ -13,7 +12,6 @@ data VideoLink = VideoLink
   , url        :: Text
   , origin     :: Maybe Text }
   deriving stock (Show, Eq, Generic)
-  deriving anyclass Flat
 
 deriveDb ''VideoLink def {renameField=underscore, ukeys=[["url"]]}
 

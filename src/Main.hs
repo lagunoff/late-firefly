@@ -26,7 +26,8 @@ import "this" Router.Wai
 import "this" Series
 
 pages =
-  [ PageDict (Dict @(IsPage HomeR)), PageDict (Dict @(IsPage SeriesR)), PageDict (Dict @(IsPage ())) ]
+  [ PageDict (Dict @(IsPage HomeR _)), PageDict (Dict @(IsPage SeriesR _))
+  , PageDict (Dict @(IsPage () _)) ]
 
 data WebOpts = WebOpts
   { webPort :: Int

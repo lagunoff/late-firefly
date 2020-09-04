@@ -20,11 +20,11 @@ html5Router ps next req resp = maybe nothin just mp where
   par = pageParser ps
   bPath = encodePath (pathInfo req) (queryString req)
   uPath = T.decodeUtf8 $ BSL.toStrict $ BS.toLazyByteString bPath
-  ini :: forall a. Dict (IsPage a) -> UnServer a (PageData a)
-  ini Dict = pageInit @a
-  wid :: forall a. Dict (IsPage a) -> PageData a -> Html ()
-  wid Dict = pageWidget @a
-  dynBk :: Dict (IsPage a) -> Dynamic -> UnServer a (PageData a) -> ServerIO (PageData a)
+  ini :: forall i o. Dict (IsPage i o) -> UnServer i o
+  ini Dict = pageInit @i
+  wid :: forall i o. Dict (IsPage i o) -> o -> Html ()
+  wid Dict = pageWidget @i
+  dynBk :: Dict (IsPage i o) -> Dynamic -> UnServer i o -> ServerIO o
   dynBk Dict d f = f (fromDyn d (error "html5Router: fromDyn error"))
   just (dn, PageDict dict) = do
     pdata <- unEio (dynBk dict dn (ini dict))

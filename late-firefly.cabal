@@ -41,7 +41,6 @@ executable late-firefly
     mtl,
     natural-transformation,
     network-uri,
-    nice-html,
     optparse-generic,
     ordered-containers,
     process,

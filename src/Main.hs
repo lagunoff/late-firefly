@@ -7,19 +7,19 @@ import Data.Generics.Product
 import Data.Text as T
 import Data.Text.IO as T
 import Flat
-import LateFirefly.DB
-import LateFirefly.Index
-import LateFirefly.Series
-import LateFirefly.Prelude
-import LateFirefly.Router
--- import LateFirefly.Series
--- import LateFirefly.Series.Episode
+import "this" DB
+import "this" Index
+import "this" Series
+import "this" Intro
+import "this" Router
+-- import "this" Series
+-- import "this" Series.Episode
 import Options.Generic
 import qualified Database.SQLite.Simple as S
 import Language.Javascript.JSaddle.WebSockets as Warp
--- import LateFirefly.JSaddle
--- import LateFirefly.RPC
-import LateFirefly.Router.Wai
+-- import "this" JSaddle
+-- import "this" RPC
+import "this" Router.Wai
 import Network.Wai
 import Network.Wai.Application.Static
 import Network.Wai.Handler.Warp as Warp

@@ -1,12 +1,13 @@
 module IMDB.GraphQL where
 
 import Data.Aeson hiding (Series)
+import Data.Aeson.TH
 import Data.Text as T
 import GHC.TypeLits
-import "this" Aeson
+import Text.Read
+
 import "this" DB
 import "this" Intro
-import Text.Read
 
 data PageInfo = PageInfo
   { endCursor :: Maybe Text

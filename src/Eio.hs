@@ -2,19 +2,14 @@ module Eio where
 
 import Control.Lens hiding (Prism')
 import Control.Monad.Catch
+import Control.Monad.Except
 import Control.Monad.Fix
 import Control.Monad.IO.Class
-import Control.Monad.Except
 import Data.Default
-import Data.Generics.Sum
-import GHC.Base
-import Data.Kind
-import Database.SQLite.Simple
-import GHC.Generics
-import GHC.TypeLits (TypeError, ErrorMessage (..), Symbol)
-import qualified Data.Generics.Sum.Internal.Typed as Core
 import Data.Generics.Internal.VL.Prism
 import Data.Generics.Sum.Internal.Typed
+import GHC.Base
+import qualified Data.Generics.Sum.Internal.Typed as Core
 
 newtype Eio e a = Eio {unEio :: IO a}
   deriving newtype

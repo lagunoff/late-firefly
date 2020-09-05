@@ -1,16 +1,12 @@
+{-# OPTIONS_GHC -Wno-orphans #-}
 module Series where
 
-import Control.Lens hiding ((#))
 import Data.Text as T
 
 import "this" Intro
 import "this" Router
-import "this" Parser
 import "this" DB hiding ((:=))
 import "this" Widget
-
-data SeriesR = SeriesR {series :: Text}
-  deriving stock (Eq, Ord, Generic)
 
 data SeriesD = SeriesD {episodes :: [Episode]}
   deriving stock (Eq, Show, Generic)
@@ -24,10 +20,8 @@ data Episode = Episode
   , episode   :: Maybe Int }
   deriving stock (Show, Eq, Generic)
 
-instance IsPage SeriesR SeriesD where
-  pageRoute =
-    dimap Series.series SeriesR $ segment "series" /> pSegment
-  pageWidget SeriesD{..} = do
+instance IsPage "SeriesR" SeriesD where
+  pageWidget SeriesR{..} SeriesD{..} = do
     let Theme{..} = theme
     header2Widget
     div_ [class_ "seasons"] do

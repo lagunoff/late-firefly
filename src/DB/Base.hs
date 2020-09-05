@@ -46,16 +46,17 @@ import Database.SQLite.Simple.Internal (Field(..), RowParser(..))
 import Database.SQLite.Simple.Ok (Ok(..))
 import Database.SQLite.Simple.ToField (ToField(..))
 import Database.SQLite3 (ColumnType(..))
-import Flat
 import GHC.Exception
-import "this" DB.QQ
-import "this" Intro
+import GHC.Generics
 import Text.Read
 import qualified Data.Map as M
 import qualified Database.SQLite.Simple as S
 import qualified Database.SQLite.Simple.FromField as S
 import qualified Database.SQLite.Simple.Internal as S
 import qualified GHC.Records as G
+
+import "this" DB.QQ
+import "this" Intro
 
 type SqlIO = Eio S.SQLError
 

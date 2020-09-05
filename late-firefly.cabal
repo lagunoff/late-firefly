@@ -26,18 +26,14 @@ executable late-firefly
     direct-sqlite,
     errors,
     exceptions,
-    flat,
     generic-lens,
     generic-lens-core,
     generic-monoid,
     haskell-src-meta,
     http-types,
     inflections,
-    jsaddle,
-    jsaddle-warp,
     lens,
     lens-regex,
-    massaraksh,
     mtl,
     natural-transformation,
     network-uri,
@@ -65,6 +61,7 @@ executable late-firefly
     wai-util,
     lucid,
     warp,
+    foreign-store,
     wreq
       
   default-extensions:

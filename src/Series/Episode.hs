@@ -6,14 +6,10 @@ import Control.Monad.Catch
 import Lucid.Base
 
 import "this" DB
-import "this" Parser
 import "this" Router
 import "this" Series.Types
 import "this" Widget
 import "this" Widget.Prelude
-
-data EpisodeR = EpisodeR {code :: Text}
-  deriving stock (Eq, Ord, Generic)
 
 data EpisodeD = EpisodeD
   { title  :: Maybe Text
@@ -22,25 +18,22 @@ data EpisodeD = EpisodeD
   , plot   :: Maybe Text }
   deriving stock (Show, Eq, Generic)
 
-instance IsPage EpisodeR EpisodeD where
-  pageRoute = dimap code EpisodeR $ segment "episode" /> pSegment
-
-  pageWidget EpisodeD{..} = do
+instance IsPage "EpisodeR" EpisodeD where
+  pageWidget EpisodeR{..} EpisodeD{..} = do
     let Theme{..} = theme
     div_ [class_ "episode-root"] do
-      -- h3_ [ht|Episode #{episodeTxt}|]
+      h3_ [ht|Episode #{code}|]
       -- breadcrumbsWidget (crumbs r ed)
+      fun_ "hcl" ["el", "link"] [st|
+        document.getElementById('video-frame').src=link;
+        Array.from(el.parentNode.parentNode.children).forEach(function(x) {
+          x.classList.remove('active');
+        });
+        el.parentNode.classList.add('active');
+      |]
       ul_ [class_ "tabs"] $ for_ (L.zip links [0..]) \(_, idx::Int) -> do
-        li_ do
-          let
-            onlick = [st|
-              document.getElementById('video-frame').src='#{links !! idx}';
-              Array.from(this.parentNode.parentNode.children).forEach(function(x) {
-                x.classList.remove('active');
-              });
-              this.parentNode.classList.add('active');
-              |]
-          a_ [href_ "javascript:void 0", onclick_ onlick]
+        li_ (bool [] [class_ "active"] $ idx == 0) do
+          a_ [href_ "javascript:void 0", onclick_ [st|hcl(this, '#{links !! idx}')|]]
             [ht|Server #{showt (idx + 1)}|]
       iframe_
         [ makeAttribute "referrerpolicy" "no-referrer"
@@ -48,7 +41,7 @@ instance IsPage EpisodeR EpisodeD where
         , makeAttribute "allowfullscreen" "true"
         , makeAttribute "frameborder" "0"
         , makeAttribute "style" "width: 900px; height: 600px"
-        , makeAttribute "src" $ showt (links !! 0)
+        , makeAttribute "src" $ links !! 0
         , id_ "video-frame" ] ""
       for_ plot \plot_text -> do p_ (toHtml plot_text)
     [style|

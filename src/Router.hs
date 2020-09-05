@@ -1,58 +1,89 @@
-{-# OPTIONS_GHC -fno-warn-orphans #-}
 module Router where
 
-import Control.Lens (dimap)
+import Control.Lens
 import Data.Constraint
-import Data.String as S
+import Data.List as L
+import Data.Proxy
+import Data.Text as T
 import Database.SQLite.Simple
-import Flat
-import GHC.Fingerprint
-import qualified Data.Dynamic as D
+import GHC.TypeLits
+import Network.URI
 import qualified Data.Map as M
 
-import "this" Parser as X
 import "this" Intro
 
-class (Typeable i, Typeable o) => IsPage i o | i -> o where
-  pageRoute :: UrlParser i
-  pageInit :: (?conn::Connection) => i -> ServerIO o
-  pageWidget :: o -> Html ()
+data UrlParts = UP
+  { partsPath  :: [Text]         -- ^ Path segments
+  , partsQuery :: [(Text, Text)] -- ^ GET parameters
+  }
+  deriving (Eq, Show, Generic)
 
-data PageDict = forall i o. PageDict (Dict (IsPage i o))
+data Route a where
+  HomeR    :: Route "HomeR"
+  EpisodeR :: {code::Text} -> Route "EpisodeR"
+  SeriesR  :: {series::Text} -> Route "SeriesR"
 
-data Page404Data = Page404Data
-  deriving stock (Show, Eq, Generic)
-  deriving anyclass Flat
+data SomeRoute = forall a. KnownSymbol a => SR (Route a)
 
-instance IsPage () () where
-  pageRoute = pUnit
-  pageInit _ = pure ()
-  pageWidget _ = h1_ "Not Found"
+class KnownSymbol l => IsPage l o | l -> o where
+  pageInit :: (?conn::Connection) => Route l -> ServerIO o
+  pageWidget :: Route l -> o -> Html ()
 
-pageParser :: [PageDict] -> Parser UrlChunks D.Dynamic (D.Dynamic, PageDict)
-pageParser p = Parser (par p) pri where
-  mm = mfng p
-  par :: [PageDict] -> UrlChunks -> [((D.Dynamic, PageDict), UrlChunks)]
-  par [] s = []
-  par (x:xs) s = (fmap (\(a, b) -> ((a, x), b)) (parse (pd x) s)) <> par xs s
-  pri :: D.Dynamic -> _ -> _
-  pri d x = let z = D.dynTypeRep d in
-    maybe x (\y -> X.print (pd y) d x) $ M.lookup (typeRepFingerprint z) mm
-  pd :: PageDict -> UrlParser D.Dynamic
-  pd (PageDict d@Dict) = dPar (pp d) where
-    pp :: forall i o. Dict (IsPage i o) -> UrlParser i
-    pp Dict = pageRoute @i
-  mfng :: [PageDict] -> M.Map Fingerprint PageDict
-  mfng = M.fromList . fmap \x@(PageDict d) -> (pp d, x) where
-    pp :: forall i o. Dict (IsPage i o) -> Fingerprint
-    pp Dict = typeRepFingerprint (typeRep (Proxy::Proxy i))
-  dPar :: Typeable a => Parser' s a -> Parser' s D.Dynamic
-  dPar = dimap g f where
-    f = D.toDyn
-    g = fromMaybe errorTrace . D.fromDynamic
+data PageDict = forall l a. PageDict (Dict (IsPage l a))
 
-printRoute :: HasUrl r => r -> Text
-printRoute = ("/" <>) . printUrl
+partsToRoute :: Prism' UrlParts SomeRoute
+partsToRoute = prism' build match where
+  match :: UrlParts -> Maybe SomeRoute
+  match = \case
+    UP [] _                  -> Just $ SR HomeR
+    UP ("episode":code:_) _  -> Just $ SR EpisodeR{..}
+    UP ("series":series:_) _ -> Just $ SR SeriesR{..}
+    _                        -> Nothing
+  build :: SomeRoute -> UrlParts
+  build = \case
+    SR HomeR        -> UP [] []
+    SR EpisodeR{..} -> UP ["episode", code] []
+    SR SeriesR{..}  -> UP ["series", series] []
 
-instance S.IsString s => S.IsString (Seg s) where
-  fromString = Seg . S.fromString
+urlToParts ::Iso' Text UrlParts
+urlToParts = iso apply unapply where
+  unapply (UP f q) =
+    T.intercalate "?" ([segments] <> bool [] [params] (params/="")) where
+      segments = T.intercalate "/" $ fmap escUri f
+      params = T.intercalate "&". L.filter (/= "")
+        . fmap (\(k, v) -> k <> "=" <> v) . fmap (bimap escUri escUri)
+        $ q
+  apply txt = UP seg qry
+    where
+      (segTxt, qryTxt) = bimap unEscUri unEscUri . breakOn1 "?" $ txt
+      seg = T.splitOn "/" segTxt & L.filter (/="")
+      qry = T.splitOn "&" qryTxt & L.filter (/="") <&> breakOn1 "="
+      breakOn1 s t = T.breakOn s t & _2 %~ T.drop 1
+
+groupPages :: [PageDict] -> M.Map Text PageDict
+groupPages ps = M.fromList $ fmap f ps where
+  f p = (pageLabel p, p)
+
+pageLabel :: PageDict -> Text
+pageLabel (PageDict d) = f d where
+  f :: forall l a. Dict (IsPage l a) -> Text
+  f Dict = T.pack $ symbolVal (Proxy @l)
+
+routeLabel :: SomeRoute -> Text
+routeLabel (SR r) = f r where
+  f :: forall l. KnownSymbol l => Route l -> Text
+  f _ = T.pack $ symbolVal (Proxy @l)
+
+escUri :: Text -> Text
+escUri = T.pack . escapeURIString isAllowed . T.unpack where
+  isAllowed c = c `elem` (['A'..'Z'] ++ ['a'..'z'] ++ ['0'..'9'] ++ "-_.~:/,")
+
+unEscUri :: Text -> Text
+unEscUri = T.pack . unEscapeString . T.unpack
+
+fromSome :: forall l. KnownSymbol l => SomeRoute -> Maybe (Route l)
+fromSome (SR r) = f r where
+  f :: forall l1. KnownSymbol l1 => Route l1 -> Maybe (Route l)
+  f r = case sameSymbol (Proxy @l) (Proxy @l1) of
+    Just Refl -> Just r
+    Nothing   -> Nothing

@@ -6,9 +6,6 @@ import Data.Constraint
 import Data.Generics.Product
 import Data.Text as T
 import Data.Text.IO as T
-import Flat
-import Language.Javascript.JSaddle.WebSockets as Warp
-import Network.Wai
 import Network.Wai.Application.Static
 import Network.Wai.Handler.Warp as Warp
 import Network.Wai.Middleware.Gzip
@@ -16,19 +13,19 @@ import Options.Generic
 import System.Environment
 import System.IO
 import qualified Database.SQLite.Simple as S
-import qualified Network.HTTP.Types as H
 
 import "this" DB
-import "this" Index
+import "this" Dev
+import "this" Index ()
 import "this" Intro
 import "this" Router
 import "this" Router.Wai
-import "this" Series
-import "this" Series.Episode
+import "this" Series ()
+import "this" Series.Episode ()
 
 pages =
-  [ PageDict (Dict @(IsPage HomeR _)), PageDict (Dict @(IsPage SeriesR _))
-  , PageDict (Dict @(IsPage EpisodeR _)), PageDict (Dict @(IsPage () _)) ]
+  [ PageDict (Dict @(IsPage "HomeR" _)), PageDict (Dict @(IsPage "SeriesR" _))
+  , PageDict (Dict @(IsPage "EpisodeR" _)) ]
 
 data WebOpts = WebOpts
   { webPort :: Int
@@ -59,8 +56,7 @@ mainOpts = \case
       withGzip = gzip def
         { gzipFiles=GzipPreCompressed GzipIgnore
         , gzipCheckMime=const True }
-      ss404Handler = Just $ html5Router pages $ withGzip $ staticApp
-        $ defaultFileServerSettings (T.unpack docroot)
+      ss404Handler = Just $ html5Router pages
       staticApp' = withGzip $ staticApp
         $ (defaultFileServerSettings (T.unpack docroot)) {ss404Handler=ss404Handler}
       sett = setServerName "" . setPort port $ defaultSettings
@@ -81,9 +77,7 @@ update = do
   let dbPath = T.unpack $ getField @"dbPath" (def :: WebOpts)
   conn <- S.open dbPath
   let site = let ?conn = conn in html5Router pages
-  Warp.debugOr 7900 (pure ()) \req ->
-    site next req where
-      next _ resp = resp $ responseLBS H.status404 [("Content-Type", "text/plain")] "Not found"
+  runOr 7900 site
 
 main = do
   args <- getArgs

@@ -1,13 +1,14 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 module Widget where
 
+import Data.Text as T
 import GHC.Word
 import Language.Haskell.TH
 import Language.Haskell.TH.Quote
+import Lucid.Base
 import Text.Cassius
 import Text.Shakespeare.Text as X (st)
 import qualified Data.Text.Lazy as LT
-import Lucid.Base
 
 import "this" Intro
 
@@ -53,3 +54,7 @@ instance TextShow PixelSize where
 
 instance TextShow RGBA where
   showb = toCss
+
+fun_ :: Text -> [Text] -> Text -> Html ()
+fun_ name args body = do
+  script_ [] $ "function " <> name <> "(" <> T.intercalate ", " args <> "){\n" <> body <> "\n}"

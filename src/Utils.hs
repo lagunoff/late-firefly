@@ -5,13 +5,10 @@ module Utils where
 import Control.Error
 import Control.Lens-- hiding (Prism')
 import Control.Monad.Catch as C
-import Control.Monad.Catch as Catch
-import Control.Monad.Except
 import Data.Aeson as AE
 import Data.Aeson.Internal as AE
 import Data.Aeson.Types as AE
 import Data.Generics.Product
-import Data.Generics.Sum
 import Data.HashMap.Strict as H
 import Data.IORef
 import Data.List as L
@@ -78,6 +75,7 @@ stripPrefix1 p x = fromMaybe x $ L.stripPrefix p x
 
 replaces :: Eq a => [(a, a)] -> a -> a
 replaces xs x = L.lookup x xs ?: x
+
 
 -- | Helper for convenient nested field parsing
 (.::) :: FromJSON a => AE.Object -> [Text] -> AE.Parser a

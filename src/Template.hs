@@ -1,16 +1,6 @@
 module Template where
 
-import Control.Lens hiding ((#))
-import Control.Monad.Trans
-import Control.Monad.Reader
-import Data.Maybe
-import Data.Constraint
-import Data.Text as T
-import Language.Javascript.JSaddle
-
 import "this" Intro
-import "this" Router
-import "this" Widget.Prelude
 import "this" Widget
 import "this" Icons
 

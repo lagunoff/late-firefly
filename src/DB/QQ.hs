@@ -11,8 +11,6 @@ import Data.String
 import Data.Text as T
 import Database.SQLite.Simple as S
 import Database.SQLite.Simple.ToField as S
-import Database.SQLite.Simple.Types as S
-import Database.SQLite3
 import Language.Haskell.Meta.Parse
 import Language.Haskell.TH
 import Language.Haskell.TH.Quote

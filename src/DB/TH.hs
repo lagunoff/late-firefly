@@ -12,23 +12,23 @@ module DB.TH
   ) where
 
 import Control.Applicative
-import Control.Monad
 import Control.Lens
-import Data.String as S
-import Data.List as L
-import Data.Text as T
+import Control.Monad
 import Data.Default
+import Data.List as L
+import Data.String as S
+import Data.Text as T
 import Database.SQLite.Simple
 import Database.SQLite.Simple.ToField
-import Flat as FL
-import "this" DB.Base
-import "this" Intro
-import "this" DB.QQ
 import GHC.Records
 import Language.Haskell.TH
 import Language.Haskell.TH.Syntax
 import Prelude as P
 import qualified Text.Inflections as Inf
+
+import "this" DB.Base
+import "this" Intro
+import "this" DB.QQ
 
 data DeriveDbConfig = DeriveDbConfig
   { tableName :: Maybe String

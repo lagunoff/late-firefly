@@ -1,4 +1,4 @@
-module Series.Types where
+module Site.Types where
 
 import Control.Applicative
 import Data.Char

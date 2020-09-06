@@ -14,7 +14,7 @@ import "this" DB
 import "this" Dev
 import "this" Intro
 import "this" Router
-import "this" Template
+import "this" Site.Template
 
 html5Router :: (?conn::Connection) => [PageDict] -> Application
 html5Router ps req resp = maybe nothin just mr where

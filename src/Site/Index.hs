@@ -1,5 +1,5 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
-module Index where
+module Site.Index where
 
 import "this" Intro
 import "this" Router

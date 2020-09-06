@@ -1,5 +1,5 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
-module Series.Episode where
+module Site.Episode where
 
 import Data.List as L
 import Control.Monad.Catch
@@ -7,7 +7,7 @@ import Lucid.Base
 
 import "this" DB
 import "this" Router
-import "this" Series.Types
+import "this" Site.Types
 import "this" Widget
 
 data EpisodeD = EpisodeD

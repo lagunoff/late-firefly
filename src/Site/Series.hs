@@ -1,5 +1,5 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
-module Series where
+module Site.Series () where
 
 import Data.Text as T
 import qualified Data.Map as M

@@ -24,22 +24,15 @@ let
   packages = {
     late-firefly = gitignoreSourcePure filterOutSourceFiles ./.;
 
-    # massaraksh = builtins.fetchTarball {
-    #   url = "https://github.com/lagunoff/massaraksh/archive/5a4877eb0d632325c4eacc3fe20c5bcd8ebdbebe.tar.gz";
-    # };
-
-    # flat = builtins.fetchTarball {
-    #   url = "https://github.com/Quid2/flat/archive/59314709b4b79c1cf6d1084ec4ad88b905d4b5f9.tar.gz";
-    # };
-
     text-show = builtins.fetchTarball {
       url = "https://github.com/RyanGlScott/text-show/archive/56c643a05ef8529dab5850949daefd66cf421e44.tar.gz";
     };
 
     tagsoup-lens = ../tagsoup-lens;
-    # builtins.fetchTarball {
-    #   url = "https://github.com/alpmestan/tagsoup-lens/archive/83ea5b820271f7d72767989b4f5663727229de95.tar.gz";
-    # };
+
+    autoexporter = builtins.fetchTarball {
+      url = "https://github.com/tfausak/autoexporter/archive/5e4b2e45364e859d553d5090eac19f93fb88c055.tar.gz";
+    };
 
     tagsoup = builtins.fetchTarball {
       url = "https://github.com/lagunoff/tagsoup/archive/c61f55d615350cc2368484baf4608bb39e0b34e8.tar.gz";
@@ -95,7 +88,7 @@ let
 
 in reflex-platform.project({ pkgs, ... }: {
   useWarp = true;
-  withHoogle = true;
+  withHoogle = false;
   packages = {};
 
   shells = {

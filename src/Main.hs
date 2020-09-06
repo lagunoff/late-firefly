@@ -16,12 +16,10 @@ import qualified Database.SQLite.Simple as S
 
 import "this" DB
 import "this" Dev
-import "this" Index ()
 import "this" Intro
 import "this" Router
 import "this" Router.Wai
-import "this" Series ()
-import "this" Series.Episode ()
+import "this" Site ()
 
 pages =
   [ PageDict (Dict @(IsPage "HomeR" _)), PageDict (Dict @(IsPage "SeriesR" _))

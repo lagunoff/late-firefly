@@ -1,4 +1,4 @@
-module Template where
+module Site.Template where
 
 import "this" Intro
 import "this" Widget

@@ -2,37 +2,30 @@
 module Main where
 
 import Control.Lens
+import Data.Constraint
 import Data.Generics.Product
 import Data.Text as T
 import Data.Text.IO as T
-import Flat
-import LateFirefly.DB
-import LateFirefly.Index
-import LateFirefly.Series
-import LateFirefly.Series.Episode
-import LateFirefly.Prelude
-import Massaraksh
-import Options.Generic
-import qualified Database.SQLite.Simple as S
-import LateFirefly.Router
-import Data.Constraint
-
-pages =
-  [ PageDict (Dict @(IsPage HomeR)), PageDict (Dict @(IsPage SeriesR))
-  , PageDict (Dict @(IsPage EpisodeR)), PageDict (Dict @(IsPage ())) ]
-
-#ifndef ghcjs_HOST_OS
-import Language.Javascript.JSaddle.WebSockets as Warp
-import LateFirefly.JSaddle
-import LateFirefly.RPC
-import LateFirefly.Router.Wai
-import Network.Wai
 import Network.Wai.Application.Static
 import Network.Wai.Handler.Warp as Warp
 import Network.Wai.Middleware.Gzip
+import Options.Generic
 import System.Environment
 import System.IO
-import qualified Network.HTTP.Types as H
+import qualified Database.SQLite.Simple as S
+
+import "this" DB
+import "this" Dev
+import "this" Index ()
+import "this" Intro
+import "this" Router
+import "this" Router.Wai
+import "this" Series ()
+import "this" Series.Episode ()
+
+pages =
+  [ PageDict (Dict @(IsPage "HomeR" _)), PageDict (Dict @(IsPage "SeriesR" _))
+  , PageDict (Dict @(IsPage "EpisodeR" _)) ]
 
 data WebOpts = WebOpts
   { webPort :: Int
@@ -60,18 +53,14 @@ mainOpts = \case
         & field @"dbPath" %~ (maybe id const mayDb)
       dbpath = getField @"dbPath" opts
     S.withConnection (T.unpack dbpath) \conn -> let ?conn = conn in let
-      rpcApp = mkApplication $readDynSPT
       withGzip = gzip def
         { gzipFiles=GzipPreCompressed GzipIgnore
         , gzipCheckMime=const True }
-      ss404Handler = Just $ html5Router pages $ withGzip $ staticApp
-        $ defaultFileServerSettings (T.unpack docroot)
+      ss404Handler = Just $ html5Router pages
       staticApp' = withGzip $ staticApp
         $ (defaultFileServerSettings (T.unpack docroot)) {ss404Handler=ss404Handler}
       sett = setServerName "" . setPort port $ defaultSettings
-      in Warp.runSettings sett \case
-        req@(pathInfo -> "rpc":_) -> rpcApp req
-        req                       -> staticApp' req
+      in Warp.runSettings sett staticApp'
   Migrate{dbpath=mayDb,..} -> do
     let
       defDb = T.unpack $ getField @"dbPath" (def @WebOpts)
@@ -87,18 +76,10 @@ update = do
   hSetBuffering stderr LineBuffering
   let dbPath = T.unpack $ getField @"dbPath" (def :: WebOpts)
   conn <- S.open dbPath
-  let rpcApp = let ?conn = conn in mkApplication $readDynSPT
   let site = let ?conn = conn in html5Router pages
-  Warp.debugOr 7900 (void $ removeJsaddleJs >> attachToBody (indexWidget pages)) \case
-    req@(pathInfo -> "rpc":_) -> rpcApp req
-    req                       -> site next req where
-      next _ resp = resp $ responseLBS H.status404 [("Content-Type", "text/plain")] "Not found"
+  runOr 7900 site
 
 main = do
   args <- getArgs
   withArgs (case args of "--":rest -> rest; xs -> xs) $
     getRecord "Web site with tons of free videos" >>= mainOpts
-#else
-main = do
-  void $ attachToBody (indexWidget pages)
-#endif

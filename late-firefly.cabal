@@ -12,7 +12,7 @@ executable late-firefly
   ghc-options:
     -Wall -Wno-missing-signatures -Wno-name-shadowing -Wno-unused-matches
     -Wno-unused-do-bind -Wno-partial-type-signatures -Wno-unticked-promoted-constructors
-  hs-source-dirs: src
+  hs-source-dirs: src src-ghc
   
   build-depends:
     aeson,
@@ -26,36 +26,44 @@ executable late-firefly
     direct-sqlite,
     errors,
     exceptions,
-    flat,
     generic-lens,
     generic-lens-core,
     generic-monoid,
     haskell-src-meta,
     http-types,
     inflections,
-    jsaddle,
     lens,
-    massaraksh,
+    lens-regex,
     mtl,
     natural-transformation,
     network-uri,
     optparse-generic,
     ordered-containers,
     process,
+    regex-tdfa,
     shakespeare,
     split,
     sqlite-simple,
+    tagsoup,
+    tagsoup-lens,
     template-haskell,
     text,
     text-show,
     time,
     transformers,
-    unliftio-core,
-    utf8-string,
     unordered-containers,
+    utf8-string,
     uuid,
-    uuid-types
-
+    uuid-types,
+    wai,
+    wai-app-static,
+    wai-extra,
+    wai-util,
+    lucid,
+    warp,
+    foreign-store,
+    wreq
+      
   default-extensions:
     AllowAmbiguousTypes
     BangPatterns
@@ -98,23 +106,5 @@ executable late-firefly
     ViewPatterns
     EmptyDataDecls
 
-  if !impl(ghcjs)
-    build-depends:
-      tagsoup,
-      lens-regex,
-      regex-tdfa,
-      tagsoup-lens,
-      warp,
-      wai,
-      wai-app-static,
-      wai-extra,
-      jsaddle-warp,
-      wreq
-    hs-source-dirs: src-ghc
-    if flag(production)
-      ghc-options: -O2
-  else
-    if flag(production)
-      ghc-options: -dedupe -O2
-    hs-source-dirs: src-ghcjs
-    build-depends: ghcjs-base, ghcjs-prim
+  if flag(production)
+    ghc-options: -O2

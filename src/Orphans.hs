@@ -1,0 +1,28 @@
+{-# LANGUAGE CPP #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
+module Orphans where
+
+import Data.Aeson
+import Data.Time.Calendar
+import Data.Time.Clock
+import Data.UUID.Types.Internal (UUID(..))
+import Database.SQLite.Simple
+import GHC.Generics (Generic)
+import GHC.Stack.Types
+
+deriving instance Generic (a :. b)
+
+deriving instance Generic Day
+
+deriving instance Generic UTCTime
+
+deriving instance Generic UUID
+
+deriving stock instance Generic CallStack
+
+deriving stock instance Generic SrcLoc
+
+deriving anyclass instance FromJSON CallStack
+deriving anyclass instance FromJSON SrcLoc
+deriving anyclass instance ToJSON CallStack
+deriving anyclass instance ToJSON SrcLoc

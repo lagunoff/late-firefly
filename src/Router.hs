@@ -87,3 +87,16 @@ fromSome (SR r) = f r where
   f r = case sameSymbol (Proxy @l) (Proxy @l1) of
     Just Refl -> Just r
     Nothing   -> Nothing
+
+linkTo :: KnownSymbol l => Route l -> Html () -> Html ()
+linkTo = linkMay . Just
+
+linkAtt :: KnownSymbol l => Route l -> [Attribute] -> Html () -> Html ()
+linkAtt r att = linkAttMay (Just r) att
+
+linkMay :: KnownSymbol l => Maybe (Route l) -> Html () -> Html ()
+linkMay r = linkAttMay r []
+
+linkAttMay :: KnownSymbol l => Maybe (Route l) -> [Attribute] -> Html () -> Html ()
+linkAttMay r att = a_
+  (maybe att ((:att) . href_ . ("/"<>) . review (urlToParts . partsToRoute) . SR) r)

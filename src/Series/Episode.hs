@@ -9,7 +9,6 @@ import "this" DB
 import "this" Router
 import "this" Series.Types
 import "this" Widget
-import "this" Widget.Prelude
 
 data EpisodeD = EpisodeD
   { title  :: Maybe Text

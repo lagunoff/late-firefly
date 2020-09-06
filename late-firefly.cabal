@@ -16,6 +16,7 @@ executable late-firefly
   
   build-depends:
     aeson,
+    autoexporter,
     attoparsec,
     base,
     base64-bytestring,
@@ -107,4 +108,4 @@ executable late-firefly
     EmptyDataDecls
 
   if flag(production)
-    ghc-options: -O2
+    ghc-options: -O2 -threaded

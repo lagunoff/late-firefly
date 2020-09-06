@@ -37,18 +37,16 @@ headerWidget = do
   div_ [class_ "header"] do
     div_ [class_ "header-wrapper"] do
       div_ [class_ "header-left"] do
-        -- linkTo HomeR_ do
-        --   "className" =:"home-link"
-        --   span_ "Telikov."
-        --   span_ do
-        --     "Net"
-        --     "style" =: [st|color: #{showt primary}|]
-        ul_ [class_ "menu"] do ""
-          -- li_ do linkTo (SeriesR_ (SeriesRoute "theoffice")) do div_ "Series"
-          -- li_ do linkTo (SeriesR_ (SeriesRoute "theoffice")) do div_ "Movies"
-          -- li_ do linkTo (SeriesR_ (SeriesRoute "theoffice")) do div_ "Genre"
-          -- li_ do linkTo (SeriesR_ (SeriesRoute "theoffice")) do div_ "Top IMDB"
-          -- li_ do linkTo (SeriesR_ (SeriesRoute "theoffice")) do div_ "A-Z List"
+        linkAtt HomeR [class_ "home-link"] do
+          span_ "Telikov."
+          span_ [style_ [st|color: #{showt primary}|] ] do
+            "Net"
+        ul_ [class_ "menu"] do
+          li_ do linkTo (SeriesR "the-office") do div_ "Series"
+          li_ do linkTo (SeriesR "the-office") do div_ "Movies"
+          li_ do linkTo (SeriesR "the-office") do div_ "Genre"
+          li_ do linkTo (SeriesR "the-office") do div_ "Top IMDB"
+          li_ do linkTo (SeriesR "the-office") do div_ "A-Z List"
       div_ [class_ "search"] do
         input_
           [placeholder_ "Search"]
@@ -142,19 +140,17 @@ footerWidget = do
   div_ [class_ "footer"] do
     div_ [class_ "footer-wrapper"] do
       div_ do
-        ul_ [class_ "menu"] do ""
-          -- li_ do linkTo (SeriesR_ (SeriesRoute "theoffice")) do div_ "Series"
-          -- li_ do linkTo (SeriesR_ (SeriesRoute "theoffice")) do div_ "Movies"
-          -- li_ do linkTo (SeriesR_ (SeriesRoute "theoffice")) do div_ "Genre"
-          -- li_ do linkTo (SeriesR_ (SeriesRoute "theoffice")) do div_ "Top IMDB"
-          -- li_ do linkTo (SeriesR_ (SeriesRoute "theoffice")) do div_ "A-Z List"
-      div_ do ""
-        -- linkTo HomeR_ do
-        --   "className" =:"home-link"
-        --   span_ "Telikov."
-        --   span_ do
-        --     "Net"
-        --     "style" =: [st|color: #{showt primary}|]
+        ul_ [class_ "menu"] do
+          li_ do linkTo (SeriesR "the-office") do div_ "Series"
+          li_ do linkTo (SeriesR "the-office") do div_ "Movies"
+          li_ do linkTo (SeriesR "the-office") do div_ "Genre"
+          li_ do linkTo (SeriesR "the-office") do div_ "Top IMDB"
+          li_ do linkTo (SeriesR "the-office") do div_ "A-Z List"
+      div_ do
+        linkAtt HomeR [class_ "home-link"] do
+          span_ "Telikov."
+          span_ [style_ [st|color: #{showt primary}|] ] do
+            "Net"
   [style|
     .footer
       margin-top: #{unit * 8}

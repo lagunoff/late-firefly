@@ -27,8 +27,10 @@ instance IsPage "SeriesR" SeriesD where
     div_ [class_ "seasons"] do
       button_ "emit error"
       for_ episodes \Episode{..} -> do
-        h2_ $ toHtml $ ((title <|> (("Episode " <>) . showt <$> episode)) ?: "")
-        img_ [src_ (thumbnail ?: "https://teddytennis.com/usa/wp-content/uploads/sites/88/2017/11/placeholder.png")]
+        linkMay (EpisodeR <$> code) do
+          h2_ $ toHtml $ ((title <|> (("Episode " <>) . showt <$> episode)) ?: "")
+        linkMay (EpisodeR <$> code) do
+          img_ [src_ (thumbnail ?: "https://teddytennis.com/usa/wp-content/uploads/sites/88/2017/11/placeholder.png")]
         p_ $ toHtml $ plot ?: ""
     [style|
       .header-2

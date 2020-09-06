@@ -3,11 +3,8 @@ module Eio where
 import Control.Lens hiding (Prism')
 import Control.Monad.Catch
 import Control.Monad.Except
-import Control.Monad.Fix
-import Control.Monad.IO.Class
 import Data.Default
 import Data.Generics.Internal.VL.Prism
-import Data.Generics.Sum.Internal.Typed
 import GHC.Base
 import qualified Data.Generics.Sum.Internal.Typed as Core
 

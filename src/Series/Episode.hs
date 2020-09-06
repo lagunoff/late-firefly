@@ -66,7 +66,6 @@ instance IsPage "EpisodeR" EpisodeD where
     |]
 
   pageInit EpisodeR{..} = do
-    let seriesId = "the-office"::Text
     ds::[EpisodeD] <- query [sql|
       with vid as
         (select
@@ -76,7 +75,7 @@ instance IsPage "EpisodeR" EpisodeD where
           min(it.series_season_number) as series_season_number,
           vl.title_id                  as title_id
         from video_link vl
-          cross join series sr on sr.rowid={seriesId}
+          cross join series sr on sr.rowid={epSeries}
           left join imdb_title it on it.rowid=vl.title_id
         where vl.video_id={code}
           and it.series_title_id=sr.title_id
@@ -97,7 +96,7 @@ instance IsPage "EpisodeR" EpisodeD where
                 min(it.plot_id) as plot_id,
                 vl.title_id as title_id
               from video_link vl
-              cross join series sr on sr.rowid={seriesId}
+              cross join series sr on sr.rowid={epSeries}
               left join imdb_title it on it.rowid=vl.title_id
               where it.series_title_id=sr.title_id and it.series_season_number={sea} and it.series_episode_number={epi}
               group by vl.title_id)

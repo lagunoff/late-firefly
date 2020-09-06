@@ -20,7 +20,8 @@ data UrlParts = UP
 
 data Route a where
   HomeR    :: Route "HomeR"
-  EpisodeR :: {code::Text} -> Route "EpisodeR"
+--  SearchR  :: {search::Text} -> Route "SearchR"
+  EpisodeR :: {epSeries::Text, code::Text} -> Route "EpisodeR"
   SeriesR  :: {series::Text} -> Route "SeriesR"
 
 data SomeRoute = forall a. KnownSymbol a => SR (Route a)
@@ -36,13 +37,13 @@ partsToRoute = prism' build match where
   match :: UrlParts -> Maybe SomeRoute
   match = \case
     UP [] _                  -> Just $ SR HomeR
-    UP ("episode":code:_) _  -> Just $ SR EpisodeR{..}
+    UP ("episode":epSeries:code:_) _ -> Just $ SR EpisodeR{..}
     UP ("series":series:_) _ -> Just $ SR SeriesR{..}
     _                        -> Nothing
   build :: SomeRoute -> UrlParts
   build = \case
     SR HomeR        -> UP [] []
-    SR EpisodeR{..} -> UP ["episode", code] []
+    SR EpisodeR{..} -> UP ["episode", epSeries, code] []
     SR SeriesR{..}  -> UP ["series", series] []
 
 urlToParts ::Iso' Text UrlParts

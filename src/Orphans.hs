@@ -9,6 +9,9 @@ import Data.UUID.Types.Internal (UUID(..))
 import Database.SQLite.Simple
 import GHC.Generics (Generic)
 import GHC.Stack.Types
+import TextShow
+import Text.Shakespeare.Text
+import Data.Text.Lazy.Builder as T
 
 deriving instance Generic (a :. b)
 
@@ -26,3 +29,11 @@ deriving anyclass instance FromJSON CallStack
 deriving anyclass instance FromJSON SrcLoc
 deriving anyclass instance ToJSON CallStack
 deriving anyclass instance ToJSON SrcLoc
+
+newtype ViaTextShow a = ViaTextShow {unViaTextShow :: a}
+
+instance TextShow a => ToText (ViaTextShow a) where
+  toText = T.fromText . showt . unViaTextShow
+
+deriving via ViaTextShow Double instance ToText Double
+deriving via ViaTextShow Float instance ToText Float

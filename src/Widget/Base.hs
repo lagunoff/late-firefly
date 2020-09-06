@@ -39,6 +39,10 @@ style :: QuasiQuoter
 style = cassius{quoteExp=qExp} where
   qExp = appE [|termRaw "style" [type_ "text/css"] . toHtmlRaw . LT.toStrict . renderCss . ($ undefined)|] . quoteExp cassius
 
+js :: QuasiQuoter
+js = st{quoteExp=qExp} where
+  qExp = appE [|script_ []|] . quoteExp st
+
 ht :: QuasiQuoter
 ht = st{quoteExp=qExp} where
   qExp = appE [|toHtml |] . quoteExp st

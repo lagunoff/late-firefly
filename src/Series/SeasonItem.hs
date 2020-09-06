@@ -4,15 +4,16 @@
 {-# LANGUAGE ForeignFunctionInterface #-}
 module Series.SeasonItem where
 
+import Data.Text as T
+import Data.Char
+
 import "this" Widget.Prelude
 import "this" IMDB.Schema
 import "this" Router
 import "this" Icons
-import Data.Text as T
-import Data.Char
 
-seasonItemWidget :: SeriesRoute -> [(Season, [Episode])] -> Html ()
-seasonItemWidget SeriesRoute{..} seasons = do
+seasonSlider :: SeriesRoute -> [(Season, [Episode])] -> Html ()
+seasonSlider SeriesRoute{..} seasons = do
   let
     Theme{..} = theme
     thumbnailHeight = thumbnailWidth * 2 / 3

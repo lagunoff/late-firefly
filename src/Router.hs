@@ -20,7 +20,7 @@ data UrlParts = UP
 
 data Route a where
   HomeR    :: Route "HomeR"
---  SearchR  :: {search::Text} -> Route "SearchR"
+  SearchR  :: {search::Text, offset::Int} -> Route "SearchR"
   EpisodeR :: {epSeries::Text, code::Text} -> Route "EpisodeR"
   SeriesR  :: {series::Text} -> Route "SeriesR"
 
@@ -36,13 +36,15 @@ partsToRoute :: Prism' UrlParts SomeRoute
 partsToRoute = prism' build match where
   match :: UrlParts -> Maybe SomeRoute
   match = \case
+    UP [] [("s", search)] -> Just $ SR SearchR{offset=0,..}
     UP [] _                  -> Just $ SR HomeR
-    UP ("episode":epSeries:code:_) _ -> Just $ SR EpisodeR{..}
-    UP ("series":series:_) _ -> Just $ SR SeriesR{..}
+    UP ["episode",epSeries,code] _ -> Just $ SR EpisodeR{..}
+    UP ["series",series] _ -> Just $ SR SeriesR{..}
     _                        -> Nothing
   build :: SomeRoute -> UrlParts
   build = \case
     SR HomeR        -> UP [] []
+    SR SearchR{..} -> UP [] [("s", search)]
     SR EpisodeR{..} -> UP ["episode", epSeries, code] []
     SR SeriesR{..}  -> UP ["series", series] []
 

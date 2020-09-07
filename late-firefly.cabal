@@ -16,6 +16,7 @@ executable late-firefly
   
   build-depends:
     aeson,
+    attoparsec,
     autoexporter,
     base,
     bytestring,
@@ -25,6 +26,7 @@ executable late-firefly
     direct-sqlite,
     errors,
     exceptions,
+    foreign-store,
     generic-lens,
     generic-lens-core,
     generic-monoid,
@@ -33,6 +35,7 @@ executable late-firefly
     inflections,
     lens,
     lens-regex,
+    lucid,
     mtl,
     network-uri,
     optparse-generic,
@@ -48,6 +51,7 @@ executable late-firefly
     text-show,
     time,
     transformers,
+    unordered-containers,
     utf8-string,
     uuid,
     uuid-types,
@@ -55,9 +59,7 @@ executable late-firefly
     wai-app-static,
     wai-extra,
     wai-util,
-    lucid,
     warp,
-    foreign-store,
     wreq
       
   default-extensions:

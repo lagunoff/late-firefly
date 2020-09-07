@@ -43,6 +43,11 @@ let
     indexed-profunctors = opticsSrc + "/indexed-profunctors";
   } // lib.optionalAttrs (builtins.pathExists ./locals.nix) (import ./locals.nix);
 
+  lateFireflyExts = hself: []
+    ++ lib.optional production (_: attrs: {
+      configureFlags = attrs.configureFlags or [] ++ ["-fproduction"];
+  });
+
   haskellPackages = with nixpkgs.haskell.lib;
     nixpkgs.haskell.packages.ghc8102.override {
     overrides = combine [
@@ -51,6 +56,7 @@ let
       (hself: hsuper: nixpkgs.lib.mapAttrs (k: v: v hsuper.${k}) {
         cabal-cargs = x: dontCheck (doJailbreak x);
         text-show = x: dontCheck (doJailbreak x);
+        late-firefly = x: overrideCabal x (x: combine (lateFireflyExts hself) x x);
       })
     ];
   };

@@ -4,6 +4,7 @@ module Site.Index where
 import "this" Intro
 import "this" Router
 import "this" Widget
+import Lucid.Base
 
 data HomeD = HomeD
 
@@ -14,8 +15,8 @@ instance IsPage "HomeR" HomeD where
     div_ [class_ "home"] do
       div_ [class_ "home-wrapper"] do
         h1_ do "Telikov.Net"
-        div_ do
-          input_ [type_ "search"]
+        form_ [action_ "/", method_ "GET"] do
+          input_ [name_ "s", type_ "search", makeAttribute "autofocus" "on"]
     [style|
       .home
         padding: 0 #{unit * 2} 0 #{unit * 2}

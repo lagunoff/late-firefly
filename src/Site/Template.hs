@@ -48,8 +48,9 @@ headerWidget = do
           li_ do linkTo (SeriesR "the-office") do div_ "Top IMDB"
           li_ do linkTo (SeriesR "the-office") do div_ "A-Z List"
       div_ [class_ "search"] do
-        input_
-          [placeholder_ "Search"]
+        form_ [action_ "/", method_ "GET"] do
+          input_
+            [name_ "s", placeholder_ "Search"]
         searchIcon_
     [style|
       body

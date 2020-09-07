@@ -4,7 +4,6 @@ import Control.Lens
 import Control.Concurrent
 import Data.ByteString.Builder as BS
 import Data.IORef
-import Data.Monoid ((<>))
 import Foreign.Store
 import Network.HTTP.Types as H
 import Network.Wai

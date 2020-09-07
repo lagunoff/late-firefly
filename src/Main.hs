@@ -2,7 +2,6 @@
 module Main where
 
 import Control.Lens
-import Data.Constraint
 import Data.Generics.Product
 import Data.Text as T
 import Data.Text.IO as T
@@ -17,13 +16,11 @@ import qualified Database.SQLite.Simple as S
 import "this" DB
 import "this" Dev
 import "this" Intro
-import "this" Router
 import "this" Router.Wai
+import "this" Router.TH
 import "this" Site ()
 
-pages =
-  [ PageDict (Dict @(IsPage "HomeR" _)), PageDict (Dict @(IsPage "SeriesR" _))
-  , PageDict (Dict @(IsPage "EpisodeR" _)) ]
+pages = $collectPages
 
 data WebOpts = WebOpts
   { webPort :: Int
@@ -43,7 +40,7 @@ data Opts
 
 mainOpts :: Opts -> IO ()
 mainOpts = \case
-  Start{dbpath=mayDb, docroot=mayDR, port=mayPort, ..} -> do
+  Start{dbpath=mayDb, docroot=mayDR, port=mayPort} -> do
     let
       port = getField @"webPort" opts
       docroot = fromMaybe "./" mayDR
@@ -59,7 +56,7 @@ mainOpts = \case
         $ (defaultFileServerSettings (T.unpack docroot)) {ss404Handler=ss404Handler}
       sett = setServerName "" . setPort port $ defaultSettings
       in Warp.runSettings sett staticApp'
-  Migrate{dbpath=mayDb,..} -> do
+  Migrate{dbpath=mayDb} -> do
     let
       defDb = T.unpack $ getField @"dbPath" (def @WebOpts)
       dbpath = maybe defDb T.unpack mayDb

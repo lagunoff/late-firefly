@@ -61,7 +61,7 @@ deriveDb n cfg@DeriveDbConfig{..} = reify n >>= \case
   _ -> error "deriveDb: unsupported data declaration"
 
 deriveCols :: Name -> DeriveDbConfig -> Q [Dec]
-deriveCols n cfg@DeriveDbConfig{..} = reify n >>= \case
+deriveCols n cfg@DeriveDbConfig{} = reify n >>= \case
   TyConI (DataD _ _ _ _ [RecC name vars] _) -> do
     let columnsE = deriveColumns cfg n
     let columnsD = funD 'columnsInfo [clause [] (normalB columnsE) []]

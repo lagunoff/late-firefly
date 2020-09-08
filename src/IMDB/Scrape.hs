@@ -1,3 +1,4 @@
+{-# LANGUAGE Strict #-}
 module IMDB.Scrape where
   -- ( scrapeSearch
   -- , scrapeEpisodes

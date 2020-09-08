@@ -9,6 +9,7 @@ import "this" DB
 import "this" Router
 import "this" Site.Types
 import "this" Widget
+import "this" IMDB.GraphQL (ImdbId(..), imdbFromText)
 
 data EpisodeD = EpisodeD
   { title  :: Maybe Text
@@ -66,45 +67,70 @@ instance IsPage "EpisodeR" EpisodeD where
     |]
 
   pageInit EpisodeR{..} = do
-    ds::[EpisodeD] <- query [sql|
-      with vid as
-        (select
-          min(vl.video_title)          as video_title,
-          json_group_array(vl.url)     as url,
-          min(it.plot_id)              as plot_id,
-          min(it.series_season_number) as series_season_number,
-          vl.title_id                  as title_id
-        from video_link vl
-          cross join series sr on sr.rowid={epSeries}
-          left join imdb_title it on it.rowid=vl.title_id
-        where vl.video_id={code}
-          and it.series_title_id=sr.title_id
-        group by vl.title_id)
-      select vid.video_title, vid.url, vid.series_season_number, ip.plot_text
-      from vid
-      left join imdb_plot ip where ip.rowid=vid.plot_id
-    |]
-    case fmap fst (L.uncons ds) of
-      Just ep -> pure ep
-      Nothing -> case parseEpCode code of
+    case imdbFromText @"tt" epSeries of
+      Left _ -> fromTitle epSeries
+      Right (ImdbId i) -> fromImdb i
+    where
+    fromImdb s = do
+      case parseEpCode code of
         Just (sea, epi) -> do
+          let ll x = x{links=episodeLinks (ImdbId s) sea epi}
           ds::[EpisodeD] <- query [sql|
-            with vid as
-              (select
-                min(vl.video_title) as video_title,
-                json_group_array(vl.url) as url,
-                min(it.plot_id) as plot_id,
-                vl.title_id as title_id
-              from video_link vl
-              cross join series sr on sr.rowid={epSeries}
-              left join imdb_title it on it.rowid=vl.title_id
-              where it.series_title_id=sr.title_id and it.series_season_number={sea} and it.series_episode_number={epi}
-              group by vl.title_id)
-            select vid.video_title, vid.url, {sea} as series_season_number, ip.plot_text
-            from vid
-            left join imdb_plot ip where ip.rowid=vid.plot_id
+            select
+              json_extract(it.original_title_text, '$.text'),
+              '[]',
+              {sea} as series_season_number,
+              ip.plot_text
+            from
+              imdb_title it
+              left join imdb_plot ip on ip.rowid=it.plot_id
+            where
+              it.series_title_id={s} and
+              it.series_season_number={sea} and
+              it.series_episode_number={epi}
             |]
-          maybe (throwM The404Error) pure $ fmap fst (L.uncons ds)
+          maybe (throwE The404Error) pure $ fmap (ll . fst) (L.uncons ds)
         Nothing -> throwM The404Error
+    fromTitle s = do
+      ds::[EpisodeD] <- query [sql|
+        with vid as
+          (select
+            min(vl.video_title)          as video_title,
+            json_group_array(vl.url)     as url,
+            min(it.plot_id)              as plot_id,
+            min(it.series_season_number) as series_season_number,
+            vl.title_id                  as title_id
+          from video_link vl
+            cross join series sr on sr.rowid={epSeries}
+            left join imdb_title it on it.rowid=vl.title_id
+          where vl.video_id={code}
+            and it.series_title_id=sr.title_id
+          group by vl.title_id)
+        select vid.video_title, vid.url, vid.series_season_number, ip.plot_text
+        from vid
+        left join imdb_plot ip where ip.rowid=vid.plot_id
+      |]
+      case fmap fst (L.uncons ds) of
+        Just ep -> pure ep
+        Nothing -> case parseEpCode code of
+          Just (sea, epi) -> do
+            ds::[EpisodeD] <- query [sql|
+              with vid as
+                (select
+                  min(vl.video_title) as video_title,
+                  json_group_array(vl.url) as url,
+                  min(it.plot_id) as plot_id,
+                  vl.title_id as title_id
+                from video_link vl
+                cross join series sr on sr.rowid={epSeries}
+                left join imdb_title it on it.rowid=vl.title_id
+                where it.series_title_id=sr.title_id and it.series_season_number={sea} and it.series_episode_number={epi}
+                group by vl.title_id)
+              select vid.video_title, vid.url, {sea} as series_season_number, ip.plot_text
+              from vid
+              left join imdb_plot ip where ip.rowid=vid.plot_id
+              |]
+            maybe (throwM The404Error) pure $ fmap fst (L.uncons ds)
+          Nothing -> throwM The404Error
 
 deriveRowDef ''EpisodeD

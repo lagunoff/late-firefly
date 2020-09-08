@@ -22,6 +22,7 @@ data Route a where
   HomeR    :: Route "HomeR"
   SearchR  :: {search::Text, offset::Int} -> Route "SearchR"
   EpisodeR :: {epSeries::Text, code::Text} -> Route "EpisodeR"
+  MovieR   :: {mvCode::Text} -> Route "MovieR"
   SeriesR  :: {series::Text} -> Route "SeriesR"
 
 data SomeRoute = forall a. KnownSymbol a => SR (Route a)
@@ -39,6 +40,7 @@ partsToRoute = prism' build match where
     UP [] [("s", search)] -> Just $ SR SearchR{offset=0,..}
     UP [] _                  -> Just $ SR HomeR
     UP ["episode",epSeries,code] _ -> Just $ SR EpisodeR{..}
+    UP ["movie",mvCode] _ -> Just $ SR MovieR{..}
     UP ["series",series] _ -> Just $ SR SeriesR{..}
     _                        -> Nothing
   build :: SomeRoute -> UrlParts
@@ -47,6 +49,7 @@ partsToRoute = prism' build match where
     SR SearchR{..} -> UP [] [("s", search)]
     SR EpisodeR{..} -> UP ["episode", epSeries, code] []
     SR SeriesR{..}  -> UP ["series", series] []
+    SR MovieR{..}  -> UP ["movie", mvCode] []
 
 urlToParts ::Iso' Text UrlParts
 urlToParts = iso apply unapply where

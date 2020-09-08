@@ -7,6 +7,7 @@ import "this" Intro
 import "this" Router
 import "this" DB
 import "this" Widget
+import "this" IMDB.GraphQL (ImdbId(..))
 
 data SearchD = SearchD
   { results :: [Result] }
@@ -17,6 +18,7 @@ data Result = Result
   , thumbnail :: Maybe Text
   , plot      :: Maybe Text
   , year      :: Maybe Text
+  , series    :: Bool
   }
   deriving stock (Eq, Show, Generic)
 
@@ -29,12 +31,15 @@ instance IsPage "SearchR" SearchD where
         button_ [type_ "submit"] do "Search"
       ul_ do
         for_ results \Result{..} -> do
+          let link = if series then linkTo $ SeriesR (showt $ ImdbId @"tt" $ fromIntegral rowid) else linkTo $ MovieR (showt rowid)
           li_ [class_ "search-item"] do
-            for_ thumbnail \src -> img_ [src_ src]
+            link do
+              for_ thumbnail \src -> img_ [src_ src]
             div_ do
-              h5_ do
-                toHtml header
-                for_ year \y -> do " "; toHtml y
+              link do
+                 h5_ do
+                   toHtml header
+                   for_ year \y -> do " "; toHtml y
               for_ plot (p_ . toHtml)
     [style|
       .search
@@ -66,7 +71,12 @@ instance IsPage "SearchR" SearchD where
         s.header,
         s.thumbnail67x98,
         s.text,
-        s.`year`
+        s.`year`,
+        case
+          when exists (select * from imdb_title where series_title_id=s.rowid)
+          then 1
+          else 0
+        end
       from
         imdb_title_fts fts
         left join imdb_search s on fts.rowid=s.rowid

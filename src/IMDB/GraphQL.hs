@@ -29,12 +29,8 @@ newtype ImdbId (t::Symbol) = ImdbId
   deriving stock (Show, Eq, Generic)
 
 instance KnownSymbol t => FromJSON (ImdbId t) where
-  parseJSON = withText "ImdbId" \t -> do
-    let pre = T.pack $ symbolVal (Proxy @t)
-    let woPreMay = T.stripPrefix pre t
-    woPre <- maybe (fail $ "prefix " <> show pre <> " not found") pure woPreMay
-    intId <- maybe (fail $ "cannot read Int") pure $ readMaybe @Int64 (T.unpack woPre)
-    pure (ImdbId intId)
+  parseJSON = withText "ImdbId"
+    $ either fail pure . imdbFromText @t
 
 instance KnownSymbol t => ToJSON (ImdbId t) where
   toJSON = toJSON . toText . showb
@@ -42,6 +38,14 @@ instance KnownSymbol t => ToJSON (ImdbId t) where
 instance KnownSymbol t => TextShow (ImdbId t) where
   showb (ImdbId i) = fromString $ symbolVal (Proxy @t) <> lpad (show i) where
     lpad x = Prelude.replicate (7 - Prelude.length x) '0' ++ x
+
+imdbFromText :: forall t. KnownSymbol t => Text -> Either String (ImdbId t)
+imdbFromText t = do
+  let pre = T.pack $ symbolVal (Proxy @t)
+  let woPreMay = T.stripPrefix pre t
+  woPre <- maybe (Left $ "prefix " <> show pre <> " not found") pure woPreMay
+  intId <- maybe (Left $ "cannot read Int") pure $ readMaybe @Int64 (T.unpack woPre)
+  pure (ImdbId intId)
 
 -- Scalar defining a date without a time info according to the ISO 8601 format, such as 2018-01-11
 type Date = Text

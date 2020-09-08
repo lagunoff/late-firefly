@@ -47,10 +47,10 @@ genres = ["action", "adventure", "animation", "biography", "comedy", "crime", "d
 
 -- * Scrape ImdbEpisode
 
-scrapeSearch :: (?conn::Connection) => Bool -> Double -> IO ()
-scrapeSearch continue percentile = void $ newVersionOrContinue continue $ unEio do
+scrapeSearch :: (?conn::Connection) => Bool -> Double -> ServerIO ()
+scrapeSearch continue percentile = void $ newVersionOrContinue continue $ do
   prog <- liftIO readProgress
-  for_ LateFirefly.IMDB.Scrape.genres \g -> do
+  for_ IMDB.Scrape.genres \g -> do
     (\x -> foldM_ x Nothing (paginate 9951)) \total p -> do
       let p' = fromIntegral p
       let total' = fmap fromIntegral total
@@ -150,7 +150,7 @@ test0 = void $ withConnection "late-firefly.sqlite" do
   for_ $mkDatabaseSetup execute
   let
     g x = "coalesce(json_extract(popularity, '$." <> x <> "'), 99999)"
-    po = T.intercalate "," (fmap g LateFirefly.IMDB.Scrape.genres)
+    po = T.intercalate "," (fmap g IMDB.Scrape.genres)
   tids::[Only (Id ImdbTitle)] <- query [sql|
     with s as
       (select rowid, min(#{po}) as pop from imdb_search group by rowid)

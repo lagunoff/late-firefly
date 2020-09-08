@@ -9,6 +9,8 @@ import "this" Icons
 import "this" Router
 import "this" DB hiding ((:=))
 import "this" Widget
+import "this" Site.Types
+import "this" IMDB.GraphQL (imdbFromText, ImdbId(..))
 
 data SeriesD = SeriesD
   { seasons   :: M.Map Int [Episode]
@@ -60,36 +62,67 @@ instance IsPage "SeriesR" SeriesD where
             div_ [style_ "clear: both"] do ""
 
   pageInit (SeriesR s) = do
-    eps::[Only Int :. Episode] <- query [sql|
-      with c as (
-        select title_id as title_id, min(video_id) as video_id
-          from video_link group by title_id
-      )
-      select
-        it.series_season_number,
-        json_extract(it.original_title_text, '$.text'),
-        c.video_id, ii.url,
-        it.series_season_number, it.series_episode_number
-      from imdb_title it
-        left join imdb_image ii on it.primary_image_id=ii.rowid
-        left join c on c.title_id=it.rowid
-        where it.series_title_id in (
-          select s.title_id from series s where s.rowid={s}
+    case imdbFromText @"tt" s of
+      Left _ -> fromTitle s
+      Right (ImdbId i) -> fromImdb i
+    where
+    fromImdb s = do
+      eps::[Only Int :. Only Int :. Episode] <- query [sql|
+        select
+          it.series_season_number,
+          it.series_episode_number,
+          json_extract(it.original_title_text, '$.text'),
+          null, ii.url,
+          it.series_season_number, it.series_episode_number
+        from imdb_title it
+          left join imdb_image ii on it.primary_image_id=ii.rowid
+        where
+          it.series_title_id={s} and
+          it.series_season_number is not null and
+          series_episode_number is not null
+      |]
+      (plot, thumbnail) <- query1 [sql|
+        select
+          ip.plot_text,
+          ii.url
+        from imdb_title it
+          left join imdb_plot ip on it.plot_id=ip.rowid
+          left join imdb_image ii on it.primary_image_id=ii.rowid
+          where it.rowid={s}
+      |]
+      let seasons = M.fromListWith (<>) $ fmap (\(Only k :. Only e :. v) -> (k, [v{Site.Series.code=Just (printEpCode (k, e))}])) eps
+      pure SeriesD{..}
+    fromTitle s = do
+      eps::[Only Int :. Episode] <- query [sql|
+        with c as (
+          select title_id as title_id, min(video_id) as video_id
+            from video_link group by title_id
         )
-    |]
-    (plot, thumbnail) <- query1 [sql|
-      select
-        ip.plot_text,
-        ii.url
-      from imdb_title it
-        left join imdb_plot ip on it.plot_id=ip.rowid
-        left join imdb_image ii on it.primary_image_id=ii.rowid
-        where it.rowid=(
-          select s.title_id from series s where s.rowid={s}
-        )
-    |]
-    let seasons = M.fromListWith (<>) $ fmap (\(Only k :. v) -> (k, [v])) eps
-    pure SeriesD{..}
+        select
+          it.series_season_number,
+          json_extract(it.original_title_text, '$.text'),
+          c.video_id, ii.url,
+          it.series_season_number, it.series_episode_number
+        from imdb_title it
+          left join imdb_image ii on it.primary_image_id=ii.rowid
+          left join c on c.title_id=it.rowid
+          where it.series_title_id in (
+            select s.title_id from series s where s.rowid={s}
+          )
+      |]
+      (plot, thumbnail) <- query1 [sql|
+        select
+          ip.plot_text,
+          ii.url
+        from imdb_title it
+          left join imdb_plot ip on it.plot_id=ip.rowid
+          left join imdb_image ii on it.primary_image_id=ii.rowid
+          where it.rowid=(
+            select s.title_id from series s where s.rowid={s}
+          )
+      |]
+      let seasons = M.fromListWith (<>) $ fmap (\(Only k :. v) -> (k, [v])) eps
+      pure SeriesD{..}
 
 seasonSlider :: Route "SeriesR" -> SeriesD -> Html ()
 seasonSlider SeriesR{..} SeriesD{..} = do

@@ -19,10 +19,6 @@ import Data.Text as T
 import Data.Text.Encoding as T
 import GHC.Stack
 import GHC.TypeLits
-import "this" DB
-import "this" IMDB.GraphQL
-import "this" IMDB.Schema
-import "this" Intro
 import Network.HTTP.Client hiding (withConnection, Proxy)
 import Network.HTTP.Types
 import Prelude as P
@@ -36,20 +32,28 @@ import Text.Shakespeare.Text as X (st)
 import qualified Network.Wreq as Wreq
 import qualified Network.Wreq.Types as Wreq hiding (headers)
 
+import "this" DB
+import "this" IMDB.GraphQL
+import "this" IMDB.Schema
+import "this" Intro
+
 data ScrapeError
   = HttpException HttpException
   | CallStackException CallStack
   | GraphQLError String
-  deriving (Exception, Show)
+  | SQLError SQLError
+  deriving (Exception, Show, Generic)
+
+type ScrapeIO = Eio ScrapeError
 
 genres :: [Genre1]
 genres = ["action", "adventure", "animation", "biography", "comedy", "crime", "documentary", "drama", "family", "fantasy", "film_noir", "game_show", "history", "horror", "music", "musical", "mystery", "news", "reality_tv", "romance", "sci_fi", "sport", "talk_show", "thriller", "war", "western"]
 
 -- * Scrape ImdbEpisode
 
-scrapeSearch :: (?conn::Connection) => Bool -> Double -> ServerIO ()
+scrapeSearch :: (?conn::Connection) => Bool -> Double -> ScrapeIO ()
 scrapeSearch continue percentile = void $ newVersionOrContinue continue $ do
-  prog <- liftIO readProgress
+  prog <- readProgress
   for_ IMDB.Scrape.genres \g -> do
     (\x -> foldM_ x Nothing (paginate 9951)) \total p -> do
       let p' = fromIntegral p
@@ -64,7 +68,7 @@ scrapeSearch continue percentile = void $ newVersionOrContinue continue $ do
 
 scrapeImdbSearch1
   :: (?conn::Connection, ?version::NewVersion)
-  => Genre1 -> Int -> Eio ScrapeError Int
+  => Genre1 -> Int -> ScrapeIO Int
 scrapeImdbSearch1 g start = do
   markup <- T.decodeUtf8 . BSL.toStrict . (^. Wreq.responseBody) <$> httpGet ("https://www.imdb.com/search/title/?genres=" <> T.unpack g <> "&start=" <> show start)
   let episodeOuters = markup^.._DOM.traverse.allElements.hasClass "lister-item"
@@ -85,14 +89,14 @@ scrapeImdbSearch1 g start = do
     header     <- mayThrow $ headerEl ^? allElements . named(only "a").allContents
     popularity <- fmap (M.singleton g) $ mayThrow $ headerEl ^? allClass "lister-item-index".allContents . to (T.unpack . T.strip) . regex [r|^([\s,[:digit:]]+)\.?$|] . captures . ix 0 . to (readMaybe @Int . L.filter isDigit) . traverse
     text       <- mayThrow $ textMutedEls ^? ix 1 . allContents . to T.strip
-    (t, changed) <- liftIO $ upsertVersionConflict clush $ ImdbSearch{version=coerce ?version,..}
+    (t, changed) <- upsertVersionConflict clush $ ImdbSearch{version=coerce ?version,..}
     traceM $ T.unpack [st|#{showt (unId rowid)} [#{show changed}]|]
   where
     clush ImdbSearch{popularity=p1} ImdbSearch{popularity=p2,..} = ImdbSearch{popularity=p1 <> p2, ..}
 
 -- * Scrape ImdbTitle
 
-readProgress :: (?conn::Connection, ?version::NewVersion) => IO (M.Map Genre1 Int)
+readProgress :: (?conn::Connection, ?version::NewVersion) => ScrapeIO (M.Map Genre1 Int)
 readProgress = do
   let TableInfo{..} = tableInfo @ImdbSearch
   let tableName::Text = name <> "_versions"
@@ -107,7 +111,7 @@ httpGet u = liftIOWith HttpException $ P.putStrLn (u <> "...") *> Wreq.getWith o
     ua = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.122 Safari/537.36"
     lang = "en-US;q=0.9,en;q=0.8"
 
-httpPost :: Wreq.Postable body => String -> body -> Eio ScrapeError _
+httpPost :: Wreq.Postable body => String -> body -> ScrapeIO _
 httpPost u b = liftIOWith HttpException $ Wreq.postWith opts u b
   where
     opts = Wreq.defaults & Wreq.headers .~ [(hUserAgent, ua), (hAcceptLanguage, lang), (hCookie, cook), (hContentType, ct)]
@@ -117,9 +121,8 @@ httpPost u b = liftIOWith HttpException $ Wreq.postWith opts u b
     ct = "application/json"
 
 sendGql
-  :: forall f a q.
-  (FromJSON a, ToJSON q, KnownSymbol f)
-  => String -> q -> Eio ScrapeError a
+  :: forall f a q. (FromJSON a, ToJSON q, KnownSymbol f)
+  => String -> q -> ScrapeIO a
 sendGql u q = do
   let b = AE.encode $ object ["operationName" .= Null, "query" .= q, "variables" .= object []]
   either error imdb_response . AE.eitherDecode' @(ImdbResponse f a) . (^. Wreq.responseBody) <$> httpPost u b
@@ -131,7 +134,7 @@ hasClass :: Text -> Traversal' (Element Text) (Element Text)
 hasClass cs = attributed(ix "class" . traverse . nearly "" cond) where
   cond = isJust . L.find (==cs) . T.splitOn " "
 
-mayThrow :: HasCallStack => Maybe a -> Eio ScrapeError a
+mayThrow :: HasCallStack => Maybe a -> ScrapeIO a
 mayThrow = maybe (throwError (CallStackException callStack)) pure
 
 paginate :: Int -> [Int]
@@ -146,7 +149,7 @@ ttText :: HasCallStack => [Tag Text] -> Text
 ttText = withFrozenCallStack (nemptyTrace . innerText)
 
 test0 :: IO ()
-test0 = void $ withConnection "late-firefly.sqlite" do
+test0 = unEio $ withConnection "late-firefly.sqlite" do
   for_ $mkDatabaseSetup execute
   let
     g x = "coalesce(json_extract(popularity, '$." <> x <> "'), 99999)"
@@ -158,12 +161,12 @@ test0 = void $ withConnection "late-firefly.sqlite" do
     |]
   progressInc (L.length tids) do
     for_ tids \(Only (Id x)) -> do
-      inc ?progress
+      liftIO (inc ?progress)
       let tid = ImdbId x
       prefixProgress (showt tid <> "/") do
         scrapeTitle tid
 
-scrapeTitle :: (?conn::Connection, ?progress::Progress) => ImdbId "tt" -> IO ()
+scrapeTitle :: (?conn::Connection, ?progress::Progress) => ImdbId "tt" -> ScrapeIO ()
 scrapeTitle tid = do
   TitleChunk{..} <- scrapeTitle1 tid
   transaction do
@@ -177,21 +180,21 @@ scrapeTitle tid = do
     for_ names upsert
     for_ credits upsert
 
-scrapeTitle1 :: (?progress::Progress) => ImdbId "tt" -> IO TitleChunk
+scrapeTitle1 :: (?progress::Progress) => ImdbId "tt" -> ScrapeIO TitleChunk
 scrapeTitle1 tid = do
   let q = qTitle tid
-  display ?progress (showt tid)
-  x::Title <- unEio $ sendGql @"title" "https://graphql.imdb.com/index.html" q
+  liftIO $ display ?progress (showt tid)
+  x::Title <- sendGql @"title" "https://graphql.imdb.com/index.html" q
   eps <- scrapeEpisodes tid
   let chunk = fromTitle x::TitleChunk
   titls <- mapM scrapeTitle1 eps
   pure $ F.fold (chunk:titls)
 
-scrapeEpisodes :: ImdbId "tt" -> IO [ImdbId "tt"]
+scrapeEpisodes :: ImdbId "tt" -> ScrapeIO [ImdbId "tt"]
 scrapeEpisodes tid = go Nothing where
   go after = do
     let q = qEpisodes tid after
-    x::Pick Title '["id", "episodes"] <- unEio $ sendGql @"title" "https://graphql.imdb.com/index.html" q
+    x::Pick Title '["id", "episodes"] <- sendGql @"title" "https://graphql.imdb.com/index.html" q
     let episodes = getField @"episodes" x
     let episodes' = episodes ^.. _Just . field @"episodes" . _Just . field @"edges" . traverse . field @"node" . field @"id"
     let cursor = episodes ^? _Just . field @"episodes" . _Just . field @"pageInfo" . field @"endCursor" . _Just

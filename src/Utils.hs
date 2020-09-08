@@ -4,6 +4,7 @@ module Utils where
 
 import Control.Error
 import Control.Lens-- hiding (Prism')
+import Control.Monad.IO.Class
 import Control.Monad.Catch as C
 import Data.Aeson as AE
 import Data.Aeson.Internal as AE
@@ -160,23 +161,23 @@ instance (GNilRec f, GNilRec g) => GNilRec ((:*:) f g) where
 nilRec :: forall a. (GNilRec (Rep a), Generic a) => a
 nilRec = GHC.Generics.to $ gNilRec (Proxy @(Rep a _))
 
-progressInc :: Int -> ((?progress::Progress) => IO r) -> IO r
+progressInc :: MonadIO m => Int -> ((?progress::Progress) => m r) -> m r
 progressInc todo act = do
-  pgRef <- newIORef (-1 :: Int)
-  lbRef <- newIORef "Starting"
+  pgRef <- liftIO $ newIORef (-1 :: Int)
+  lbRef <- liftIO $ newIORef "Starting"
   let
     inc = do
       modifyIORef pgRef (+ 1) >> prin
-    display lb =
+    display lb = do
       writeIORef lbRef lb >> prin
-    prin = do
+    prin = liftIO do
       done <- readIORef pgRef
       lb <- readIORef lbRef
       T.hPutStr stderr "\r\ESC[K"
       T.hPutStr stderr (lb <> " [" <> showt done <> "/" <> showt todo <> "]")
-  prin *> (let ?progress=Progress inc display in act) <* T.hPutStr stderr "\n"
+  liftIO prin *> (let ?progress=Progress inc display in act) <* liftIO (T.hPutStr stderr "\n")
 
-prefixProgress :: (?progress::Progress) => Text -> ((?progress::Progress) => IO r) -> IO r
+prefixProgress :: (?progress::Progress, MonadIO m) => Text -> ((?progress::Progress) => m r) -> m r
 prefixProgress pre act = do
   let Progress{..} = ?progress
   let ?progress=Progress inc (display . (pre <>)) in act

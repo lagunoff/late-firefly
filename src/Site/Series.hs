@@ -15,6 +15,7 @@ import "this" IMDB.GraphQL (imdbFromText, ImdbId(..))
 data SeriesD = SeriesD
   { seasons   :: M.Map Int [Episode]
   , thumbnail :: Maybe Text
+  , title     :: Text
   , plot      :: Maybe Text }
   deriving stock (Eq, Show, Generic)
 
@@ -58,6 +59,7 @@ instance IsPage "SeriesR" SeriesD where
           div_ do
             for_ thumbnail \src ->
               img_ [class_ "poster", src_ src]
+            h1_ (toHtml title)
             for_ plot (p_ . toHtml)
             div_ [style_ "clear: both"] do ""
 
@@ -81,9 +83,10 @@ instance IsPage "SeriesR" SeriesD where
           it.series_season_number is not null and
           series_episode_number is not null
       |]
-      (plot, thumbnail) <- query1 [sql|
+      (plot, title, thumbnail) <- query1 [sql|
         select
           ip.plot_text,
+          json_extract(it.original_title_text, '$.text'),
           ii.url
         from imdb_title it
           left join imdb_plot ip on it.plot_id=ip.rowid
@@ -110,9 +113,10 @@ instance IsPage "SeriesR" SeriesD where
             select s.title_id from series s where s.rowid={s}
           )
       |]
-      (plot, thumbnail) <- query1 [sql|
+      (plot, title, thumbnail) <- query1 [sql|
         select
           ip.plot_text,
+          json_extract(it.original_title_text, '$.text'),
           ii.url
         from imdb_title it
           left join imdb_plot ip on it.plot_id=ip.rowid

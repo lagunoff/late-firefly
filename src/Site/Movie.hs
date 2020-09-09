@@ -7,7 +7,8 @@ import Lucid.Base
 import "this" DB
 import "this" Router
 import "this" Widget
-import "this" IMDB.GraphQL (ImdbId(..))
+import "this" Site.Types
+import "this" IMDB.Types
 
 data MovieD = MovieD
   { title  :: Text
@@ -75,10 +76,6 @@ instance IsPage "MovieR" MovieD where
         left join imdb_title t on t.rowid=s.rowid
       where
         s.rowid={mvCode} |]
-    let
-      links =
-        [ "https://vidsrc.me/embed/" <> showt (ImdbId @"tt" rowid) <> "/"
-        , "http://videospider.stream/personal?key=tr196i95M6UMTd1i&video_id=" <> showt rowid ]
-    pure movie{links}
+    pure movie{links=movieLinks (ImdbId rowid)}
 
 deriveRowDef ''MovieD

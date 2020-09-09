@@ -83,6 +83,12 @@ withConnectionEnv f = do
   e <- liftIO $ lookupEnv "DB"
   withConnection (e ?: "late-firefly.sqlite") f
 
+withConnectionSetup
+  :: (As SQLError e) => [Sql] -> ((?conn::Connection) => Eio e a) -> Eio e a
+withConnectionSetup setup f = do
+  e <- liftIO $ lookupEnv "DB"
+  withConnection (e ?: "late-firefly.sqlite") (for_ setup execute *> f)
+
 type NewVersion = Id Transaction
 
 transaction :: (?conn::Connection, As SQLError e) => Eio e a -> Eio e a

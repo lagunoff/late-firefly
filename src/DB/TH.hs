@@ -5,7 +5,7 @@ module DB.TH
   , deriveRow
   , deriveRowDef
   , deriveDbPrio
-  , mkDatabaseSetup
+  , collectTables
   , ColumnStrategy(..)
   , def
   , underscore
@@ -132,8 +132,8 @@ deriveDbPrio = flip deriveDb . DeriveDbConfig Nothing [] id def def
 
 -- | Make expression of type [Query] applying 'createTableStmt' to all
 -- the instances of typeclass 'DbTable'
-mkDatabaseSetup :: Q Exp
-mkDatabaseSetup = reify ''DbTable >>= \case
+collectTables :: Q Exp
+collectTables = reify ''DbTable >>= \case
   ClassI _ instances -> do
     ins <- catMaybes <$> forM instances \case
       InstanceD _ _ (AppT _ insTy) _ -> do

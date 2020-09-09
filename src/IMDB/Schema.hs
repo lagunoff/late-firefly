@@ -8,6 +8,7 @@ import Data.Monoid.Generic
 
 import "this" DB
 import "this" IMDB.GraphQL
+import "this" IMDB.Types
 import "this" Intro
 
 type Genre1 = Text

@@ -1,9 +1,5 @@
 {-# LANGUAGE Strict #-}
 module IMDB.Scrape where
-  -- ( scrapeSearch
-  -- , scrapeEpisodes
-  -- , test0
-  -- ) where
 
 import Control.Error
 import Control.Exception
@@ -34,6 +30,7 @@ import qualified Network.Wreq as Wreq
 import qualified Network.Wreq.Types as Wreq hiding (headers)
 
 import "this" DB
+import "this" IMDB.Types
 import "this" IMDB.GraphQL
 import "this" IMDB.Schema
 import "this" Intro
@@ -139,9 +136,7 @@ mayThrow :: HasCallStack => Maybe a -> ScrapeIO a
 mayThrow = maybe (throwError (CallStackException callStack)) pure
 
 paginate :: Int -> [Int]
-paginate total = L.takeWhile ((<=total') . fromIntegral) $ fmap (succ . (* 50)) [0..]
-  where
-    total'::Double = fromIntegral total
+paginate total = L.takeWhile (<=total) . fmap (succ . (* 50)) $ [0..]
 
 attr :: HasCallStack => Text -> [Tag Text] -> Text
 attr k = withFrozenCallStack (nemptyTrace . fromAttrib k . headTrace)
@@ -151,7 +146,7 @@ ttText = withFrozenCallStack (nemptyTrace . innerText)
 
 test0 :: IO ()
 test0 = unEio $ withConnection "late-firefly.sqlite" do
-  for_ $mkDatabaseSetup execute
+  for_ $collectTables execute
   let
     g x = "coalesce(json_extract(popularity, '$." <> x <> "'), 99999)"
     po = T.intercalate "," (fmap g IMDB.Scrape.genres)

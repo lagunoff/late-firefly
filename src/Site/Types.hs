@@ -5,7 +5,8 @@ import Data.Char
 import Data.Text as T
 import Text.Read
 import TextShow
-import "this" IMDB.GraphQL (ImdbId(..))
+
+import "this" IMDB.Types
 
 parseEpCode :: Text -> Maybe (Int, Int)
 parseEpCode t = do

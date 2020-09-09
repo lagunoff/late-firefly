@@ -25,7 +25,7 @@ import qualified Network.Wreq as Wreq
 test0 :: IO ()
 test0 = do
   void $ withConnectionEnv do
-    for_ $mkDatabaseSetup execute
+    for_ $collectTables execute
     scrapeSeasons
 
 episodeNumberPresets = M.fromList

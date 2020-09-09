@@ -10,7 +10,7 @@ import "this" Router
 import "this" DB hiding ((:=))
 import "this" Widget
 import "this" Site.Types
-import "this" IMDB.GraphQL (imdbFromText, ImdbId(..))
+import "this" IMDB.Types
 
 data SeriesD = SeriesD
   { seasons   :: M.Map Int [Episode]

@@ -60,9 +60,9 @@ mainOpts = \case
     let
       defDb = T.unpack $ getField @"dbPath" (def @WebOpts)
       dbpath = maybe defDb T.unpack mayDb
-    unEio @_ @SQLError $ withConnection dbpath do for_ $mkDatabaseSetup execute
+    unEio @_ @SQLError $ withConnection dbpath do for_ $collectTables execute
   PrintSchema -> do
-    let qSchema = T.intercalate ";\n\n" $ fmap (\(Sql x _ _) -> x) $mkDatabaseSetup
+    let qSchema = T.intercalate ";\n\n" $ fmap (\(Sql x _ _) -> x) $collectTables
     T.putStrLn qSchema
 
 update :: IO ()

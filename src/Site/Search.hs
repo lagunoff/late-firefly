@@ -7,7 +7,7 @@ import "this" Intro
 import "this" Router
 import "this" DB
 import "this" Widget
-import "this" IMDB.GraphQL (ImdbId(..))
+import "this" IMDB.Types
 
 data SearchD = SearchD
   { results :: [Result] }

@@ -9,7 +9,7 @@ import "this" DB
 import "this" Router
 import "this" Site.Types
 import "this" Widget
-import "this" IMDB.GraphQL (ImdbId(..), imdbFromText)
+import "this" IMDB.Types
 
 data EpisodeD = EpisodeD
   { title  :: Maybe Text

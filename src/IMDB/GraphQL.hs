@@ -8,6 +8,7 @@ import Text.Read
 
 import "this" DB
 import "this" Intro
+import "this" IMDB.Types
 
 data PageInfo = PageInfo
   { endCursor :: Maybe Text

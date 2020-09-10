@@ -1,8 +1,9 @@
 module Icons where
 
+import Lucid
+import Data.Text
 import Lucid.Base
-
-import "this" Widget.Prelude
+import Text.Shakespeare.Text
 
 svgIcon :: Text -> [Attribute] -> Html ()
 svgIcon contents attrs = do

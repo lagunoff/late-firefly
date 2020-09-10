@@ -1,8 +1,9 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 module Site.Episode where
 
-import Data.List as L
 import Control.Monad.Catch
+import Data.List as L
+import Language.Javascript.JMacro
 import Lucid.Base
 
 import "this" DB
@@ -24,12 +25,15 @@ instance IsPage "EpisodeR" EpisodeD where
     div_ [class_ "episode-root"] do
       h3_ [ht|Episode #{code}|]
       -- breadcrumbsWidget (crumbs r ed)
-      fun_ "hcl" ["el", "link"] [st|
-        document.getElementById('video-frame').src=link;
-        Array.from(el.parentNode.parentNode.children).forEach(function(x) {
-          x.classList.remove('active');
-        });
-        el.parentNode.classList.add('active');
+      toHtml [jmacro|
+        fun hcl el link {
+          document.getElementById('video-frame').src=link;
+          var ch = el.parentNode.parentNode.children;
+          for (var i=0; i < ch.length; i++) {
+            ch[i].classList.remove('active');
+          };
+          el.parentNode.classList.add('active');
+        }
       |]
       ul_ [class_ "tabs"] $ for_ (L.zip links [0..]) \(_, idx::Int) -> do
         li_ (bool [] [class_ "active"] $ idx == 0) do

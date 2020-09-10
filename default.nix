@@ -56,6 +56,7 @@ let
       (hself: hsuper: nixpkgs.lib.mapAttrs (k: v: v hsuper.${k}) {
         cabal-cargs = x: dontCheck (doJailbreak x);
         text-show = x: dontCheck (doJailbreak x);
+        parseargs = x: dontCheck (doJailbreak x);
         late-firefly = x: overrideCabal x (x: combine (lateFireflyExts hself) x x);
       })
     ];

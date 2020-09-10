@@ -9,6 +9,7 @@ import Lucid.Base
 import Text.Cassius
 import Text.Shakespeare.Text as X (st)
 import qualified Data.Text.Lazy as LT
+import Language.Javascript.JMacro
 
 import "this" Intro
 
@@ -62,3 +63,7 @@ instance TextShow RGBA where
 fun_ :: Text -> [Text] -> Text -> Html ()
 fun_ name args body = do
   script_ [] $ "function " <> name <> "(" <> T.intercalate ", " args <> "){\n" <> body <> "\n}"
+
+instance ToHtml JStat where
+  toHtml = script_ [] . T.pack . ("\n"<>) . show . renderJs
+  toHtmlRaw = script_ [] . T.pack . ("\n"<>) . show . renderJs

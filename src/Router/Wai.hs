@@ -27,11 +27,13 @@ html5Router ps req resp = maybe nothin just mr where
   ini Dict = pageInit @i
   wid :: forall i o. Dict (IsPage i o) -> SomeRoute -> o -> Html ()
   wid Dict sr o = pageWidget @i (fromMaybe errorTrace $ fromSome @i sr) o
+  tpl :: forall i o. Dict (IsPage i o) -> Html () -> Html ()
+  tpl Dict = pageTemplate @i
   dynBk :: forall i o. Dict (IsPage i o) -> SomeRoute -> UnServer (Route i) o -> ServerIO o
   dynBk Dict sr f = f $ fromMaybe errorTrace $ fromSome @i sr
   just (sr, PageDict dict) = do
     pdata <- unEio (dynBk dict sr (ini dict))
-    let b = htmlBuilder . BS.lazyByteString . renderBS . htmlTemplate $ wid dict sr pdata
+    let b = htmlBuilder . BS.lazyByteString . renderBS . (tpl dict) $ wid dict sr pdata
     resp (responseBuilder ok200 [(hContentType, "text/html")] b)
   nothin = do
     let b = htmlBuilder . BS.lazyByteString . renderBS $ page404
@@ -40,8 +42,9 @@ html5Router ps req resp = maybe nothin just mr where
 htmlBuilder :: BS.Builder -> BS.Builder
 htmlBuilder h =
   "<!doctype html>\n" <>
-  "<html>\n" <>
+  "<html lang=\"en\">\n" <>
   "  <head>\n" <>
+  "    <meta charset=\"UTF-8\"/>\n" <>
   "    <script type=\"text/javascript\">" <> reloadJs <> "</script>\n" <>
   "  </head>" <>
   "  <body>\n" <>  h <> "\n" <>

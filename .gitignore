@@ -21,3 +21,4 @@ locals.nix
 .envrc
 .ghcjs.envrc
 screenlog.*
+node_modules

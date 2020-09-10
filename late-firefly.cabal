@@ -12,7 +12,7 @@ executable late-firefly
   ghc-options:
     -Wall -Wno-missing-signatures -Wno-name-shadowing -Wno-unused-matches
     -Wno-unused-do-bind -Wno-partial-type-signatures -Wno-unticked-promoted-constructors
-  hs-source-dirs: src src-ghc
+  hs-source-dirs: src src-ghc ../massaraksh/src
   
   build-depends:
     aeson,
@@ -33,6 +33,7 @@ executable late-firefly
     haskell-src-meta,
     http-types,
     inflections,
+    jmacro,
     lens,
     lens-regex,
     lucid,

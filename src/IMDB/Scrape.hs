@@ -144,16 +144,20 @@ attr k = withFrozenCallStack (nemptyTrace . fromAttrib k . headTrace)
 ttText :: HasCallStack => [Tag Text] -> Text
 ttText = withFrozenCallStack (nemptyTrace . innerText)
 
-test0 :: IO ()
-test0 = unEio $ withConnection "late-firefly.sqlite" do
-  for_ $collectTables execute
+scrapeGql :: IO ()
+scrapeGql = unEio $ withConnectionSetup $collectTables do
   let
     g x = "coalesce(json_extract(popularity, '$." <> x <> "'), 99999)"
     po = T.intercalate "," (fmap g IMDB.Scrape.genres)
   tids::[Only (Id ImdbTitle)] <- query [sql|
-    with s as
-      (select rowid, min(#{po}) as pop from imdb_search group by rowid)
-      select rowid from s where rowid not in (select rowid from imdb_title) order by pop
+    with s as (
+      select rowid, min(#{po}) as pop from imdb_search
+        group by rowid
+    )
+    select rowid from s
+      where
+        rowid not in (select rowid from imdb_title)
+      order by pop
     |]
   progressInc (L.length tids) do
     for_ tids \(Only (Id x)) -> do
@@ -185,6 +189,21 @@ scrapeTitle1 tid = do
   let chunk = fromTitle x::TitleChunk
   titls <- mapM scrapeTitle1 eps
   pure $ F.fold (chunk:titls)
+
+scrapeTitle2 :: ImdbId "tt" -> ScrapeIO TitleChunk
+scrapeTitle2 tid = do
+  let q = qTitle tid
+  x::Title <- sendGql @"title" "https://graphql.imdb.com/index.html" q
+  eps <- scrapeEpisodes tid
+  traceShowM eps
+  let chunk = fromTitle x::TitleChunk
+  pure chunk
+
+scrapeTitle3 :: [ImdbId "tt"] -> ScrapeIO ()
+scrapeTitle3 tids = do
+  let q = qTitles tids
+  x::[Title] <- sendGql @"title" "https://graphql.imdb.com/index.html" q
+  traceShowM x
 
 scrapeEpisodes :: ImdbId "tt" -> ScrapeIO [ImdbId "tt"]
 scrapeEpisodes tid = go Nothing where
@@ -263,7 +282,98 @@ qTitle tid = [st|
 
     runtime{ seconds country {id text} }
 
-    certificate{ rating country {id text} ratingsBody ratingReason }
+    certificate{ rating country {id text} ratingReason }
+
+    userRating{ date value }
+
+    genres{
+      genres {id text}
+      language {id text}
+    }
+
+    keywords(first: 999){
+      edges {
+        node {
+          id
+          text
+          interestScore { usersInterested usersVoted }
+        }
+      }
+      pageInfo {
+        endCursor
+        hasNextPage
+      }
+    }
+
+    credits(first: 999){
+      edges {
+        node {
+          name {
+            id nameText {text}
+            primaryImage {
+              id
+              url
+              width
+              height
+            }
+          }
+          title {id}
+          category {id text}
+        }
+      }
+      pageInfo {
+        endCursor
+        hasNextPage
+      }
+    }
+  }
+} |]
+
+qTitles :: [ImdbId "tt"]-> Text
+qTitles tids = [st|
+{
+  title(ids: [#{T.intercalate "," $ fmap showt tids}]) {
+    id
+    plot { id }
+    plots(first:999) {
+      edges {
+        node {
+          id plotText { markdown } plotType language { id text } isSpoiler author
+        }
+      }
+      pageInfo { hasNextPage }
+    }
+
+    primaryImage {
+      id
+      url
+      width
+      height
+    }
+
+    series {
+      series { id }
+      episodeNumber { episodeNumber seasonNumber }
+      nextEpisode { id }
+      previousEpisode { id }
+    }
+
+    countriesOfOrigin {
+      countries { id text }
+      language { id text }
+    }
+
+    releaseYear { year endYear }
+
+    titleType {id text}
+
+    originalTitleText {text isOriginalTitle country{id text} language{id text}}
+
+    releaseDate{ day month year country {id text} }
+
+    runtime{ seconds country {id text} }
+
+    certificate{ rating country {id text} ratingReason }
 
     userRating{ date value }
 

@@ -20,6 +20,7 @@ executable late-firefly
     autoexporter,
     base,
     bytestring,
+    zlib,
     constraints,
     containers,
     data-default,

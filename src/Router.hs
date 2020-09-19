@@ -25,7 +25,7 @@ data Route a where
   EpisodeR :: {epSeries::Text, code::Text} -> Route "EpisodeR"
   MovieR   :: {mvCode::Text} -> Route "MovieR"
   SeriesR  :: {series::Text} -> Route "SeriesR"
-  GraphQlR  :: Route "GraphQlR"
+  GraphQlR :: Route "GraphQlR"
 
 data SomeRoute = forall a. KnownSymbol a => SR (Route a)
 
@@ -42,7 +42,7 @@ partsToRoute = prism' build match where
   match :: UrlParts -> Maybe SomeRoute
   match = \case
     UP [] [("s", search)] -> Just $ SR SearchR{offset=0,..}
-    UP [] _                  -> Just $ SR HomeR
+    UP [] _               -> Just $ SR HomeR
     UP ["episode",epSeries,code] _ -> Just $ SR EpisodeR{..}
     UP ["movie",mvCode] _ -> Just $ SR MovieR{..}
     UP ["series",series] _ -> Just $ SR SeriesR{..}
@@ -61,16 +61,15 @@ urlToParts ::Iso' Text UrlParts
 urlToParts = iso apply unapply where
   unapply (UP f q) =
     T.intercalate "?" ([segments] <> bool [] [params] (params/="")) where
-      segments = T.intercalate "/" $ fmap escUri f
+      segments = T.intercalate "/" $ fmap enUri f
       params = T.intercalate "&". L.filter (/= "")
-        . fmap (\(k, v) -> k <> "=" <> v) . fmap (bimap escUri escUri)
+        . fmap (\(k, v) -> k <> "=" <> v) . fmap (bimap enUri enUri)
         $ q
-  apply txt = UP seg qry
-    where
-      (segTxt, qryTxt) = bimap unEscUri unEscUri . breakOn1 "?" $ txt
-      seg = T.splitOn "/" segTxt & L.filter (/="")
-      qry = T.splitOn "&" qryTxt & L.filter (/="") <&> breakOn1 "="
-      breakOn1 s t = T.breakOn s t & _2 %~ T.drop 1
+  apply txt = UP seg qry where
+    (segTxt, qryTxt) = breakOn1 "?" txt
+    seg = fmap deUri . L.filter (/="") . T.splitOn "/" $ segTxt
+    qry = fmap (breakOn1 "=" . deUri) . L.filter (/="") . T.splitOn "&" $ qryTxt
+    breakOn1 s t = T.breakOn s t & _2 %~ T.drop 1
 
 groupPages :: [PageDict] -> M.Map Text PageDict
 groupPages ps = M.fromList $ fmap f ps where
@@ -86,12 +85,12 @@ routeLabel (SR r) = f r where
   f :: forall l. KnownSymbol l => Route l -> Text
   f _ = T.pack $ symbolVal (Proxy @l)
 
-escUri :: Text -> Text
-escUri = T.pack . escapeURIString isAllowed . T.unpack where
+enUri :: Text -> Text
+enUri = T.pack . escapeURIString isAllowed . T.unpack where
   isAllowed c = c `elem` (['A'..'Z'] ++ ['a'..'z'] ++ ['0'..'9'] ++ "-_.~:/,")
 
-unEscUri :: Text -> Text
-unEscUri = T.pack . unEscapeString . T.unpack
+deUri :: Text -> Text
+deUri = T.pack . unEscapeString . T.unpack
 
 fromSome :: forall l. KnownSymbol l => SomeRoute -> Maybe (Route l)
 fromSome (SR r) = f r where

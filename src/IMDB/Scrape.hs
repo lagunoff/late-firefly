@@ -1,11 +1,13 @@
 {-# LANGUAGE Strict #-}
 module IMDB.Scrape where
 
-import Control.Error
+import Control.Error hiding (bool)
+import Control.Monad
 import Control.Exception
 import Control.Lens as L hiding (children, (.=))
 import Data.Aeson as AE
 import Data.ByteString.Lazy as BSL
+import Data.ByteString.Lazy.Char8 as BSL8
 import Data.Char
 import Data.Coerce
 import Data.Foldable as F
@@ -19,7 +21,6 @@ import GHC.TypeLits
 import Network.HTTP.Client hiding (withConnection, Proxy)
 import Network.HTTP.Types
 import Prelude as P
-import Text.HTML.TagSoup as L
 import Text.HTML.TagSoup.Lens as L hiding (attr)
 import Text.Read hiding (lift)
 import Text.Regex.Lens
@@ -28,6 +29,7 @@ import Text.Regex.TDFA
 import Text.Shakespeare.Text as X (st)
 import qualified Network.Wreq as Wreq
 import qualified Network.Wreq.Types as Wreq hiding (headers)
+import Codec.Compression.Zlib.Internal as Zlib
 
 import "this" DB
 import "this" IMDB.Types
@@ -138,12 +140,6 @@ mayThrow = maybe (throwError (CallStackException callStack)) pure
 paginate :: Int -> [Int]
 paginate total = L.takeWhile (<=total) . fmap (succ . (* 50)) $ [0..]
 
-attr :: HasCallStack => Text -> [Tag Text] -> Text
-attr k = withFrozenCallStack (nemptyTrace . fromAttrib k . headTrace)
-
-ttText :: HasCallStack => [Tag Text] -> Text
-ttText = withFrozenCallStack (nemptyTrace . innerText)
-
 scrapeGql :: IO ()
 scrapeGql = unEio $ withConnectionSetup $collectTables do
   let
@@ -159,16 +155,15 @@ scrapeGql = unEio $ withConnectionSetup $collectTables do
         rowid not in (select rowid from imdb_title)
       order by pop
     |]
-  progressInc (L.length tids) do
+  knownProgress 1 (L.length tids) \p -> do
     for_ tids \(Only (Id x)) -> do
-      liftIO (inc ?progress)
+      inc p
       let tid = ImdbId x
-      prefixProgress (showt tid <> "/") do
-        scrapeTitle tid
+      scrapeTitle p tid
 
-scrapeTitle :: (?conn::Connection, ?progress::Progress) => ImdbId "tt" -> ScrapeIO ()
-scrapeTitle tid = do
-  TitleChunk{..} <- scrapeTitle1 tid
+scrapeTitle :: (?conn::Connection) => Progress _ -> ImdbId "tt" -> ScrapeIO ()
+scrapeTitle p tid = do
+  TitleChunk{..} <- scrapeTitle1 p tid
   transaction do
     for_ title upsert
     for_ images upsert
@@ -180,14 +175,14 @@ scrapeTitle tid = do
     for_ names upsert
     for_ credits upsert
 
-scrapeTitle1 :: (?progress::Progress) => ImdbId "tt" -> ScrapeIO TitleChunk
-scrapeTitle1 tid = do
+scrapeTitle1 :: Progress _ -> ImdbId "tt" -> ScrapeIO TitleChunk
+scrapeTitle1 p@Progress{..} tid = do
   let q = qTitle tid
-  liftIO $ display ?progress (showt tid)
+  report (showt tid)
   x::Title <- sendGql @"title" "https://graphql.imdb.com/index.html" q
   eps <- scrapeEpisodes tid
   let chunk = fromTitle x::TitleChunk
-  titls <- mapM scrapeTitle1 eps
+  titls <- mapM (scrapeTitle1 p) eps
   pure $ F.fold (chunk:titls)
 
 scrapeTitle2 :: ImdbId "tt" -> ScrapeIO TitleChunk
@@ -419,3 +414,63 @@ qTitles tids = [st|
     }
   }
 } |]
+
+scrapeTsv :: Text -> SqlIO ()
+scrapeTsv file = withConnectionSetup $collectTables do
+  let
+    process :: (DbTable t, HasField' "rowid" t (Id t)) => (BSL.ByteString -> Either String t) -> SqlIO ()
+    process f = do
+      bsl <- liftIO $ BSL.readFile $ T.unpack file
+      let unbsl = Zlib.decompress gzipFormat defaultDecompressParams bsl
+      let lines = BSL.split 10 unbsl
+      knownProgress 100 (L.length lines)
+        \Progress{..} -> upsertCb
+        \upsert -> for_ lines
+        \line -> let
+          left = ((inc *>) . (traceShowM line *>) . traceShowM)
+          right x = upsert x *> inc *> report (T.pack $ show $ getField @"rowid" x)
+          in either left right $ f line
+    basics line = do
+      (c1,c2,c3,c4,c5,c6,c7,c8) <- case BSL.split 9 line of
+        (c1:c2:c3:c4:c5:c6:c7:c8:_) -> Right (c1,c2,c3,c4,c5,c6,c7,c8)
+        _                           -> Left "Insufficient columns"
+      let titleType = ptext c2
+      let startYear = hush $ pint c6
+      let endYear = hush $ pint c7
+      let runtimeMinutes = hush $ pint c8
+      rowid <- Id . unImdbId <$> (pimdb c1)
+      primaryTitle <- pmtext c3
+      originalTitle <- pmtext c4
+      isAdult <- pbool c5
+      pure TitleBasicsTsv{..}
+    episodes line = do
+      (c1,c2,c3,c4) <- case BSL.split 9 line of
+        (c1:c2:c3:c4:_) -> Right (c1,c2,c3,c4)
+        _                   -> Left "Insufficient columns"
+      rowid <- Id . unImdbId <$> (pimdb c1)
+      parentId <- Id . unImdbId <$> (pimdb c2)
+      let seasonNumber = hush $ pint c3
+      let episodeNumber = hush $ pint c4
+      pure TitleEpisodeTsv{..}
+    ratings line = do
+      (c1,c2,c3) <- case BSL.split 9 line of
+        (c1:c2:c3:_) -> Right (c1,c2,c3)
+        _               -> Left "Insufficient columns"
+      rowid <- Id . unImdbId <$> (pimdb c1)
+      averageRating <- pdouble c3
+      numVotes <- pint c3
+      pure TitleRatingsTsv{..}
+    action
+      | T.isSuffixOf "title.basics.tsv.gz" file = process basics
+      | T.isSuffixOf "title.episode.tsv.gz" file = process episodes
+      | T.isSuffixOf "title.ratings.tsv.gz" file = process ratings
+      | otherwise = error "Unknown file format"
+  action
+  where
+    ptext = T.decodeUtf8 . BSL.toStrict
+    pne = note "Non empty failed" . mfilter (/="") . mfilter (/="\\N") . Just
+    pmtext = fmap ptext . pne
+    pimdb = imdbFromText @"tt" . ptext
+    pint = note "pint failed" . readMaybe @Int . BSL8.unpack <=< pne
+    pdouble = note "pdouble failed" . readMaybe @Double . BSL8.unpack <=< pne
+    pbool = fmap (/=0) . pint

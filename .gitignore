@@ -22,3 +22,4 @@ locals.nix
 .ghcjs.envrc
 screenlog.*
 node_modules
+archive

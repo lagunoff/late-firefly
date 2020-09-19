@@ -4,7 +4,6 @@ module Server where
 
 import Control.Lens hiding (As)
 import Control.Monad.Catch as C
-import Data.Text as T
 import Data.Typeable
 import Database.SQLite.Simple (FromRow(..), Connection, Query(..))
 import Database.SQLite3 (SQLError(..), Error(..))
@@ -35,10 +34,6 @@ data SomeServer = forall a r. SomeServer (Server a r)
 data RemotePtr a r = RemotePtr
   { rptrStaticPtr :: StaticPtr SomeServer
   , rptrName      :: Name }
-
-data Progress = Progress
-  { inc     :: IO ()
-  , display :: Text -> IO () }
 
 query1 :: (?conn::Connection, As ServerError e, FromRow r) => Sql -> Eio e r
 query1 q = withEio (review _S) $ query q >>= \case

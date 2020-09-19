@@ -38,6 +38,10 @@ let
       url = "https://github.com/lagunoff/tagsoup/archive/c61f55d615350cc2368484baf4608bb39e0b34e8.tar.gz";
     };
 
+    cabal-cargs = builtins.fetchTarball {
+      url = "https://github.com/dan-t/cabal-cargs/archive/d2bba4366e13f0e40338ff2bbaa87d943630999d.tar.gz";
+    };
+
     generic-lens = genericLensSrc + "/generic-lens";
     generic-lens-core = genericLensSrc + "/generic-lens-core";
     indexed-profunctors = opticsSrc + "/indexed-profunctors";
@@ -65,6 +69,6 @@ in
   haskellPackages // {
     shell = nixpkgs.mkShell {
       inputsFrom = with haskellPackages; [late-firefly.env];
-      buildInputs = with haskellPackages; [cabal-cargs ghcid];
+      buildInputs = with haskellPackages; [cabal-cargs ghcid cabal-install];
     };
   }

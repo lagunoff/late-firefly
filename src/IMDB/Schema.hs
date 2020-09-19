@@ -36,6 +36,30 @@ data ImdbImage = ImdbImage {
   width :: Maybe Int }
   deriving stock (Show, Eq, Generic)
 
+data TitleBasicsTsv = TitleBasicsTsv
+  { rowid          :: Id TitleBasicsTsv
+  , titleType      :: Text
+  , primaryTitle   :: Text
+  , originalTitle  :: Text
+  , isAdult        :: Bool
+  , startYear      :: Maybe Int
+  , endYear        :: Maybe Int
+  , runtimeMinutes :: Maybe Int }
+  deriving stock (Show, Eq, Generic)
+
+data TitleEpisodeTsv = TitleEpisodeTsv
+  { rowid         :: Id TitleEpisodeTsv
+  , parentId      :: Id TitleBasicsTsv
+  , seasonNumber  :: Maybe Int
+  , episodeNumber :: Maybe Int }
+  deriving stock (Show, Eq, Generic)
+
+data TitleRatingsTsv = TitleRatingsTsv
+  { rowid         :: Id TitleRatingsTsv
+  , averageRating :: Double
+  , numVotes      :: Int }
+  deriving stock (Show, Eq, Generic)
+
 data ImdbPlot = ImdbPlot {
   rowid :: Tid ImdbPlot,
   title_id :: Id ImdbTitle,
@@ -173,6 +197,11 @@ deriveRow ''DisplayableLanguage def
 deriveRow ''InterestScore def {renameField = underscore}
 deriveRow ''CountriesOfOrigin def {renameField = underscore}
 deriveRow ''YearRange def {renameField = underscore}
+
+deriveDb ''TitleEpisodeTsv def
+deriveDb ''TitleRatingsTsv def
+deriveDb ''TitleBasicsTsv def
+
 deriveDb ''ImdbSearch def
 deriveDb ''ImdbImage def {renameField = stripPrefix1 "_"}
 deriveDb ''ImdbPlot def

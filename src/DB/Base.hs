@@ -11,6 +11,7 @@ module DB.Base
   , query
   , select
   , upsert
+  , upsertCb
   , upsertInc
   , upsertVersion
   , upsertVersionConflict
@@ -54,6 +55,7 @@ import qualified Database.SQLite.Simple as S
 import qualified Database.SQLite.Simple.FromField as S
 import qualified Database.SQLite.Simple.Internal as S
 import qualified GHC.Records as G
+import qualified Database.SQLite3 as Base
 
 import "this" DB.QQ
 import "this" Intro
@@ -172,6 +174,20 @@ upsert t = do
     Sql q _ _ = [sql|replace into {{tableName}} (#{cols}) values (#{vals})|]
   liftEio $ Eio @S.SQLError $ S.execute ?conn (Query q) (toRow t)
 
+upsertCb :: forall t e.
+  (?conn::Connection, As S.SQLError e, DbTable t) => ((t -> Eio e ()) -> Eio e ()) -> Eio e ()
+upsertCb act = do
+  let
+    TableInfo{..} = tableInfo @t
+    tableName = bool name (name <> "_versions") (isVersioned @t)
+    cols = T.intercalate ", " $ fmap (esc . fst) columns
+    vals = T.intercalate ", " $ fmap (const "?") columns
+    Sql q _ _ = [sql|replace into {{tableName}} (#{cols}) values (#{vals})|]
+  liftEio $ Eio @S.SQLError $ S.withStatement ?conn (Query q) \stmt -> do
+    let S.Statement stmt' = stmt
+    unEio $ act \t -> do
+      liftEio $ Eio @S.SQLError $ S.withBind stmt t (void $ Base.step stmt')
+
 upsertVersion :: forall t e.
   (?conn::Connection, Eq t, DbTable t, As S.SQLError e)
   => t -> Eio e (t, UpsertResult)
@@ -282,6 +298,9 @@ instance ToField (Id t) where
 
 instance DbField Int where
   columnInfo _ = ColumnInfo IntegerColumn False False Nothing
+
+instance DbField Double where
+  columnInfo _ = ColumnInfo FloatColumn False False Nothing
 
 instance DbField Text where
   columnInfo _ = ColumnInfo TextColumn False False Nothing

@@ -55,6 +55,9 @@ instance Exception e => MonadError e (Eio e) where
   throwError = throwE
   catchError = catchE
 
+instance MonadFail (Eio e) where
+  fail = Eio . fail
+
 class (<:) a s where
   _S :: Prism' s a
 

@@ -3,6 +3,7 @@
 module Utils where
 
 import Control.Error
+import Control.Monad
 import Control.Lens-- hiding (Prism')
 import Control.Monad.IO.Class
 import Control.Monad.Catch as C
@@ -27,7 +28,6 @@ import TextShow
 import Unsafe.Coerce
 import qualified Control.Exception as Exception
 
-import "this" Server
 import "this" Orphans ()
 
 newtype Id t = Id {unId :: Int64}
@@ -161,23 +161,32 @@ instance (GNilRec f, GNilRec g) => GNilRec ((:*:) f g) where
 nilRec :: forall a. (GNilRec (Rep a), Generic a) => a
 nilRec = GHC.Generics.to $ gNilRec (Proxy @(Rep a _))
 
-progressInc :: MonadIO m => Int -> ((?progress::Progress) => m r) -> m r
-progressInc todo act = do
+data Progress m = Progress
+  { inc    :: m ()
+  , incShow :: m ()
+  , report :: Text -> m ()
+  , setProgress :: Int -> m () }
+
+knownProgress :: MonadIO m => Int -> Int -> (Progress m -> m r) -> m r
+knownProgress each todo act = do
   pgRef <- liftIO $ newIORef (-1 :: Int)
   lbRef <- liftIO $ newIORef "Starting"
   let
-    inc = do
-      modifyIORef pgRef (+ 1) >> prin
-    display lb = do
-      writeIORef lbRef lb >> prin
-    prin = liftIO do
+    prin = do
       done <- readIORef pgRef
-      lb <- readIORef lbRef
-      T.hPutStr stderr "\r\ESC[K"
-      T.hPutStr stderr (lb <> " [" <> showt done <> "/" <> showt todo <> "]")
-  liftIO prin *> (let ?progress=Progress inc display in act) <* liftIO (T.hPutStr stderr "\n")
+      when (done `rem` each == 0) do
+        lb <- readIORef lbRef
+        T.hPutStr stderr "\r\ESC[K"
+        T.hPutStr stderr (lb <> " [" <> showt done <> "/" <> showt todo <> "]")
+    inc = liftIO do
+      modifyIORef pgRef (+ 1)
+    incShow = liftIO do
+      modifyIORef pgRef (+ 1) >> prin
+    setProgress p = liftIO do
+      writeIORef pgRef p >> prin
+    report lb = liftIO do
+      writeIORef lbRef lb >> prin
+  liftIO prin *> act Progress{..} <* liftIO (T.hPutStr stderr "\n")
 
-prefixProgress :: (?progress::Progress, MonadIO m) => Text -> ((?progress::Progress) => m r) -> m r
-prefixProgress pre act = do
-  let Progress{..} = ?progress
-  let ?progress=Progress inc (display . (pre <>)) in act
+(</>) :: Text -> Text -> Text
+(</>) l r = T.dropWhileEnd (=='/') l <> "/" <> T.dropWhile (=='/') r

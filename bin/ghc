@@ -4,6 +4,6 @@ DIR="$(dirname "${BASH_SOURCE[0]}")"
 EXTRA_ARGS="-j -outputdir=$DIR/../out"
 make --silent -f $DIR/envrc.mk $DIR/../.envrc || exit 1;
 source $DIR/../.envrc
-CABAL_ARGS=$(cd $DIR/../; cabal-cargs || exit 1)
+CABAL_ARGS=$(cd $DIR/../; cabal-cargs | sed 's/\/autogen/\/late-firefly\/autogen/g' || exit 1)
 
 ghc $CABAL_ARGS $EXTRA_ARGS "$@"

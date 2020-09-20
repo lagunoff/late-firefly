@@ -430,9 +430,9 @@ data TitleText = TitleText {
   -- Cache TTL in seconds: 900
   text :: Text,
   -- Cache TTL in seconds: 900
-  isOriginalTitle :: Bool,
+  isOriginalTitle :: Maybe Bool,
   -- Cache TTL in seconds: 900
-  country :: DisplayableCountry,
+  country :: Maybe DisplayableCountry,
   -- Cache TTL in seconds: 900
   language :: Maybe DisplayableLanguage }
   deriving stock (Show, Eq, Generic)
@@ -450,7 +450,7 @@ data Plot = Plot {
   plotType :: PlotType,
   -- The language of the plot text
   -- Cache TTL in seconds: 900
-  language :: DisplayableLanguage,
+  language :: Maybe DisplayableLanguage,
   -- Whether this plot contains spoilers
   -- Cache TTL in seconds: 900
   isSpoiler :: Bool,
@@ -949,7 +949,7 @@ data Genres = Genres {
   -- Affected by headers: x-imdb-user-country, x-imdb-user-language
   --
   -- Cache TTL in seconds: 900
-  language :: DisplayableLanguage }
+  language :: Maybe DisplayableLanguage }
   deriving stock (Show, Eq, Generic)
   deriving anyclass (FromJSON, ToJSON)
 
@@ -1018,7 +1018,7 @@ data Keyword = Keyword {
   -- Affected by headers: x-imdb-user-country, x-imdb-user-language
   --
   -- Cache TTL in seconds: 900
-  interestScore :: InterestScore }
+  interestScore :: Maybe InterestScore }
   deriving stock (Show, Eq, Generic)
   deriving anyclass (FromJSON, ToJSON)
 

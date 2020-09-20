@@ -175,7 +175,7 @@ upsert t = do
   liftEio $ Eio @S.SQLError $ S.execute ?conn (Query q) (toRow t)
 
 upsertCb :: forall t e.
-  (?conn::Connection, As S.SQLError e, DbTable t) => ((t -> Eio e ()) -> Eio e ()) -> Eio e ()
+  (?conn::Connection, DbTable t, As S.SQLError e) => ((t -> Eio e ()) -> Eio e ()) -> Eio e ()
 upsertCb act = do
   let
     TableInfo{..} = tableInfo @t

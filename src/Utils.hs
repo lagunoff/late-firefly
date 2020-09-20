@@ -163,6 +163,7 @@ nilRec = GHC.Generics.to $ gNilRec (Proxy @(Rep a _))
 
 data Progress m = Progress
   { inc    :: m ()
+  , incBy :: Int -> m ()
   , incShow :: m ()
   , report :: Text -> m ()
   , setProgress :: Int -> m () }
@@ -180,6 +181,8 @@ knownProgress each todo act = do
         T.hPutStr stderr (lb <> " [" <> showt done <> "/" <> showt todo <> "]")
     inc = liftIO do
       modifyIORef pgRef (+ 1)
+    incBy x = liftIO do
+      modifyIORef pgRef (+ x)
     incShow = liftIO do
       modifyIORef pgRef (+ 1) >> prin
     setProgress p = liftIO do

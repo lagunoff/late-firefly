@@ -14,6 +14,7 @@ import Database.SQLite.Simple.ToField
 import Database.SQLite3 (ColumnType(..))
 import System.Environment
 import qualified Database.SQLite.Simple as S
+import Language.Haskell.TH
 
 import "this" DB.Base as DB
 import "this" DB.QQ
@@ -88,6 +89,9 @@ withConnectionSetup
 withConnectionSetup setup f = do
   e <- liftIO $ lookupEnv "DB"
   withConnection (e ?: "late-firefly.sqlite") (for_ setup execute *> f)
+
+withDb :: Q Exp
+withDb = [|withConnectionSetup $(collectTables)|]
 
 type NewVersion = Id Transaction
 

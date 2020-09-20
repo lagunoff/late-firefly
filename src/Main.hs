@@ -12,6 +12,7 @@ import Options.Generic
 import System.Environment
 import System.IO
 import qualified Database.SQLite.Simple as S
+import Network.Wai.Internal
 
 import "this" DB
 import "this" Dev
@@ -72,9 +73,15 @@ update = do
   hSetBuffering stderr LineBuffering
   let dbPath = T.unpack $ getField @"dbPath" (def :: WebOpts)
   conn <- S.open dbPath
-  let site = let ?conn = conn in html5Router pages
-  -- let staticApp' = staticApp (defaultFileServerSettings ".") {ss404Handler=Just site}
-  runOr 7900 site
+  let
+    docroot = "./"
+    site = let ?conn = conn in html5Router pages
+    ss404Handler = Just site
+    staticApp' = staticApp
+      $ (defaultFileServerSettings (T.unpack docroot)) {ss404Handler}
+  runOr 7900 \case
+    r@(pathInfo -> []) -> site r
+    r                  -> staticApp' r
 
 main = do
   args <- getArgs

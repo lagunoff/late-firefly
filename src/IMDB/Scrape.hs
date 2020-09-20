@@ -4,7 +4,7 @@ module IMDB.Scrape where
 import Control.Error hiding (bool)
 import Control.Monad
 import Control.Exception
-import Control.Lens as L hiding (children, (.=))
+import Control.Lens hiding (children, (.=))
 import Data.Aeson as AE
 import Data.ByteString.Lazy as BSL
 import Data.ByteString.Lazy.Char8 as BSL8
@@ -14,7 +14,7 @@ import Data.Foldable as F
 import Data.Generics.Product
 import Data.List as L
 import Data.Map as M
-import Data.Text as T
+import Data.Text as T hiding (chunksOf)
 import Data.Text.Encoding as T
 import GHC.Stack
 import GHC.TypeLits
@@ -140,30 +140,64 @@ mayThrow = maybe (throwError (CallStackException callStack)) pure
 paginate :: Int -> [Int]
 paginate total = L.takeWhile (<=total) . fmap (succ . (* 50)) $ [0..]
 
-scrapeGql :: IO ()
-scrapeGql = unEio $ withConnectionSetup $collectTables do
-  let
-    g x = "coalesce(json_extract(popularity, '$." <> x <> "'), 99999)"
-    po = T.intercalate "," (fmap g IMDB.Scrape.genres)
-  tids::[Only (Id ImdbTitle)] <- query [sql|
-    with s as (
-      select rowid, min(#{po}) as pop from imdb_search
-        group by rowid
-    )
-    select rowid from s
-      where
-        rowid not in (select rowid from imdb_title)
-      order by pop
-    |]
-  knownProgress 1 (L.length tids) \p -> do
-    for_ tids \(Only (Id x)) -> do
-      inc p
-      let tid = ImdbId x
-      scrapeTitle p tid
+chunksOf :: Int -> [a] -> [[a]]
+chunksOf _ [] = []
+chunksOf n l
+  | n > 0 = (L.take n l) : (chunksOf n (L.drop n l))
+  | otherwise = error "Negative or zero n"
 
-scrapeTitle :: (?conn::Connection) => Progress _ -> ImdbId "tt" -> ScrapeIO ()
-scrapeTitle p tid = do
-  TitleChunk{..} <- scrapeTitle1 p tid
+scrapeGql :: ScrapeIO ()
+scrapeGql = $withDb do
+  tids::[Only (Id ImdbTitle)] <- query [sql|
+    with movies as (
+      select
+        vm.rowid as rowid,
+        trt.num_votes as num_votes
+        from vidsrc_movie vm
+          left join title_ratings_tsv trt on trt.rowid=vm.imdb_id
+        where
+          vm.rowid not in (select rowid from imdb_title)
+    )
+    , series as (
+      select
+        tet.parent_id as rowid,
+        trt.num_votes as num_votes
+        from title_episode_tsv tet
+          left join title_ratings_tsv trt on trt.rowid=tet.parent_id
+        where
+          tet.parent_id in (select show_imdb_id from vidsrc_episode)
+          and tet.parent_id not in (select rowid from imdb_title)
+        group by tet.parent_id, trt.num_votes
+    )
+    , episodes as (
+      select
+        tet.rowid as rowid,
+        trt.num_votes as num_votes
+        from title_episode_tsv tet
+          left join title_ratings_tsv trt on trt.rowid=tet.parent_id
+        where
+          tet.parent_id in (select show_imdb_id from vidsrc_episode)
+          and tet.rowid not in (select rowid from imdb_title)
+    )
+    , united as (
+      select * from movies
+        union all select * from series
+        union all select * from episodes
+    )
+    select rowid from united
+      order by num_votes desc
+    |]
+  let n = 25
+  let chunks = chunksOf n $ fmap (\(Only (Id x)) -> ImdbId x) tids
+  knownProgress 1 (L.length chunks * n) \Progress{..} -> do
+    for_ chunks \chunk -> do
+      for_ (L.uncons chunk) \(t, _) -> report (showt t)
+      scrapeTitle chunk
+      incBy n
+
+scrapeTitle :: (?conn::Connection) => [ImdbId "tt"] -> ScrapeIO ()
+scrapeTitle tid = do
+  TitleChunk{..} <- scrapeTitle1 tid
   transaction do
     for_ title upsert
     for_ images upsert
@@ -172,168 +206,25 @@ scrapeTitle p tid = do
     for_ titleToGenre upsert
     for_ keywords upsert
     for_ titleToKeyword upsert
-    for_ names upsert
-    for_ credits upsert
 
-scrapeTitle1 :: Progress _ -> ImdbId "tt" -> ScrapeIO TitleChunk
-scrapeTitle1 p@Progress{..} tid = do
-  let q = qTitle tid
-  report (showt tid)
-  x::Title <- sendGql @"title" "https://graphql.imdb.com/index.html" q
-  eps <- scrapeEpisodes tid
-  let chunk = fromTitle x::TitleChunk
-  titls <- mapM (scrapeTitle1 p) eps
-  pure $ F.fold (chunk:titls)
-
-scrapeTitle2 :: ImdbId "tt" -> ScrapeIO TitleChunk
-scrapeTitle2 tid = do
-  let q = qTitle tid
-  x::Title <- sendGql @"title" "https://graphql.imdb.com/index.html" q
-  eps <- scrapeEpisodes tid
-  traceShowM eps
-  let chunk = fromTitle x::TitleChunk
-  pure chunk
-
-scrapeTitle3 :: [ImdbId "tt"] -> ScrapeIO ()
-scrapeTitle3 tids = do
+scrapeTitle1 :: [ImdbId "tt"] -> ScrapeIO TitleChunk
+scrapeTitle1 tids = do
   let q = qTitles tids
-  x::[Title] <- sendGql @"title" "https://graphql.imdb.com/index.html" q
-  traceShowM x
+  xs::[Title] <- sendGql @"titles" "https://graphql.imdb.com/index.html" q
+  pure (foldMap toDb xs)
 
-scrapeEpisodes :: ImdbId "tt" -> ScrapeIO [ImdbId "tt"]
-scrapeEpisodes tid = go Nothing where
-  go after = do
-    let q = qEpisodes tid after
-    x::Pick Title '["id", "episodes"] <- sendGql @"title" "https://graphql.imdb.com/index.html" q
-    let episodes = getField @"episodes" x
-    let episodes' = episodes ^.. _Just . field @"episodes" . _Just . field @"edges" . traverse . field @"node" . field @"id"
-    let cursor = episodes ^? _Just . field @"episodes" . _Just . field @"pageInfo" . field @"endCursor" . _Just
-    maybe (pure episodes') (\x -> (episodes' <>) <$> go (Just x)) cursor
-
-qEpisodes :: ImdbId "tt" -> Maybe Text -> Text
-qEpisodes tid after =
-  let after' = maybe "" ((", after: "<>) . show) after
-  in [st|
-{
-  title(id: "#{showt tid}") {
-    id
-    episodes {
-      episodes(first: 100#{after'}) {
-        edges {
-          node {
-            id
-          }
-        }
-        pageInfo {
-          endCursor
-          hasNextPage
-        }
-      }
-    }
-  }
-} |]
-
-qTitle :: ImdbId "tt"-> Text
-qTitle tid = [st|
-{
-  title(id: "#{showt tid}") {
-    id
-    plot { id }
-    plots(first:999) {
-      edges {
-        node {
-          id plotText { markdown } plotType language { id text } isSpoiler author
-        }
-      }
-      pageInfo { hasNextPage }
-    }
-
-    primaryImage {
-      id
-      url
-      width
-      height
-    }
-
-    series {
-      series { id }
-      episodeNumber { episodeNumber seasonNumber }
-      nextEpisode { id }
-      previousEpisode { id }
-    }
-
-    countriesOfOrigin {
-      countries { id text }
-      language { id text }
-    }
-
-    releaseYear { year endYear }
-
-    titleType {id text}
-
-    originalTitleText {text isOriginalTitle country{id text} language{id text}}
-
-    releaseDate{ day month year country {id text} }
-
-    runtime{ seconds country {id text} }
-
-    certificate{ rating country {id text} ratingReason }
-
-    userRating{ date value }
-
-    genres{
-      genres {id text}
-      language {id text}
-    }
-
-    keywords(first: 999){
-      edges {
-        node {
-          id
-          text
-          interestScore { usersInterested usersVoted }
-        }
-      }
-      pageInfo {
-        endCursor
-        hasNextPage
-      }
-    }
-
-    credits(first: 999){
-      edges {
-        node {
-          name {
-            id nameText {text}
-            primaryImage {
-              id
-              url
-              width
-              height
-            }
-          }
-          title {id}
-          category {id text}
-        }
-      }
-      pageInfo {
-        endCursor
-        hasNextPage
-      }
-    }
-  }
-} |]
+quo x = "\"" <> x <> "\""
 
 qTitles :: [ImdbId "tt"]-> Text
 qTitles tids = [st|
 {
-  title(ids: [#{T.intercalate "," $ fmap showt tids}]) {
+  titles(ids: [#{T.intercalate "," $ fmap (quo . showt) tids}]) {
     id
     plot { id }
-    plots(first:999) {
+    plots(first:250) {
       edges {
         node {
-          id plotText { markdown } plotType language { id text } isSpoiler author
+          id plotText { markdown } plotType isSpoiler author
         }
       }
       pageInfo { hasNextPage }
@@ -346,65 +237,17 @@ qTitles tids = [st|
       height
     }
 
-    series {
-      series { id }
-      episodeNumber { episodeNumber seasonNumber }
-      nextEpisode { id }
-      previousEpisode { id }
-    }
-
-    countriesOfOrigin {
-      countries { id text }
-      language { id text }
-    }
-
-    releaseYear { year endYear }
-
-    titleType {id text}
-
-    originalTitleText {text isOriginalTitle country{id text} language{id text}}
-
-    releaseDate{ day month year country {id text} }
-
-    runtime{ seconds country {id text} }
-
-    certificate{ rating country {id text} ratingReason }
-
-    userRating{ date value }
+    originalTitleText {text}
 
     genres{
       genres {id text}
-      language {id text}
     }
 
-    keywords(first: 999){
+    keywords(first: 250){
       edges {
         node {
           id
           text
-          interestScore { usersInterested usersVoted }
-        }
-      }
-      pageInfo {
-        endCursor
-        hasNextPage
-      }
-    }
-
-    credits(first: 999){
-      edges {
-        node {
-          name {
-            id nameText {text}
-            primaryImage {
-              id
-              url
-              width
-              height
-            }
-          }
-          title {id}
-          category {id text}
         }
       }
       pageInfo {
@@ -455,9 +298,9 @@ scrapeTsv file = withConnectionSetup $collectTables do
     ratings line = do
       (c1,c2,c3) <- case BSL.split 9 line of
         (c1:c2:c3:_) -> Right (c1,c2,c3)
-        _               -> Left "Insufficient columns"
+        _            -> Left "Insufficient columns"
       rowid <- Id . unImdbId <$> (pimdb c1)
-      averageRating <- pdouble c3
+      averageRating <- pdouble c2
       numVotes <- pint c3
       pure TitleRatingsTsv{..}
     action

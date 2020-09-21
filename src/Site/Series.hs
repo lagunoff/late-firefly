@@ -65,28 +65,29 @@ instance IsPage "SeriesR" SeriesD where
 
   pageInit (SeriesR s) = do
     case imdbFromText @"tt" s of
-      Left _ -> fromTitle s
       Right (ImdbId i) -> fromImdb i
+      Left _           -> throwE The404Error
     where
     fromImdb s = do
       eps::[Only Int :. Only Int :. Episode] <- query [sql|
         select
-          it.series_season_number,
-          it.series_episode_number,
-          json_extract(it.original_title_text, '$.text'),
+          tet.season_number,
+          tet.episode_number,
+          it.original_title_text,
           null, ii.url,
-          it.series_season_number, it.series_episode_number
-        from imdb_title it
+          tet.season_number, tet.episode_number
+        from title_episode_tsv tet
+          cross join imdb_title it on tet.rowid=it.rowid
           left join imdb_image ii on it.primary_image_id=ii.rowid
         where
-          it.series_title_id={s} and
-          it.series_season_number is not null and
-          series_episode_number is not null
+          tet.parent_id={s} and
+          tet.season_number is not null and
+          tet.episode_number is not null
       |]
       (plot, title, thumbnail) <- query1 [sql|
         select
           ip.plot_text,
-          json_extract(it.original_title_text, '$.text'),
+          it.original_title_text,
           ii.url
         from imdb_title it
           left join imdb_plot ip on it.plot_id=ip.rowid
@@ -94,38 +95,6 @@ instance IsPage "SeriesR" SeriesD where
           where it.rowid={s}
       |]
       let seasons = M.fromListWith (<>) $ fmap (\(Only k :. Only e :. v) -> (k, [v{Site.Series.code=Just (printEpCode (k, e))}])) eps
-      pure SeriesD{..}
-    fromTitle s = do
-      eps::[Only Int :. Episode] <- query [sql|
-        with c as (
-          select title_id as title_id, min(video_id) as video_id
-            from video_link group by title_id
-        )
-        select
-          it.series_season_number,
-          json_extract(it.original_title_text, '$.text'),
-          c.video_id, ii.url,
-          it.series_season_number, it.series_episode_number
-        from imdb_title it
-          left join imdb_image ii on it.primary_image_id=ii.rowid
-          left join c on c.title_id=it.rowid
-          where it.series_title_id in (
-            select s.title_id from series s where s.rowid={s}
-          )
-      |]
-      (plot, title, thumbnail) <- query1 [sql|
-        select
-          ip.plot_text,
-          json_extract(it.original_title_text, '$.text'),
-          ii.url
-        from imdb_title it
-          left join imdb_plot ip on it.plot_id=ip.rowid
-          left join imdb_image ii on it.primary_image_id=ii.rowid
-          where it.rowid=(
-            select s.title_id from series s where s.rowid={s}
-          )
-      |]
-      let seasons = M.fromListWith (<>) $ fmap (\(Only k :. v) -> (k, [v])) eps
       pure SeriesD{..}
 
 seasonSlider :: Route "SeriesR" -> SeriesD -> Html ()

@@ -21,6 +21,7 @@ executable late-firefly
     base,
     bytestring,
     zlib,
+    zenc,
     constraints,
     containers,
     data-default,

@@ -31,7 +31,10 @@ instance IsPage "SearchR" SearchD where
         button_ [type_ "submit"] do "Search"
       ul_ do
         for_ results \Result{..} -> do
-          let link = if series then linkTo $ SeriesR (showt $ ImdbId @"tt" $ fromIntegral rowid) else linkTo $ MovieR (showt rowid)
+          let
+            link = if series
+              then linkTo $ SeriesR (showt $ ImdbId @"tt" $ fromIntegral rowid)
+              else linkTo $ MovieR (showt rowid)
           li_ [class_ "search-item"] do
             link do
               for_ thumbnail \src -> img_ [src_ src]
@@ -73,13 +76,15 @@ instance IsPage "SearchR" SearchD where
         s.text,
         s.`year`,
         case
-          when exists (select * from imdb_title where series_title_id=s.rowid)
+          when (tbt.title_type = "tvSeries")
           then 1
           else 0
         end
       from
         imdb_title_fts fts
+        cross join imdb_title it on fts.rowid=it.rowid
         left join imdb_search s on fts.rowid=s.rowid
+        left join title_basics_tsv tbt on fts.rowid=tbt.rowid
       where
         fts.header match {search}
     |]

@@ -317,3 +317,10 @@ scrapeTsv file = withConnectionSetup $collectTables do
     pint = note "pint failed" . readMaybe @Int . BSL8.unpack <=< pne
     pdouble = note "pdouble failed" . readMaybe @Double . BSL8.unpack <=< pne
     pbool = fmap (/=0) . pint
+
+titleNames :: SqlIO ()
+titleNames = $withDb do
+  titles <- query [sql|select * from imdb_title|]
+  upsertCb \upsert -> do
+    for_ titles \t@ImdbTitle{..} -> do
+      upsert t{url_slug=urlSlug rowid =<< original_title_text}

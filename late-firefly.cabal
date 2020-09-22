@@ -20,8 +20,6 @@ executable late-firefly
     autoexporter,
     base,
     bytestring,
-    zlib,
-    zenc,
     constraints,
     containers,
     data-default,
@@ -45,6 +43,7 @@ executable late-firefly
     process,
     regex-tdfa,
     shakespeare,
+    slug,
     split,
     sqlite-simple,
     tagsoup,
@@ -63,7 +62,9 @@ executable late-firefly
     wai-extra,
     wai-util,
     warp,
-    wreq
+    wreq,
+    zenc,
+    zlib
       
   default-extensions:
     AllowAmbiguousTypes

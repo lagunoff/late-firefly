@@ -5,6 +5,7 @@ import Control.Lens
 import Data.Generics.Product
 import Data.Map as M
 import Data.Monoid.Generic
+import Web.Slug
 
 import "this" DB
 import "this" IMDB.GraphQL
@@ -93,7 +94,8 @@ data ImdbTitle = ImdbTitle
   { rowid               :: Id ImdbTitle
   , primary_image_id    :: Maybe (Id ImdbImage)
   , plot_id             :: Maybe (Tid ImdbPlot)
-  , original_title_text :: Maybe Text }
+  , original_title_text :: Maybe Text
+  , url_slug            :: Maybe Text }
   deriving stock (Show, Eq, Generic)
 
 data TitleChunk = TitleChunk
@@ -111,13 +113,18 @@ data TitleChunk = TitleChunk
 class ToDb a b | a -> b where
   toDb :: a -> b
 
+urlSlug :: Id ImdbTitle -> Text -> Maybe Text
+urlSlug (Id ii) = fmap (pre . unSlug) . mkSlug where
+  pre x = showt ii <> "-" <> x
+
 instance ToDb Title TitleChunk where
   toDb Title{..} = TitleChunk
     { title = pure ImdbTitle
       { rowid = coerce id
       , primary_image_id = fmap (Id . unImdbId . getField @"id") primaryImage
       , plot_id = fmap (Tid . getField @"id") plot
-      , original_title_text = originalTitleText ^? _Just . field @"text" }
+      , original_title_text = original_title_text
+      , url_slug = urlSlug tid =<< original_title_text }
     , images = catMaybes [fmap toDb primaryImage]
     , plots = plots ^.. _Just . field @"edges" . traverse . field @"node" . to (flip toDb  tid)
     , genres = genres'
@@ -126,6 +133,7 @@ instance ToDb Title TitleChunk where
     , titleToKeyword = ImdbTitleToKeyword tid . getField @"rowid" <$> keywords' }
     where
       tid = Id (unImdbId id)
+      original_title_text = originalTitleText ^? _Just . field @"text"
       genres' = genres ^.. _Just . field @"genres" . traverse . to toDb
       keywords' = keywords ^.. _Just . field @"edges" . traverse . field @"node" . to toDb
 

@@ -42,11 +42,11 @@ headerWidget = do
           span_ [style_ [st|color: #{showt primary}|] ] do
             "Net"
         ul_ [class_ "menu"] do
-          li_ do linkTo (SeriesR "the-office") do div_ "Series"
-          li_ do linkTo (SeriesR "the-office") do div_ "Movies"
-          li_ do linkTo (SeriesR "the-office") do div_ "Genre"
-          li_ do linkTo (SeriesR "the-office") do div_ "Top IMDB"
-          li_ do linkTo (SeriesR "the-office") do div_ "A-Z List"
+          li_ do linkTo (HomeR) do div_ "Series"
+          li_ do linkTo HomeR do div_ "Movies"
+          li_ do linkTo HomeR do div_ "Genre"
+          li_ do linkTo HomeR do div_ "Top IMDB"
+          li_ do linkTo HomeR do div_ "A-Z List"
       div_ [class_ "search"] do
         form_ [action_ "/", method_ "GET"] do
           input_
@@ -142,11 +142,11 @@ footerWidget = do
     div_ [class_ "footer-wrapper"] do
       div_ do
         ul_ [class_ "menu"] do
-          li_ do linkTo (SeriesR "the-office") do div_ "Series"
-          li_ do linkTo (SeriesR "the-office") do div_ "Movies"
-          li_ do linkTo (SeriesR "the-office") do div_ "Genre"
-          li_ do linkTo (SeriesR "the-office") do div_ "Top IMDB"
-          li_ do linkTo (SeriesR "the-office") do div_ "A-Z List"
+          li_ do linkTo HomeR do div_ "Series"
+          li_ do linkTo HomeR do div_ "Movies"
+          li_ do linkTo HomeR do div_ "Genre"
+          li_ do linkTo HomeR do div_ "Top IMDB"
+          li_ do linkTo HomeR do div_ "A-Z List"
       div_ do
         linkAtt HomeR [class_ "home-link"] do
           span_ "Telikov."

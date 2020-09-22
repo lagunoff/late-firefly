@@ -10,6 +10,7 @@ import "this" DB
 import "this" Router
 import "this" Site.Types
 import "this" Widget
+import "this" IMDB.Schema
 import "this" IMDB.Types
 
 data EpisodeD = EpisodeD
@@ -71,30 +72,28 @@ instance IsPage "EpisodeR" EpisodeD where
     |]
 
   pageInit EpisodeR{..} = do
-    case imdbFromText @"tt" epSeries of
-      Left _ -> throwE The404Error
-      Right (ImdbId i) -> fromImdb i
-    where
-    fromImdb s = do
-      case parseEpCode code of
-        Just (sea, epi) -> do
-          let ll x = x{links=episodeLinks (ImdbId s) sea epi}
-          ds::[EpisodeD] <- query [sql|
-            select
-              it.original_title_text,
-              '[]',
-              {sea} as series_season_number,
-              ip.plot_text
-            from
-              imdb_title it
-              left join imdb_plot ip on ip.rowid=it.plot_id
-              left join title_episode_tsv tet on tet.rowid=it.rowid
-            where
-              tet.parent_id={s} and
-              tet.season_number={sea} and
-              tet.episode_number={epi}
-            |]
-          maybe (throwE The404Error) pure $ fmap (ll . fst) (L.uncons ds)
-        Nothing -> throwM The404Error
+    case parseEpCode code of
+      Just (sea, epi) -> do
+        ds::[Only (Id ImdbTitle) :. EpisodeD] <- query [sql|
+          select
+            it2.rowid,
+            it.original_title_text,
+            '[]',
+            {sea} as series_season_number,
+            ip.plot_text
+          from
+            imdb_title it
+            left join imdb_plot ip on ip.rowid=it.plot_id
+            left join title_episode_tsv tet on tet.rowid=it.rowid
+            left join imdb_title it2 on tet.parent_id=it2.rowid
+          where
+            it2.url_slug={epSeries} and
+            tet.season_number={sea} and
+            tet.episode_number={epi}
+          |]
+        case fmap fst (L.uncons ds) of
+          Just (Only (Id i) :. e) -> pure e{links=episodeLinks (ImdbId i) sea epi}
+          Nothing                 -> throwE The404Error
+      Nothing -> throwE The404Error
 
 deriveRowDef ''EpisodeD

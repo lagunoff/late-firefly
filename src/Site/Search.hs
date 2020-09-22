@@ -14,6 +14,7 @@ data SearchD = SearchD
 
 data Result = Result
   { rowid     :: Int
+  , urlSlug   :: Text
   , header    :: Text
   , thumbnail :: Maybe Text
   , plot      :: Maybe Text
@@ -32,12 +33,10 @@ instance IsPage "SearchR" SearchD where
       ul_ do
         for_ results \Result{..} -> do
           let
-            link = if series
-              then linkTo $ SeriesR (showt $ ImdbId @"tt" $ fromIntegral rowid)
-              else linkTo $ MovieR (showt rowid)
+            link = linkTo $ MovieR urlSlug
           li_ [class_ "search-item"] do
             link do
-              for_ thumbnail \src -> img_ [src_ src]
+              for_ thumbnail \src -> img_ [src_ src, width_ "64"]
             div_ do
               link do
                  h5_ do
@@ -71,8 +70,10 @@ instance IsPage "SearchR" SearchD where
     results <- query [sql|
       select
         s.rowid,
+        it.url_slug,
         s.header,
-        s.thumbnail67x98,
+        ii.url,
+--        s.thumbnail67x98,
         s.text,
         s.`year`,
         case
@@ -83,10 +84,13 @@ instance IsPage "SearchR" SearchD where
       from
         imdb_title_fts fts
         cross join imdb_title it on fts.rowid=it.rowid
+        left join imdb_image ii on ii.rowid=it.primary_image_id
         left join imdb_search s on fts.rowid=s.rowid
         left join title_basics_tsv tbt on fts.rowid=tbt.rowid
+        left join title_ratings_tsv trt on fts.rowid=trt.rowid
       where
         fts.header match {search}
+      order by trt.num_votes desc
     |]
     pure SearchD{..}
 

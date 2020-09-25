@@ -3,11 +3,13 @@ module Router where
 import Control.Lens
 import Data.Constraint
 import Data.List as L
+import Data.Maybe
 import Data.Proxy
 import Data.Text as T
 import Database.SQLite.Simple
 import GHC.TypeLits
 import Network.URI
+import Text.Read
 import qualified Data.Map as M
 
 import "this" Intro
@@ -20,11 +22,11 @@ data UrlParts = UP
   deriving (Eq, Show, Generic)
 
 data Route a where
-  HomeR    :: Route "HomeR"
-  SearchR  :: {search::Text, offset::Int} -> Route "SearchR"
-  EpisodeR :: {epSeries::Text, code::Text} -> Route "EpisodeR"
-  MovieR   :: {slug::Text} -> Route "MovieR"
-  GraphQlR :: Route "GraphQlR"
+  HomeR    :: Route "Home"
+  SearchR  :: {search::Text, offset::Int} -> Route "Search"
+  EpisodeR :: {series::Text, code::Text} -> Route "Episode"
+  TitleR   :: {slug::Text} -> Route "Title"
+  GraphQlR :: Route "GraphQl"
 
 data SomeRoute = forall a. KnownSymbol a => SR (Route a)
 
@@ -40,19 +42,26 @@ partsToRoute :: Prism' UrlParts SomeRoute
 partsToRoute = prism' build match where
   match :: UrlParts -> Maybe SomeRoute
   match = \case
-    UP [] [("s", search)] -> Just $ SR SearchR{offset=0,..}
-    UP ["graphql"] _ -> Just $ SR GraphQlR
-    UP [epSeries,code] _ -> Just $ SR EpisodeR{..}
-    UP [slug] _ -> Just $ SR MovieR{..}
+    UP [] q
+      | Just search <- lookupNe "s" q
+      , offset      <- lookupInt 0 "offset"  q ->
+        Just $ SR SearchR{..}
+    UP ["graphql"] _      -> Just $ SR GraphQlR
+    UP [series,code] _    -> Just $ SR EpisodeR{..}
+    UP [slug] _           -> Just $ SR TitleR{..}
     UP [] _               -> Just $ SR HomeR
-    _                        -> Nothing
+    _                     -> Nothing
   build :: SomeRoute -> UrlParts
   build = \case
     SR HomeR        -> UP [] []
-    SR SearchR{..} -> UP [] [("s", search)]
-    SR EpisodeR{..} -> UP [epSeries, code] []
-    SR MovieR{..}  -> UP [slug] []
-    SR GraphQlR{}  -> UP ["graphql"] []
+    SR SearchR{..}  -> UP [] (catMaybes [Just ("s", search), parDef 0 "offset" offset])
+    SR EpisodeR{..} -> UP [series, code] []
+    SR TitleR{..}   -> UP [slug] []
+    SR GraphQlR{}   -> UP ["graphql"] []
+
+  lookupNe n = mfilter (/="") . L.lookup n
+  lookupInt d n = fromMaybe d . (readMaybe @Int . T.unpack =<<) . L.lookup n
+  parDef d n x = bool (Just (n,showt x)) Nothing (x==d)
 
 urlToParts ::Iso' Text UrlParts
 urlToParts = iso apply unapply where

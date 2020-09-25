@@ -9,7 +9,7 @@ import "this" Widget
 data GraphQlD = GraphQlD
   deriving stock (Show, Eq, Generic)
 
-instance IsPage "GraphQlR" GraphQlD where
+instance IsPage "GraphQl" GraphQlD where
   pageTemplate = id
   pageWidget GraphQlR{} GraphQlD{} = do
     let

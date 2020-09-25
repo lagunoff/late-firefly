@@ -62,6 +62,9 @@ let
         text-show = x: dontCheck (doJailbreak x);
         parseargs = x: dontCheck (doJailbreak x);
         slug = x: dontCheck (doJailbreak x);
+        size-based = x: dontCheck (doJailbreak x);
+        language-ecmascript = x: dontCheck (doJailbreak x);
+        fay = x: dontCheck (doJailbreak x);
         late-firefly = x: overrideCabal x (x: combine (lateFireflyExts hself) x x);
       })
     ];

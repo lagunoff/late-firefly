@@ -1,7 +1,6 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 module Site.Episode where
 
-import Control.Monad.Catch
 import Data.List as L
 import Language.Javascript.JMacro
 import Lucid.Base
@@ -20,7 +19,7 @@ data EpisodeD = EpisodeD
   , plot   :: Maybe Text }
   deriving stock (Show, Eq, Generic)
 
-instance IsPage "EpisodeR" EpisodeD where
+instance IsPage "Episode" EpisodeD where
   pageWidget EpisodeR{..} EpisodeD{..} = do
     let Theme{..} = theme
     div_ [class_ "episode-root"] do
@@ -80,14 +79,13 @@ instance IsPage "EpisodeR" EpisodeD where
             it.original_title_text,
             '[]',
             {sea} as series_season_number,
-            ip.plot_text
+            (select plot_text from imdb_plot ip where ip.title_id=it.rowid and ip.plot_type='"SUMMARY"' limit 1)
           from
             imdb_title it
-            left join imdb_plot ip on ip.rowid=it.plot_id
             left join title_episode_tsv tet on tet.rowid=it.rowid
             left join imdb_title it2 on tet.parent_id=it2.rowid
           where
-            it2.url_slug={epSeries} and
+            it2.url_slug={series} and
             tet.season_number={sea} and
             tet.episode_number={epi}
           |]

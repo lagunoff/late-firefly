@@ -26,21 +26,20 @@ data Result = Result
 
 limit::Int = 50
 
-paginate :: Int -> Int -> Int -> [(Maybe Int, Int, Int)]
-paginate offset limit total = prevs $ fmap (\x -> (x, p x)) $ catMaybes pages where
+paginate :: Int -> Int -> Int -> [Int]
+paginate offset limit total = catMaybes pages where
   pages =
-    [ first, left 2, left 1, Just offset, right 1, right 2, right 3
-    , right 4, last ]
-  p = succ . (`div` limit) --
-  left x = let y = offset - (limit * x) in if y <= 0 then Nothing else Just y
-  right x = let y = offset + (limit * x) in if y >= limit * q then Nothing else Just y
+    [ first, back 2, back 1, Just offset, forward 1, forward 2, forward 3
+    , forward 4, last ]
+  back x = let y = offset - (limit * x) in if y <= 0 then Nothing else Just y
+  forward x = let y = offset + (limit * x) in if y >= limit * q then Nothing else Just y
   first = if offset == 0 then Nothing else Just 0
   last = if lastOff == offset then Nothing else Just lastOff
   (q,r) = divMod total limit
   lastOff|total == 0 = 0|r==0 = limit * (q - 1)|otherwise = limit * q
-  prevs = go Nothing where
-    go _ []     = []
-    go y ((a, b):xs) = (y, a, b) : go (Just b) xs
+
+pageOf :: Int -> Int
+pageOf = succ . (`div` limit)
 
 instance IsPage "Search" SearchD where
   pageWidget SearchR{..} SearchD{..} = do
@@ -48,35 +47,49 @@ instance IsPage "Search" SearchD where
       Theme{..} = theme
       pages =
         when (total > limit) $ ul_ [class_ "pagination"] do
-          for_ (paginate offset limit total) \(prev, o, p) -> do
-            when (fmap (< (p-1)) prev == Just True) do
+          let ps = paginate offset limit total
+          for_ (L.zip ps (Nothing:fmap Just ps)) \(o, prev) -> do
+            when (fmap (< (o - limit)) prev == Just True) do
               li_ [class_ "dots"] "…"
-            if offset==o then li_ [class_ "active"] do (toHtml (showt p))
-            else li_ do linkTo SearchR{offset=o,..} do (toHtml (showt p))
-    div_ [class_ "search"] do
-      form_ [action_ "/", method_ "GET"] do
-        input_ [name_ "s", type_ "search", makeAttribute "autofocus" "on", value_ search]
-        button_ [type_ "submit"] do "Search"
-      div_ [class_ "total"] do
-        span_ do toHtml (showt total); " results found"
-      pages
-      ul_ do
-        for_ results \Result{..} -> do
-          let
-            link = linkTo $ TitleR urlSlug
-          li_ [class_ "search-item"] do
-            link do
-              for_ thumbnail \src -> img_ [src_ src, width_ "64"]
-            div_ do
-              link do
-                 h5_ do
-                   toHtml header
-                   for_ year \y -> do " "; toHtml y
-              for_ plot (p_ . toHtml)
-      pages
-
+            if offset==o then li_ [class_ "active"] do (toHtml (showt (pageOf o)))
+            else li_ do linkTo SearchR{offset=o,..} do (toHtml (showt (pageOf o)))
+    div_ [class_ "search-results"] do
+      case total of
+        0 -> do
+          div_ [class_ "not-found"] do
+            span_ do "Nothing found"
+        _ -> do
+          div_ [class_ "total"] do
+            span_ do toHtml (showt total); " results found"
+          pages
+          ul_ do
+            for_ results \Result{..} -> do
+              let
+                link = linkTo $ TitleR urlSlug
+              li_ [class_ "search-item"] do
+                link do
+                  for_ thumbnail \src -> img_ [src_ src, width_ "64"]
+                div_ do
+                  link do
+                     h5_ do
+                       toHtml header
+                       for_ year \y -> do " "; toHtml y
+                  for_ plot (p_ . toHtml)
+          pages
+    let next = SearchR{offset=offset+limit,..}
+    let prev = SearchR{offset=offset-limit,..}
+    toHtml [jmacro|
+      window.addEventListener 'keydown' \e {
+        if (e.ctrlKey && e.key == 'ArrowLeft' && `(offset > 0)`) {
+          window.location.href = `(urlTo prev)`;
+        }
+        if (e.ctrlKey && e.key == 'ArrowRight' && `(offset + limit <= total)`) {
+          window.location.href = `(urlTo next)`;
+        }
+      }
+    |]
     [style|
-      .search
+      .search-results
         max-width: #{pageWidth}
         margin: #{unit * 3} auto 0 auto
         & ul

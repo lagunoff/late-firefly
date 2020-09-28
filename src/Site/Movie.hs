@@ -22,8 +22,6 @@ movieWidget :: Route "Title" -> MovieD -> Html ()
 movieWidget TitleR{} MovieD{..} = do
   let Theme{..} = theme
   div_ [class_ "episode-root"] do
-    h3_ [ht|#{title}|]
-    -- breadcrumbsWidget (crumbs r ed)
     toHtml [jmacro|
       fun hcl el link {
         document.getElementById('video-frame').src=link;
@@ -33,10 +31,6 @@ movieWidget TitleR{} MovieD{..} = do
         el.parentNode.classList.add('active');
       }
     |]
-    ul_ [class_ "tabs"] $ for_ (L.zip links [0..]) \(_, idx::Int) -> do
-      li_ (bool [] [class_ "active"] $ idx == 0) do
-        a_ [href_ "javascript:void 0", onclick_ [st|hcl(this, '#{links !! idx}')|]]
-          [ht|Server #{showt (idx + 1)}|]
     iframe_
       [ makeAttribute "referrerpolicy" "no-referrer"
       , makeAttribute "scrolling" "no"
@@ -45,11 +39,17 @@ movieWidget TitleR{} MovieD{..} = do
       , makeAttribute "style" "width: 900px; height: 600px"
       , makeAttribute "src" $ links !! 0
       , id_ "video-frame" ] ""
+    ul_ [class_ "tabs"] $ for_ (L.zip links [0..]) \(_, idx::Int) -> do
+      li_ (bool [] [class_ "active"] $ idx == 0) do
+        a_ [href_ "javascript:void 0", onclick_ [st|hcl(this, '#{links !! idx}')|]]
+          [ht|Server #{showt (idx + 1)}|]
+    h3_ [ht|#{title}|]
     for_ plot (p_ . toHtml)
     [style|
       .episode-root
         max-width: 900px
         margin: 0 auto
+        margin-top: #{unit * 3}
         .tabs
           display: flex
           margin: 0

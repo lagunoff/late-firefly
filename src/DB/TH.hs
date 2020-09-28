@@ -166,4 +166,5 @@ imdbTitleSearch = [sql|
   create unique index imdb_title__url_slug on imdb_title(url_slug);
   create index title_episode_tsv__parent_id on title_episode_tsv(parent_id);
   create index title_ratings_tsv__num_votes on title_ratings_tsv(num_votes);
+  create index imdb_plot__title_id on imdb_plot(title_id);
 |]

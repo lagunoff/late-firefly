@@ -42,7 +42,7 @@ headerWidget = do
           span_ [style_ [st|color: #{showt primary}|] ] do
             "Net"
         ul_ [class_ "menu"] do
-          li_ do linkTo (HomeR) do div_ "Series"
+          li_ do linkTo HomeR do div_ "Series"
           li_ do linkTo HomeR do div_ "Movies"
           li_ do linkTo HomeR do div_ "Genre"
           li_ do linkTo HomeR do div_ "Top IMDB"
@@ -50,8 +50,20 @@ headerWidget = do
       div_ [class_ "search"] do
         form_ [action_ "/", method_ "GET"] do
           input_
-            [name_ "s", placeholder_ "Search"]
+            [id_ "s", name_ "s", placeholder_ "Search"]
         searchIcon_
+    toHtml [jmacro|
+      var sEl = document.getElementById 's';
+      var hlEl = document.querySelector '.header-left';
+      // sEl.addEventListener 'focusin' \e {
+      //   hlEl.style.display = 'none';
+      //   sEl.style.width = '1200px';
+      // };
+      // sEl.addEventListener 'focusout' \e {
+      //   sEl.style.width = '200px';
+      //   hlEl.style.display = 'block';
+      // }
+    |]
     [style|
       body
         background: rgba(0,0,0,0.04)
@@ -114,26 +126,21 @@ headerWidget = do
           height: 100%
           display: flex
           align-items: center
-          height: #{(unit * 4) - 2}
+          height: #{(unit * 5) - 2}
           box-sizing: border-box
-          border-radius: #{unit * 2}
-          border: solid 2px transparent
-          box-shadow: 0 0 2px rgba(0,0,0,0.4)
+          border-radius: #{unit * 2.5}
+          border: solid 1px rgba(0,0,0,0.2)
+          &:hover
+            box-shadow: 2px 1px 4px rgba(0,0,0,0.2)
           input
             padding-left: #{unit}
             border: none
             outline: none
             font-size: 16px
             background: transparent
-            &:focus
-              width: 400px
+            width: 200px
           svg
-            opacity: 0.2
-          &:hover
-            border: solid 2px #{primary}
-            box-shadow: none
-            svg
-              opacity: 1 |]
+            opacity: 0.2 |]
 
 footerWidget :: Html ()
 footerWidget = do

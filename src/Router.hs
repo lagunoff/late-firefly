@@ -37,10 +37,20 @@ class KnownSymbol l => IsPage l o | l -> o where
   pageInit :: (?conn::Connection) => Route l -> ServerIO o
   pageWidget :: Route l -> o -> Html ()
 
+class KnownSymbol l => IsPage2 l o | l -> o where
+  page :: Page (Route l) o
+
 data Page i o = Page
-  { pInit   :: i -> ServerIO o
-  , pWidget :: i -> o -> Html ()
-  , pCss    :: LT.Text }
+  { pTemplate :: Html () -> Html ()
+  , pInit     :: (?conn::Connection) => i -> ServerIO o
+  , pWidget   :: i -> o -> Html ()
+  , pCss      :: LT.Text }
+
+defPage :: Page i o
+defPage = Page htmlTemplate (const undefined) (\_ _ -> pure ()) mempty
+
+unitPage :: Page i ()
+unitPage = Page htmlTemplate (const (pure ())) (\_ _ -> pure ()) mempty
 
 data PageDict = forall l a. PageDict (Dict (IsPage l a))
 
@@ -123,3 +133,6 @@ linkMay r = linkAttMay r []
 linkAttMay :: KnownSymbol l => Maybe (Route l) -> [Attribute] -> Html () -> Html ()
 linkAttMay r att = a_
   (maybe att ((:att) . href_ . ("/"<>) . review (urlToParts . partsToRoute) . SR) r)
+
+urlTo :: KnownSymbol l => Route l -> Text
+urlTo = ("/"<>) . review (urlToParts . partsToRoute) . SR

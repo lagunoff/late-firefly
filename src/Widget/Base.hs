@@ -5,11 +5,11 @@ import Data.Text as T
 import GHC.Word
 import Language.Haskell.TH
 import Language.Haskell.TH.Quote
+import Language.Javascript.JMacro
 import Lucid.Base
 import Text.Cassius
 import Text.Shakespeare.Text as X (st)
 import qualified Data.Text.Lazy as LT
-import Language.Javascript.JMacro
 
 import "this" Intro
 

@@ -26,15 +26,40 @@ data Result = Result
 
 limit::Int = 50
 
+paginate :: Int -> Int -> Int -> [(Maybe Int, Int, Int)]
+paginate offset limit total = prevs $ fmap (\x -> (x, p x)) $ catMaybes pages where
+  pages =
+    [ first, left 2, left 1, Just offset, right 1, right 2, right 3
+    , right 4, last ]
+  p = succ . (`div` limit) --
+  left x = let y = offset - (limit * x) in if y <= 0 then Nothing else Just y
+  right x = let y = offset + (limit * x) in if y >= limit * q then Nothing else Just y
+  first = if offset == 0 then Nothing else Just 0
+  last = if lastOff == offset then Nothing else Just lastOff
+  (q,r) = divMod total limit
+  lastOff|total == 0 = 0|r==0 = limit * (q - 1)|otherwise = limit * q
+  prevs = go Nothing where
+    go _ []     = []
+    go y ((a, b):xs) = (y, a, b) : go (Just b) xs
+
 instance IsPage "Search" SearchD where
   pageWidget SearchR{..} SearchD{..} = do
-    let Theme{..} = theme
+    let
+      Theme{..} = theme
+      pages =
+        when (total > limit) $ ul_ [class_ "pagination"] do
+          for_ (paginate offset limit total) \(prev, o, p) -> do
+            when (fmap (< (p-1)) prev == Just True) do
+              li_ [class_ "dots"] "…"
+            if offset==o then li_ [class_ "active"] do (toHtml (showt p))
+            else li_ do linkTo SearchR{offset=o,..} do (toHtml (showt p))
     div_ [class_ "search"] do
       form_ [action_ "/", method_ "GET"] do
         input_ [name_ "s", type_ "search", makeAttribute "autofocus" "on", value_ search]
         button_ [type_ "submit"] do "Search"
       div_ [class_ "total"] do
         span_ do toHtml (showt total); " results found"
+      pages
       ul_ do
         for_ results \Result{..} -> do
           let
@@ -48,10 +73,8 @@ instance IsPage "Search" SearchD where
                    toHtml header
                    for_ year \y -> do " "; toHtml y
               for_ plot (p_ . toHtml)
-      when (offset + limit < total) do
-        ul_ do
-          li_ do
-            linkTo SearchR{offset=offset + limit,..} do "More->"
+      pages
+
     [style|
       .search
         max-width: #{pageWidth}
@@ -74,6 +97,38 @@ instance IsPage "Search" SearchD where
           margin: 0
         * + *
           margin-left: #{unit * 2}
+      .pagination
+        margin: 0
+        padding: 0
+        display: flex
+        justify-content: center
+        user-select: none
+        li
+          border: 1px solid rgba(0,0,0,0.1)
+          list-style: none
+          margin: 0
+          padding: 0
+          min-width: #{unit * 4}
+          height: #{unit * 4}
+          text-align: center
+          line-height: #{unit * 4}
+          background: white
+          &.active
+            background: #{primary}
+            color: rgba(255,255,255,0.87)
+            cursor: default
+          a
+            width: 100%
+            height: 100%
+            display: block
+        li + li
+          border-left: none
+        li:first-child
+          border-top-left-radius: 5px
+          border-bottom-left-radius: 5px
+        li:last-child
+          border-top-right-radius: 5px
+          border-bottom-right-radius: 5px
     |]
   pageInit SearchR{..} = do
     results0 <- query [sql|

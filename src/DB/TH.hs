@@ -165,4 +165,5 @@ imdbTitleSearch = [sql|
   create virtual table if not exists imdb_title_fts using fts5(original_title_text, content='imdb_title');
   create unique index imdb_title__url_slug on imdb_title(url_slug);
   create index title_episode_tsv__parent_id on title_episode_tsv(parent_id);
+  create index title_ratings_tsv__num_votes on title_ratings_tsv(num_votes);
 |]

@@ -6,6 +6,7 @@ import Data.List as L
 import Data.Maybe
 import Data.Proxy
 import Data.Text as T
+import qualified Data.Text.Lazy as LT
 import Database.SQLite.Simple
 import GHC.TypeLits
 import Network.URI
@@ -15,7 +16,7 @@ import qualified Data.Map as M
 import "this" Intro
 import {-# SOURCE #-} "this" Site.Template
 
-data UrlParts = UP
+data UrlParts = Url
   { partsPath  :: [Text]         -- ^ Path segments
   , partsQuery :: [(Text, Text)] -- ^ GET parameters
   }
@@ -36,28 +37,33 @@ class KnownSymbol l => IsPage l o | l -> o where
   pageInit :: (?conn::Connection) => Route l -> ServerIO o
   pageWidget :: Route l -> o -> Html ()
 
+data Page i o = Page
+  { pInit   :: i -> ServerIO o
+  , pWidget :: i -> o -> Html ()
+  , pCss    :: LT.Text }
+
 data PageDict = forall l a. PageDict (Dict (IsPage l a))
 
 partsToRoute :: Prism' UrlParts SomeRoute
 partsToRoute = prism' build match where
   match :: UrlParts -> Maybe SomeRoute
   match = \case
-    UP [] q
+    Url [] q
       | Just search <- lookupNe "s" q
       , offset      <- lookupInt 0 "offset"  q ->
         Just $ SR SearchR{..}
-    UP ["graphql"] _      -> Just $ SR GraphQlR
-    UP [series,code] _    -> Just $ SR EpisodeR{..}
-    UP [slug] _           -> Just $ SR TitleR{..}
-    UP [] _               -> Just $ SR HomeR
+    Url ["graphql"] _      -> Just $ SR GraphQlR
+    Url [series,code] _    -> Just $ SR EpisodeR{..}
+    Url [slug] _           -> Just $ SR TitleR{..}
+    Url [] _               -> Just $ SR HomeR
     _                     -> Nothing
   build :: SomeRoute -> UrlParts
   build = \case
-    SR HomeR        -> UP [] []
-    SR SearchR{..}  -> UP [] (catMaybes [Just ("s", search), parDef 0 "offset" offset])
-    SR EpisodeR{..} -> UP [series, code] []
-    SR TitleR{..}   -> UP [slug] []
-    SR GraphQlR{}   -> UP ["graphql"] []
+    SR HomeR        -> Url [] []
+    SR SearchR{..}  -> Url [] (catMaybes [Just ("s", search), parDef 0 "offset" offset])
+    SR EpisodeR{..} -> Url [series, code] []
+    SR TitleR{..}   -> Url [slug] []
+    SR GraphQlR{}   -> Url ["graphql"] []
 
   lookupNe n = mfilter (/="") . L.lookup n
   lookupInt d n = fromMaybe d . (readMaybe @Int . T.unpack =<<) . L.lookup n
@@ -65,13 +71,13 @@ partsToRoute = prism' build match where
 
 urlToParts ::Iso' Text UrlParts
 urlToParts = iso apply unapply where
-  unapply (UP f q) =
+  unapply (Url f q) =
     T.intercalate "?" ([segments] <> bool [] [params] (params/="")) where
       segments = T.intercalate "/" $ fmap enUri f
       params = T.intercalate "&". L.filter (/= "")
         . fmap (\(k, v) -> k <> "=" <> v) . fmap (bimap enUri enUri)
         $ q
-  apply txt = UP seg qry where
+  apply txt = Url seg qry where
     (segTxt, qryTxt) = breakOn1 "?" txt
     seg = fmap deUri . L.filter (/="") . T.splitOn "/" $ segTxt
     qry = fmap (breakOn1 "=" . deUri) . L.filter (/="") . T.splitOn "&" $ qryTxt

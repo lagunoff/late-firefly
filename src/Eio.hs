@@ -13,7 +13,7 @@ newtype Eio e a = Eio {unEio :: IO a}
     ( Alternative, Applicative, Functor, Monad, MonadPlus, Monoid, Semigroup
     , MonadIO, Default, MonadFix, MonadThrow, MonadCatch )
 
-newtype I0 r e a = I0 {unI0 :: r -> IO a}
+newtype Y i x a = Y {unY :: i -> IO a}
 
 liftEio :: (e' <: e, Exception e, Exception e') => Eio e' a -> Eio e a
 liftEio = withEio (review _S)

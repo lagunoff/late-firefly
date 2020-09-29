@@ -20,7 +20,6 @@ import "this" Intro
 import "this" Router.Wai
 import "this" Router.TH
 import "this" Site ()
-import "this" Admin ()
 
 pages = $collectPages
 
@@ -35,8 +34,8 @@ instance Default WebOpts where
 
 -- | Command line options
 data Opts
-  = Start        {dbpath::Maybe Text, port::Maybe Int, docroot::Maybe Text}
-  | Migrate      {dbpath::Maybe Text}
+  = Start       {dbpath::Maybe Text, port::Maybe Int, docroot::Maybe Text}
+  | Migrate     {dbpath::Maybe Text}
   | PrintSchema
   deriving (Show, Generic, ParseRecord)
 

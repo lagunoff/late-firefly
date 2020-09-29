@@ -7,8 +7,11 @@ import "this" Router
 import "this" Site.Movie
 import "this" Site.Series
 
-instance IsPage "Title" (Either MovieD SeriesD) where
-  pageInit r@TitleR{..} = do
+titlePage = defPage {pInit,pLayout} where
+  Page{pInit=initMovie,pLayout=layoutMovie} = moviePage
+  Page{pInit=initSeries,pLayout=layoutSeries} = seriesPage
+  pInit :: (?conn::Connection) => Route "Title" -> ServerIO _
+  pInit r@TitleR{..} = do
     Only (isTv::Bool) <- query1 [sql|
       select tbt.title_type='tvSeries'
         from title_basics_tsv tbt
@@ -17,4 +20,6 @@ instance IsPage "Title" (Either MovieD SeriesD) where
           it.url_slug={slug}
         |]
     bool (Left <$> initMovie r) (Right <$> initSeries r) isTv
-  pageWidget r = either (movieWidget r) (seriesWidget r)
+  pLayout r = either (layoutMovie r) (layoutSeries r)
+
+instance IsPage "Title" (Either MovieD SeriesD) where page = titlePage

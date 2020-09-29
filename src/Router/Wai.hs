@@ -23,17 +23,17 @@ html5Router ps req resp = maybe nothin just mr where
   mp = preview (urlToParts . partsToRoute) uPath
   bPath = encodePath (pathInfo req) (queryString req)
   uPath = T.decodeUtf8 $ BSL.toStrict $ BS.toLazyByteString bPath
-  ini :: forall i o. Dict (IsPage i o) -> UnServer (Route i) o
-  ini Dict = pageInit @i
-  wid :: forall i o. Dict (IsPage i o) -> SomeRoute -> o -> Html ()
-  wid Dict sr o = pageWidget @i (fromMaybe errorTrace $ fromSome @i sr) o
-  tpl :: forall i o. Dict (IsPage i o) -> Html () -> Html ()
-  tpl Dict = pageTemplate @i
+  pag :: forall i o. Dict (IsPage i o) -> _
+  pag Dict = page @i
+  lay :: forall i o. Dict (IsPage i o) -> SomeRoute -> o -> Layout
+  lay Dict sr o = pLayout (page @i) (fromMaybe errorTrace $ fromSome @i sr) o
   dynBk :: forall i o. Dict (IsPage i o) -> SomeRoute -> UnServer (Route i) o -> ServerIO o
   dynBk Dict sr f = f $ fromMaybe errorTrace $ fromSome @i sr
   just (sr, PageDict dict) = do
-    pdata <- unEio (dynBk dict sr (ini dict))
-    let b = htmlBuilder . BS.lazyByteString . renderBS . (tpl dict) $ wid dict sr pdata
+    let Page{..} = pag dict
+    pdata <- unEio (dynBk dict sr pInit)
+    let Layout{..} = lay dict sr pdata
+    let b = htmlBuilder . BS.lazyByteString . renderBS $ pTemplate styles script html
     resp (responseBuilder ok200 [(hContentType, "text/html")] b)
   nothin = do
     let b = htmlBuilder . BS.lazyByteString . renderBS $ page404

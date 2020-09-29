@@ -11,6 +11,7 @@ import "this" Widget
 
 data SearchD = SearchD
   { results :: [Result]
+  , genres  :: [Text]
   , total   :: Int }
 
 data Result = Result
@@ -41,10 +42,10 @@ paginate offset limit total = catMaybes pages where
 pageOf :: Int -> Int
 pageOf = succ . (`div` limit)
 
-instance IsPage "Search" SearchD where
-  pageWidget SearchR{..} SearchD{..} = do
+searchPage :: _ _ SearchD
+searchPage = coercePage defPage2 {
+  html = \SearchR{..} SearchD{..} -> do
     let
-      Theme{..} = theme
       pages =
         when (total > limit) $ ul_ [class_ "pagination"] do
           let ps = paginate offset limit total
@@ -53,6 +54,15 @@ instance IsPage "Search" SearchD where
               li_ [class_ "dots"] "…"
             if offset==o then li_ [class_ "active"] do (toHtml (showt (pageOf o)))
             else li_ do linkTo SearchR{offset=o,..} do (toHtml (showt (pageOf o)))
+    div_ [class_ "search-results"] do
+      a_ [href_ "#"] "Show filter"
+      form_ [action_ "/", method_ "GET", onsubmit_ "handleSubmit(event)"] do
+        for_ genres \v -> do label_ (toHtml v); input_ [type_ "checkbox", name_ "genres[]", value_ v ]
+        select_ [name_ "type"] do
+          option_ [value_ "tvSeries"] "TV-series"
+          option_ [value_ "movie"] "Movies"
+        input_ [name_ "s", value_ search]
+        button_ [type_ "submit"] "Submit"
     div_ [class_ "search-results"] do
       case total of
         0 -> do
@@ -75,10 +85,11 @@ instance IsPage "Search" SearchD where
                        toHtml header
                        for_ year \y -> do " "; toHtml y
                   for_ plot (p_ . toHtml)
-          pages
-    let next = SearchR{offset=offset+limit,..}
-    let prev = SearchR{offset=offset-limit,..}
-    toHtml [jmacro|
+          pages,
+  script = \SearchR{..} SearchD{..} ->
+    let next = SearchR{offset=offset+limit,..} in
+    let prev = SearchR{offset=offset-limit,..} in
+    [jmacro|
       window.addEventListener 'keydown' \e {
         if (e.ctrlKey && e.key == 'ArrowLeft' && `(offset > 0)`) {
           window.location.href = `(urlTo prev)`;
@@ -87,63 +98,68 @@ instance IsPage "Search" SearchD where
           window.location.href = `(urlTo next)`;
         }
       }
-    |]
-    [style|
-      .search-results
-        max-width: #{pageWidth}
-        margin: #{unit * 3} auto 0 auto
-        & ul
-          margin: 0
-          padding: 0
-          & li
-            list-style: none
-      .search-item
-        display: flex
-        align-items: top
-        margin-top: #{unit * 2}
-        h5
-          margin: 0 0 #{unit} 0
-          font-size: 16px
-          text-transform: uppercase
-          font-weight: 400
-        p
-          margin: 0
-        * + *
-          margin-left: #{unit * 2}
-      .pagination
+      fun handleSubmit e {
+        var formData = new FormData(e.target);
+        console.log formData;
+        e.preventDefault();
+      }
+    |],
+  styles = \_ _ -> let Theme{..} = theme in [css|
+    .search-results
+      max-width: #{pageWidth}
+      margin: #{unit * 3} auto 0 auto
+      & ul
         margin: 0
         padding: 0
-        display: flex
-        justify-content: center
-        user-select: none
-        li
-          border: 1px solid rgba(0,0,0,0.1)
+        & li
           list-style: none
-          margin: 0
-          padding: 0
-          min-width: #{unit * 4}
-          height: #{unit * 4}
-          text-align: center
-          line-height: #{unit * 4}
-          background: white
-          &.active
-            background: #{primary}
-            color: rgba(255,255,255,0.87)
-            cursor: default
-          a
-            width: 100%
-            height: 100%
-            display: block
-        li + li
-          border-left: none
-        li:first-child
-          border-top-left-radius: 5px
-          border-bottom-left-radius: 5px
-        li:last-child
-          border-top-right-radius: 5px
-          border-bottom-right-radius: 5px
-    |]
-  pageInit SearchR{..} = do
+    .search-item
+      display: flex
+      align-items: top
+      margin-top: #{unit * 2}
+      h5
+        margin: 0 0 #{unit} 0
+        font-size: 16px
+        text-transform: uppercase
+        font-weight: 400
+      p
+        margin: 0
+      * + *
+        margin-left: #{unit * 2}
+    .pagination
+      margin: 0
+      padding: 0
+      display: flex
+      justify-content: center
+      user-select: none
+      li
+        border: 1px solid rgba(0,0,0,0.1)
+        list-style: none
+        margin: 0
+        padding: 0
+        min-width: #{unit * 4}
+        height: #{unit * 4}
+        text-align: center
+        line-height: #{unit * 4}
+        background: white
+        &.active
+          background: #{primary}
+          color: rgba(255,255,255,0.87)
+          cursor: default
+        a
+          width: 100%
+          height: 100%
+          display: block
+      li + li
+        border-left: none
+      li:first-child
+        border-top-left-radius: 5px
+        border-bottom-left-radius: 5px
+      li:last-child
+        border-top-right-radius: 5px
+        border-bottom-right-radius: 5px
+    |],
+  make = \SearchR{..} -> do
     results0 <- query [sql|
       with a as (
         select
@@ -176,8 +192,12 @@ instance IsPage "Search" SearchD where
       )
       select count(*),"","",null,null,null,0 from a union all select * from b
     |]
+    genres <- fmap fromOnly <$> query [sql|select distinct rowid from imdb_genre|]
     let results = L.drop 1 results0
     let total::Int = coerce (Site.Search.rowid (results0 !! 0))
     pure SearchD{..}
+  }
+
+instance IsPage "Search" SearchD where page = searchPage
 
 deriveRowDef ''Result

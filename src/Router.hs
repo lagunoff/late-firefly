@@ -6,12 +6,14 @@ import Data.List as L
 import Data.Maybe
 import Data.Proxy
 import Data.Text as T
-import qualified Data.Text.Lazy as LT
 import Database.SQLite.Simple
 import GHC.TypeLits
+import GHC.Records
+import Language.Javascript.JMacro
 import Network.URI
 import Text.Read
 import qualified Data.Map as M
+import qualified Data.Text.Lazy as LT
 
 import "this" Intro
 import {-# SOURCE #-} "this" Site.Template
@@ -26,31 +28,57 @@ data Route a where
   HomeR    :: Route "Home"
   SearchR  :: {search::Text, offset::Int} -> Route "Search"
   EpisodeR :: {series::Text, code::Text} -> Route "Episode"
+  SeasonR  :: {series2::Text, code2::Text} -> Route "Season"
   TitleR   :: {slug::Text} -> Route "Title"
   GraphQlR :: Route "GraphQl"
 
 data SomeRoute = forall a. KnownSymbol a => SR (Route a)
 
 class KnownSymbol l => IsPage l o | l -> o where
-  pageTemplate :: Html () -> Html ()
-  pageTemplate = htmlTemplate
-  pageInit :: (?conn::Connection) => Route l -> ServerIO o
-  pageWidget :: Route l -> o -> Html ()
-
-class KnownSymbol l => IsPage2 l o | l -> o where
   page :: Page (Route l) o
 
 data Page i o = Page
-  { pTemplate :: Html () -> Html ()
+  { pTemplate :: LT.Text -> JStat -> Html () -> Html ()
   , pInit     :: (?conn::Connection) => i -> ServerIO o
-  , pWidget   :: i -> o -> Html ()
-  , pCss      :: LT.Text }
+  , pLayout   :: i -> o -> Layout }
+
+instance Functor (Page i) where
+  fmap f (Page t i l) = Page t i2 (\i o -> l i undefined) where
+    i2 :: (?conn::Connection) => i -> ServerIO _
+    i2 x = fmap f (i x)
+
+data Page2 i o = Page2
+  { template :: LT.Text -> JStat -> Html () -> Html ()
+  , make     :: (?conn::Connection) => i -> ServerIO o
+  , html     :: i -> o -> Html ()
+  , styles   :: i -> o -> LT.Text
+  , script   :: i -> o -> JStat }
+
+coercePage :: Page2 i o -> Page i o
+coercePage Page2{..} = Page
+  { pTemplate=template
+  , pInit=make
+  , pLayout = \i o -> Layout{html=html i o,styles=styles i o,script=script i o} }
+
+data Layout = Layout
+  { html   :: Html ()
+  , styles :: LT.Text
+  , script :: JStat }
+
+instance Semigroup Layout where
+  (<>) !a !b = Layout (getField @"html" a <> getField @"html" b) (getField @"styles" a <> getField @"styles" b) (getField @"script" a <> getField @"script" b)
+
+instance Monoid Layout where
+  mempty = Layout mempty mempty mempty
 
 defPage :: Page i o
-defPage = Page htmlTemplate (const undefined) (\_ _ -> pure ()) mempty
+defPage = Page htmlTemplate (const undefined) mempty
+
+defPage2 :: Page2 i o
+defPage2 = Page2 htmlTemplate (const undefined) mempty mempty mempty
 
 unitPage :: Page i ()
-unitPage = Page htmlTemplate (const (pure ())) (\_ _ -> pure ()) mempty
+unitPage = Page htmlTemplate (const (pure ())) mempty
 
 data PageDict = forall l a. PageDict (Dict (IsPage l a))
 

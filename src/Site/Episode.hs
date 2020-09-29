@@ -8,6 +8,7 @@ import Lucid.Base
 import "this" DB
 import "this" Router
 import "this" Site.Types
+import "this" Site.Movie
 import "this" Widget
 import "this" IMDB.Schema
 import "this" IMDB.Types
@@ -19,58 +20,13 @@ data EpisodeD = EpisodeD
   , plot   :: Maybe Text }
   deriving stock (Show, Eq, Generic)
 
-instance IsPage "Episode" EpisodeD where
-  pageWidget EpisodeR{..} EpisodeD{..} = do
-    let Theme{..} = theme
-    div_ [class_ "episode-root"] do
-      toHtml [jmacro|
-        fun hcl el link {
-          document.getElementById('video-frame').src=link;
-          var ch = el.parentNode.parentNode.children;
-          for (var i=0; i < ch.length; i++) {
-            ch[i].classList.remove('active');
-          };
-          el.parentNode.classList.add('active');
-        }
-      |]
-      iframe_
-        [ makeAttribute "referrerpolicy" "no-referrer"
-        , makeAttribute "scrolling" "no"
-        , makeAttribute "allowfullscreen" "true"
-        , makeAttribute "frameborder" "0"
-        , makeAttribute "style" "width: 900px; height: 600px"
-        , makeAttribute "src" $ links !! 0
-        , id_ "video-frame" ] ""
-      ul_ [class_ "tabs"] $ for_ (L.zip links [0..]) \(_, idx::Int) -> do
-        li_ (bool [] [class_ "active"] $ idx == 0) do
-          a_ [href_ "javascript:void 0", onclick_ [st|hcl(this, '#{links !! idx}')|]]
-            [ht|Server #{showt (idx + 1)}|]
-      h3_ [ht|Episode #{code}|]
-      for_ plot \plot_text -> do p_ (toHtml plot_text)
-    [style|
-      .episode-root
-        max-width: 900px
-        margin: 0 auto
-        margin-top: #{unit * 3}
-        .tabs
-          display: flex
-          margin: 0
-          padding: 0
-          border-bottom: solid 2px #{primary}
-          margin-bottom: #{unit}
-          & > li
-            list-style: none
-            padding: #{unit} #{unit * 2}
-        li.active
-          background: #{primary}
-          a
-            color: white
-        li a
-          text-decoration: none
-          color: #{primaryText}
-    |]
+episodePage = defPage {pInit,pLayout} where
+  Page{pLayout=movieLayout} = moviePage
+  pLayout :: Route "Episode" -> EpisodeD -> _
+  pLayout EpisodeR{..} EpisodeD{..} = movieLayout (TitleR series) MovieD{title=title ?: "",..}
 
-  pageInit EpisodeR{..} = do
+  pInit :: (?conn::Connection) => Route "Episode" -> ServerIO _
+  pInit EpisodeR{..} = do
     case parseEpCode code of
       Just (sea, epi) -> do
         ds::[Only (Id ImdbTitle) :. EpisodeD] <- query [sql|
@@ -90,8 +46,10 @@ instance IsPage "Episode" EpisodeD where
             tet.episode_number={epi}
           |]
         case fmap fst (L.uncons ds) of
-          Just (Only (Id i) :. e) -> pure e{links=episodeLinks (ImdbId i) sea epi}
+          Just (Only (Id i) :. e) -> pure e{Site.Episode.links=episodeLinks (ImdbId i) sea epi}
           Nothing                 -> throwE The404Error
       Nothing -> throwE The404Error
+
+instance IsPage "Episode" EpisodeD where page = episodePage
 
 deriveRowDef ''EpisodeD

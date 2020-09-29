@@ -27,103 +27,45 @@ data Episode = Episode
   , episode   :: Maybe Int }
   deriving stock (Eq, Show, Generic)
 
-initSeries :: (?conn::Connection) => Route "Title" -> ServerIO SeriesD
-initSeries TitleR{..} = do
-  eps::[Episode] <- query [sql|
-    select
-      it.original_title_text,
-      null,
-      replace(ii.url, '._V1_.jpg', '._V1_UX225_AL_.jpg'),
-      tet.season_number,
-      tet.episode_number
-    from title_episode_tsv tet
-      left join imdb_title it on tet.rowid=it.rowid
-      left join imdb_image ii on it.primary_image_id=ii.rowid
-    where
-      tet.parent_id=(select rowid from imdb_title where url_slug={slug}) and
-      tet.episode_number is not null
-  |]
-  (plot, title, thumbnail) <- query1 [sql|
-    select
-      (select plot_text from imdb_plot ip where ip.title_id=it.rowid and ip.plot_type='"SUMMARY"' limit 1),
-      it.original_title_text,
-      replace(ii.url, '._V1_.jpg', '._V1_UX256_AL_.jpg')
-    from imdb_title it
-      left join imdb_image ii on it.primary_image_id=ii.rowid
-      where it.url_slug={slug}
-  |]
-  let seasons = fmap (L.sortOn episode) $ M.fromListWith (<>) $ fmap (\v@Episode{..} -> (season, [v{Site.Series.code=liftA2 (curry printEpCode) season episode}])) eps
-  pure SeriesD{..}
-
-seriesWidget :: Route "Title" -> SeriesD -> Html ()
-seriesWidget r d@SeriesD{..} = do
-    let Theme{..} = theme
-    header2Widget
-    div_ [class_ "seasons"] do
-      seasonSlider r d
-    [style|
-      .header-2
-        width: 100%
-        box-sizing: border-box
-        padding: #{showt $ unit * 3}
-        p
-          margin-top: 0
-        & > *
-          max-width: #{showt $ pageWidth}
-          margin: 0 auto
-        .poster
-          object-fit: contain
-          height: 350px
-          float: left
-          padding-right: #{showt $ unit * 3}
-      .seasons
-        & > *
-          max-width: #{showt $ pageWidth}
-          margin: 0 auto
+seriesPage :: Page (Route "Title") _
+seriesPage = coercePage defPage2 {
+  make = \TitleR{..} -> do
+    eps::[Episode] <- query [sql|
+      select
+        it.original_title_text,
+        null,
+        replace(ii.url, '._V1_.jpg', '._V1_UX225_AL_.jpg'),
+        tet.season_number,
+        tet.episode_number
+      from title_episode_tsv tet
+        left join imdb_title it on tet.rowid=it.rowid
+        left join imdb_image ii on it.primary_image_id=ii.rowid
+      where
+        tet.parent_id=(select rowid from imdb_title where url_slug={slug}) and
+        tet.episode_number is not null
     |]
-    where
-      header2Widget = do
-        div_ [class_ "header-2"] do
-          div_ do
-            for_ thumbnail \src ->
-              img_ [class_ "poster", src_ src]
-            h1_ (toHtml title)
-            for_ plot (p_ . toHtml)
-            div_ [style_ "clear: both"] do ""
-
-seasonSlider :: Route "Title" -> SeriesD -> Html ()
-seasonSlider TitleR{..} SeriesD{..} = do
-  let
-    Theme{..} = theme
-    thumbnailHeight = thumbnailWidth * 2 / 3
-    chevronWidth = unit * 5
-    gap = unit
-  flip M.traverseWithKey seasons \season episodes -> do
-    div_ [class_ "season"] do
-      h3_ [class_ "season-header"] do
-        toHtml [st|Season #{showt season}|]
-      div_ [class_ "wrapper"] do
-        ul_ [class_ "episodes-list"] do
-          for_ episodes \Episode{..} -> do
-            li_ do
-              linkAttMay (EpisodeR slug <$> code) [class_ "link", draggable_ "false"] do
-                for_ thumbnail \src -> img_ [draggable_ "false", src_ src, style_ [st|width: #{showt thumbnailWidth}; height: #{showt thumbnailHeight}|] ]
-                div_ do
-                  let tit = T.intercalate " " $ catMaybes [(<>" — ") . ("Episode "<>) . showt <$> episode, title]
-                  h4_ (toHtml tit)
-        button_
-          [ class_ "chevron chevron-left"
-          , tabindex_ "-1"
-          , onclick_ "hscrl(this, -1)"
-          ] do
-          chevronLeft_
-        button_
-          [ class_ "chevron chevron-right"
-          , tabindex_ "-1"
-          , onclick_ "hscrl(this, 1)"
-          ] do
-          chevronRight_
-  toHtml [jmacro|
+    (plot, title, thumbnail) <- query1 [sql|
+      select
+        (select plot_text from imdb_plot ip where ip.title_id=it.rowid and ip.plot_type='"SUMMARY"' limit 1),
+        it.original_title_text,
+        replace(ii.url, '._V1_.jpg', '._V1_UX256_AL_.jpg')
+      from imdb_title it
+        left join imdb_image ii on it.primary_image_id=ii.rowid
+        where it.url_slug={slug}
+    |]
+    let seasons = fmap (L.sortOn episode) $ M.fromListWith (<>) $ fmap (\v@Episode{..} -> (season, [v{Site.Series.code=liftA2 (curry printEpCode) season episode}])) eps
+    pure SeriesD{..},
+  html = \r@TitleR{..} d@SeriesD{..} -> do
+    div_ [class_ "header-2"] do
+      div_ do
+        for_ thumbnail \src ->
+          img_ [class_ "poster", src_ src]
+        h1_ (toHtml title)
+        for_ plot (p_ . toHtml)
+        div_ [style_ "clear: both"] do ""
+    div_ [class_ "seasons"] do
+      seasonSlider r d,
+  script = \_ _ -> [jmacro|
     fun listen el n h {
       fun hh e { h e }
       el.addEventListener n hh;
@@ -154,6 +96,7 @@ seasonSlider TitleR{..} SeriesD{..} = do
 
     forEach liEls \el {
       listen el 'mousedown' \e {
+        if (e.which != 1) return;
         down0 = e.x;
         scroll0 = el.scrollLeft;
         moved = 0;
@@ -183,8 +126,31 @@ seasonSlider TitleR{..} SeriesD{..} = do
         }
       };
     };
-  |]
-  [style|
+  |],
+  styles = \_ _ ->
+    let Theme{..} = theme in
+    let chevronWidth = unit * 5 in
+    let thumbnailHeight = thumbnailWidth * 2 / 3 in
+    let gap = unit in [css|
+    .header-2
+      width: 100%
+      box-sizing: border-box
+      padding: #{showt $ unit * 3}
+      p
+        margin-top: 0
+      & > *
+        max-width: #{showt $ pageWidth}
+        margin: 0 auto
+      .poster
+        object-fit: contain
+        height: 350px
+        float: left
+        padding-right: #{showt $ unit * 3}
+
+    .seasons > *
+        max-width: #{showt $ pageWidth}
+        margin: 0 auto
+
     .season
       .link
         text-decoration: none
@@ -259,6 +225,38 @@ seasonSlider TitleR{..} SeriesD{..} = do
         background: rgba(155, 147, 127, 0.06)
       .wrapper
         position: relative
-  |]
+    |]
+  }
+
+seasonSlider :: Route "Title" -> SeriesD -> Html ()
+seasonSlider TitleR{..} SeriesD{..} = do
+  let
+    Theme{..} = theme
+    thumbnailHeight = thumbnailWidth * 2 / 3
+  for_ (M.toList seasons) \(season, episodes) -> do
+    div_ [class_ "season"] do
+      h3_ [class_ "season-header"] do
+        toHtml [st|Season #{showt season}|]
+      div_ [class_ "wrapper"] do
+        ul_ [class_ "episodes-list"] do
+          for_ episodes \Episode{..} -> do
+            li_ do
+              linkAttMay (EpisodeR slug <$> code) [class_ "link", draggable_ "false"] do
+                for_ thumbnail \src -> img_ [draggable_ "false", src_ src, style_ [st|width: #{showt thumbnailWidth}; height: #{showt thumbnailHeight}|] ]
+                div_ do
+                  let tit = T.intercalate " " $ catMaybes [(<>" — ") . ("Episode "<>) . showt <$> episode, title]
+                  h4_ (toHtml tit)
+        button_
+          [ class_ "chevron chevron-left"
+          , tabindex_ "-1"
+          , onclick_ "hscrl(this, -1)"
+          ] do
+          chevronLeft_
+        button_
+          [ class_ "chevron chevron-right"
+          , tabindex_ "-1"
+          , onclick_ "hscrl(this, 1)"
+          ] do
+          chevronRight_
 
 deriveRowDef ''Episode

@@ -1,17 +1,17 @@
 module Site.Template where
 
+import Data.Text as T
+import Data.Text.Lazy as TL
+import Language.Javascript.JMacro
+
 import "this" Intro
 import "this" Widget
 import "this" Icons
 
-htmlTemplate :: Html () -> Html ()
-htmlTemplate content = do
+htmlTemplate :: TL.Text -> JStat -> Html () -> Html ()
+htmlTemplate cs js content = do
   let Theme{..} = theme
-  headerWidget
-  div_ [class_ "root"] do
-    div_ content
-  footerWidget
-  [style|
+  headerWidget (cs <> [css|
     html, body, body *
       font-family: Arial, sans-serif
     .root
@@ -29,10 +29,13 @@ htmlTemplate content = do
       text-decoration: none
       &:hover
         color: #{primary}
-  |]
+  |])
+  div_ [class_ "root"] do
+    div_ content
+  footerWidget js
 
-headerWidget :: Html ()
-headerWidget = do
+headerWidget :: TL.Text -> Html ()
+headerWidget cs = do
   let Theme{..} = theme
   div_ [class_ "header"] do
     div_ [class_ "header-wrapper"] do
@@ -64,7 +67,40 @@ headerWidget = do
       //   hlEl.style.display = 'block';
       // }
     |]
-    [style|
+    style_ [] $ toHtmlRaw cs
+  [style|
+    .footer
+      margin-top: #{unit * 8}
+      height: 150px
+      background: rgba(0,0,0,0.9)
+      color: rgba(255,255,255,0.87)
+      position:absolute
+      bottom:0
+      width:100%
+      a
+        color: rgba(255,255,255,0.87)
+      .footer-wrapper
+        display: flex
+        align-items: top
+        justify-content: space-between
+        margin: 0 auto
+        max-width: #{pageWidth}
+      .home-link
+        font-size: 33px
+        display: block
+        text-decoration: none
+        display: flex
+        align-items: center
+        margin-top: #{unit * 3}
+        color: rgba(255,255,255,0.87)
+        &:hover
+          color: rgba(255,255,255,0.87)
+      .menu
+        padding: 0
+        margin: #{unit * 3} 0 0 0
+        li
+          list-style: none |]
+  [style|
       body
         background: rgba(0,0,0,0.04)
       .header
@@ -142,8 +178,8 @@ headerWidget = do
           svg
             opacity: 0.2 |]
 
-footerWidget :: Html ()
-footerWidget = do
+footerWidget :: JStat -> Html ()
+footerWidget js = do
   let Theme{..} = theme
   div_ [class_ "footer"] do
     div_ [class_ "footer-wrapper"] do
@@ -159,39 +195,8 @@ footerWidget = do
           span_ "Telikov."
           span_ [style_ [st|color: #{showt primary}|] ] do
             "Net"
-  [style|
-    .footer
-      margin-top: #{unit * 8}
-      height: 150px
-      background: rgba(0,0,0,0.9)
-      color: rgba(255,255,255,0.87)
-      position:absolute
-      bottom:0
-      width:100%
-      a
-        color: rgba(255,255,255,0.87)
-      .footer-wrapper
-        display: flex
-        align-items: top
-        justify-content: space-between
-        margin: 0 auto
-        max-width: #{pageWidth}
-      .home-link
-        font-size: 33px
-        display: block
-        text-decoration: none
-        display: flex
-        align-items: center
-        margin-top: #{unit * 3}
-        color: rgba(255,255,255,0.87)
-        &:hover
-          color: rgba(255,255,255,0.87)
-      .menu
-        padding: 0
-        margin: #{unit * 3} 0 0 0
-        li
-          list-style: none |]
+  script_ [] . T.pack . ("\n"<>) . show . renderJs $ js
 
 page404 :: Html ()
-page404 = htmlTemplate do
+page404 = htmlTemplate mempty mempty do
   h2_ "Not Found"
